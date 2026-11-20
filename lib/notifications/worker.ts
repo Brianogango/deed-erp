@@ -462,6 +462,14 @@ async function dispatchPendingNotificationDeliveries(limit = 100) {
       })
     }
 
+    // The number on the home-screen icon: the person's unread alerts, the
+    // same count the bell shows.
+    const badgeCount = channel === 'push' && delivery.userId
+      ? await prisma.notificationRecipient.count({
+        where: { userId: delivery.userId, dismissedAt: null, readAt: null, resolvedAt: null },
+      }).catch(() => null)
+      : null
+
     const result = await sendProviderDelivery({
       channel,
       eventType: delivery.event.eventType,
@@ -471,6 +479,7 @@ async function dispatchPendingNotificationDeliveries(limit = 100) {
       actionUrl: delivery.event.actionUrl,
       destination: delivery.destination,
       endpoint,
+      badgeCount,
       metadata: effectiveMetadata,
     })
 

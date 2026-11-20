@@ -1,5 +1,6 @@
 // Deed ERP Service Worker — PWA + Offline POS + Web Push
 //
+// v10: pushes carry the unread count; the worker sets the app icon's number.
 // v9: handle Web Push toasts on the same worker that owns '/' so Account
 // Settings → Browser Push is not overwritten by the PWA registration.
 // v8: offline Try Again probes the network and navigates back into the app
@@ -14,8 +15,8 @@
 // v2 pre-cached '/' and '/login' at install time; after a deploy those stale
 // snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
 // so users saw a completely unstyled login page until they cleared site data.
-const CACHE = 'deed-erp-v9'
-const RUNTIME_CACHE = 'deed-erp-runtime-v9'
+const CACHE = 'deed-erp-v10'
+const RUNTIME_CACHE = 'deed-erp-runtime-v10'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively
@@ -173,8 +174,18 @@ self.addEventListener('push', event => {
     // Stays on screen until closed, clicked, or read/resolved in the ERP.
     requireInteraction: true,
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    setIconNumber(payload.badgeCount),
+  ]))
 })
+
+// The number on the installed app's icon (iPhone home screen, Android, desktop).
+function setIconNumber(count) {
+  const nav = self.navigator
+  if (typeof count !== 'number' || !nav || !('setAppBadge' in nav)) return Promise.resolve()
+  return (count > 0 ? nav.setAppBadge(count) : nav.clearAppBadge()).catch(() => {})
+}
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
