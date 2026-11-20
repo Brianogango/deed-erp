@@ -4,22 +4,28 @@ import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { productSchema } from '@/lib/validation'
 import { publishProduct, toClientProduct } from '@/lib/product-catalog-write'
-import { PLACEHOLDER_KINDS, placeholderProductName, type PlaceholderKind } from '@/lib/refurbishment/unidentified'
+import { PLACEHOLDER_KINDS, placeholderProductName, standInProductName, type PlaceholderKind } from '@/lib/refurbishment/unidentified'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * POST { kind } — the "<Device> — unidentified" product unknown machines are
+ * POST { kind, name? } — the "<Device> — unidentified" product unknown machines are
  * filed under until the bench finds their model. Created once, then reused.
  * It has no price, so nothing on it can be sold; identified units move off it.
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
     await requirePermission('refurbishment.intake')
-    const body = await req.json().catch(() => ({})) as { kind?: string }
+    const body = await req.json().catch(() => ({})) as { kind?: string; name?: string }
     const kind = PLACEHOLDER_KINDS.find(k => k.id === body.kind)
     if (!kind) return NextResponse.json({ error: 'Choose the device type' }, { status: 422 })
-    const name = placeholderProductName(kind.id as PlaceholderKind)
+    // A name typed at intake ("lenovo tm") makes its own stand-in, so a batch
+    // keeps what little is known about it until refurbishment matches it.
+    const typed = typeof body.name === 'string' && body.name.trim() ? standInProductName(body.name) : ''
+    if (typeof body.name === 'string' && body.name.trim() && !typed) {
+      return NextResponse.json({ error: 'Type a name of at least 2 characters' }, { status: 422 })
+    }
+    const name = typed || placeholderProductName(kind.id as PlaceholderKind)
     return withAppStateKeyLock('deed_products', async () => {
       let row = await prisma.product.findFirst({ where: { name: { equals: name, mode: 'insensitive' } }, include: { category: true } })
       let created = false

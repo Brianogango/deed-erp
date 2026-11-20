@@ -13,3 +13,15 @@ describe('stand-in products', () => {
     expect(isStandInProduct(undefined, 'HP 840 G6')).toBe(false)
   })
 })
+
+import { standInProductName } from '@/lib/refurbishment/unidentified'
+
+describe('stand-in names typed at intake', () => {
+  it('becomes "<name> — unidentified", tidied, once', () => {
+    expect(standInProductName('lenovo tm')).toBe('lenovo tm — unidentified')
+    expect(standInProductName('  lenovo   tm ')).toBe('lenovo tm — unidentified')
+    expect(standInProductName('lenovo tm — unidentified')).toBe('lenovo tm — unidentified')
+    expect(standInProductName('x')).toBe('')
+    expect(isStandInProduct({ name: standInProductName('hp dead'), salePrice: 0 })).toBe(true)
+  })
+})
