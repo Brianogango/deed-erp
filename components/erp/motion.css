@@ -1,0 +1,117 @@
+/*
+ * Small motion for the phone screens: feedback on a tap, things that appear
+ * coming from where they belong, nothing that makes anyone wait. Everything
+ * here is under 250ms, uses transform/opacity only, and is off for anyone
+ * who asked their device to reduce motion.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 1 · Bottom tab bar: the icon dips on a press; the colour fades across. */
+  .mobile-tab-bar__tab {
+    transition: color 160ms ease-out, background-color 160ms ease-out;
+  }
+  .mobile-tab-bar__icon {
+    transition: transform 120ms ease-out;
+  }
+  .mobile-tab-bar__tab:active .mobile-tab-bar__icon {
+    transform: scale(0.86);
+  }
+  .mobile-tab-bar__tab.is-active .mobile-tab-bar__icon {
+    animation: motion-tab-pop 220ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+
+  /* 2 · Selection bar: rises from the bottom, sinks back when cleared. */
+  .dt-mobile-bulk {
+    animation: motion-rise 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .dt-mobile-bulk.is-leaving {
+    animation: motion-sink 160ms ease-in both;
+  }
+
+  /* 3 · Ticking a row: the highlight fades, the tick pops. */
+  .dt-select-row {
+    transition: background-color 160ms ease-out, border-color 160ms ease-out;
+  }
+  .dt-select-row__tick:checked {
+    animation: motion-tick 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 4 · ⋯ menus and More sheets on a phone slide up like a native sheet. */
+  .tab-overflow-menu--mobile {
+    animation: motion-sheet-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* 5 · A tap on a line or card registers before the record opens. */
+  .dt-line.is-tappable,
+  .record-card {
+    transition: background-color 120ms ease-out, transform 120ms ease-out;
+  }
+  .dt-line.is-tappable:active {
+    background: var(--bg-surface);
+  }
+  .record-card:active {
+    background: var(--bg-surface);
+  }
+
+  /* 6 · Tabs: the active underline grows in; the new tab's content fades in. */
+  .mod-tab.active::after {
+    animation: motion-underline 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: center;
+  }
+  .mod-body > * {
+    animation: motion-fade 180ms ease-out both;
+  }
+
+  /* 7 · "More details" on a sales record: the fields ease in, not pop in. */
+  .sales-order-meta-panel.is-expanded :is(.sp-field--secondary, .sales-secondary-group > *) {
+    animation: motion-reveal 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* 8 · Loading: a soft shimmer instead of a blinking block. */
+  .state-panel-loading.animate-pulse {
+    animation: none;
+  }
+  .state-panel-loading .bg-muted {
+    background: linear-gradient(90deg, var(--bg-muted) 0%, var(--bg-surface) 50%, var(--bg-muted) 100%);
+    background-size: 200% 100%;
+    animation: motion-shimmer 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes motion-tab-pop {
+  0% { transform: scale(0.86); }
+  100% { transform: scale(1); }
+}
+@keyframes motion-rise {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-sink {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(1rem); }
+}
+@keyframes motion-tick {
+  0% { transform: scale(0.8); }
+  100% { transform: scale(1); }
+}
+@keyframes motion-sheet-up {
+  from { opacity: 0; transform: translateY(1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-underline {
+  from { opacity: 0; transform: scaleX(0.3); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+/* Opacity only: a transform here would move the fixed action bars inside. */
+@keyframes motion-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes motion-reveal {
+  from { opacity: 0; transform: translateY(-0.25rem); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
