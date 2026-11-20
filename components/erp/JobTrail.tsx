@@ -57,9 +57,9 @@ export default function JobTrail({ start, showNext = true }: { start: TrailStart
   if (trail.steps.length < 2 && !trail.next) return null
 
   return (
-    <nav aria-label="Job trail" className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
+    <nav aria-label="Job trail" className="job-trail flex flex-wrap items-center gap-x-1.5 gap-y-1.5 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
       {trail.steps.map((step, i) => (
-        <span key={`${step.kind}-${step.ref}-${i}`} className="inline-flex items-center gap-1.5">
+        <span key={`${step.kind}-${step.ref}-${i}`} className={`job-trail__step inline-flex items-center gap-1.5 ${step === own ? 'is-own' : ''}`}>
           {i > 0 && <span aria-hidden="true" className="text-[11px] text-[var(--text-4)]">→</span>}
           <Link
             href={step.href}

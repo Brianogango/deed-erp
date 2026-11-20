@@ -832,7 +832,7 @@ export default function InvoiceDetail() {
             {invoice.type === 'customer_invoice' && availableCredit > 0 && (
               <p className="invoice-detail__country">Store credit {fmtKes(availableCredit)} — apply from More actions</p>
             )}
-            <p className="invoice-detail__country">{partnerCountry}</p>
+            <p className="invoice-detail__country invoice-detail__country--place">{partnerCountry}</p>
             <div className="invoice-detail__dates">
               <span className="invoice-detail__date-item">
                 <Fa icon={faCalendarDay} aria-hidden="true" />
@@ -882,7 +882,7 @@ export default function InvoiceDetail() {
         </div>
 
         {journeyNotice && (
-          <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)]" role="note">
+          <div className={`invoice-detail__notice rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)] ${payState === 'paid' ? 'is-settled' : ''}`} role="note">
             <strong className="text-[var(--text-1)]">{journeyNotice.title}</strong>{' '}
             {journeyNotice.message}
           </div>

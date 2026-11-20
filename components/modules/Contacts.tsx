@@ -802,25 +802,28 @@ function ContactsInner() {
                 <section className="contacts-panel contacts-panel--credit">
                   <h4>Credit & payment</h4>
                   <div className="contacts-credit-summary">
-                    <div><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
+                    <div className="contacts-credit-summary__dup"><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
                     <div><span>Payment terms</span><strong>{vc.paymentTermsDays === 0 ? 'Due immediately' : `${vc.paymentTermsDays ?? 0} days`}</strong></div>
                     <div><span>Credit limit</span><strong>{vc.creditLimit ? fmtKes(vc.creditLimit) : '—'}</strong></div>
                     {vc.type === 'company' && <div><span>Credit standing</span><strong>{CREDIT_STANDING_LABELS[vc.creditStatus ?? 'none'] ?? vc.creditStatus}{vc.creditReviewDue ? ` · review ${fmtDate(vc.creditReviewDue)}` : ''}</strong></div>}
-                    <div><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
+                    <div className="contacts-credit-summary__dup"><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
                   </div>
                   <p className="contacts-help-copy">Credit can be applied to posted unpaid invoices from Finance.</p>
                 </section>
 
+                {/* Only what is filled in: a block of dashes said nothing. */}
+                {(vc.bankName || vc.bankAccount || vc.bankBranch || Boolean(vc.vendorRating) || (vc.isCustomer && Number(vc.loyaltyPoints) > 0)) && (
                 <section className="contacts-panel contacts-panel--banking">
-                  <h4>Banking details</h4>
+                  <h4>{vc.bankName || vc.bankAccount || vc.bankBranch ? 'Banking details' : 'Other details'}</h4>
                   <dl className="contacts-banking-details" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 0 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Bank</dt><dd>{vc.bankName || '—'}</dd></div>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd></div>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd></div>
+                    {vc.bankName && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Bank</dt><dd>{vc.bankName}</dd></div>}
+                    {vc.bankAccount && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Account</dt><dd className="font-mono">{vc.bankAccount}</dd></div>}
+                    {vc.bankBranch && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Branch</dt><dd>{vc.bankBranch}</dd></div>}
                     {Boolean(vc.vendorRating) && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></div>}
-                    {vc.isCustomer && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Loyalty points</dt><dd>{vc.loyaltyPoints ?? 0}</dd></div>}
+                    {vc.isCustomer && Number(vc.loyaltyPoints) > 0 && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Loyalty points</dt><dd>{vc.loyaltyPoints}</dd></div>}
                   </dl>
                 </section>
+                )}
 
                 <section className="contacts-panel contacts-panel--credits">
                   <h4>Customer credits</h4>
@@ -831,10 +834,10 @@ function ContactsInner() {
                         <tbody>
                           {clientCredits.map(credit => (
                             <tr key={String(credit.id || credit.ref)}>
-                              <td className="font-mono">{credit.ref}</td>
-                              <td>{customerCreditSourceLabel(credit)}</td>
-                              <td className="font-mono">{fmtKes(credit.balance)}</td>
-                              <td><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
+                              <td className="font-mono" data-col="ref">{credit.ref}</td>
+                              <td data-col="sub">{customerCreditSourceLabel(credit)}</td>
+                              <td className="font-mono" data-col="amount" data-label="Remaining">{fmtKes(credit.balance)}</td>
+                              <td data-col="status"><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
                             </tr>
                           ))}
                         </tbody>
@@ -854,12 +857,12 @@ function ContactsInner() {
                             const doc = invoiceDocState(invoice.status)
                             const payment = invoicePaymentStatus(invoice)
                             return <tr key={invoice.id}>
-                              <td className="font-mono">{displayDocRef(invoice.ref)}</td>
-                              <td>{fmtDate(invoice.date)}</td>
-                              <td className="font-mono">{fmtKes(invoice.total)}</td>
-                              <td className="font-mono">{fmtKes(invoice.amountPaid)}</td>
-                              <td className="font-mono">{fmtKes(invoiceResidual(invoice))}</td>
-                              <td><Badge status={doc === 'posted' ? payment : doc} label={doc === 'posted' ? PAYMENT_STATUS_LABELS[payment] : undefined} size="xs" /></td>
+                              <td className="font-mono" data-col="ref">{displayDocRef(invoice.ref)}</td>
+                              <td data-col="sub">{fmtDate(invoice.date)}</td>
+                              <td className="font-mono" data-col="amount" data-label="Amount">{fmtKes(invoice.total)}</td>
+                              <td className="font-mono" data-col="paid">{fmtKes(invoice.amountPaid)}</td>
+                              <td className="font-mono" data-col="amount" data-label="Outstanding">{fmtKes(invoiceResidual(invoice))}</td>
+                              <td data-col="status"><Badge status={doc === 'posted' ? payment : doc} label={doc === 'posted' ? PAYMENT_STATUS_LABELS[payment] : undefined} size="xs" /></td>
                             </tr>
                           })}
                         </tbody>
