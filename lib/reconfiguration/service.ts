@@ -1302,7 +1302,7 @@ async function applyStockPlan(
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_serials: JSON.stringify(serials),
     deed_stockMoves: JSON.stringify(stockMoves),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
   return moveId
 }
 

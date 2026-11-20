@@ -61,7 +61,9 @@ async function rewriteProductIdsInBlobs(fromId: string, toId: string): Promise<v
       next[key] = JSON.stringify(rewritten)
     }
   }
-  if (Object.keys(next).length) await saveStoreKeys(next)
+  // Stock moves from the merged-away product to the kept one as changes, so
+  // quantities saved meanwhile are kept (lib/inventory/bulk-stock-delta.ts).
+  if (Object.keys(next).length) await saveStoreKeys(next, { bulkStockBase: state.deed_bulkStock })
 }
 
 async function countProductRefs(id: string): Promise<number> {
