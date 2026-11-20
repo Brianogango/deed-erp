@@ -13,6 +13,7 @@ import { canIntakeOnHandSerials, canReleaseHeldSerial } from '@/lib/inventory/pe
 import { ON_HAND_LOCATIONS, parseSerialList, type OnHandLocation } from '@/lib/inventory/serial-intake'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
 import { userCan } from '@/lib/auth/can'
+import { SecondaryActionMenu } from '@/components/erp/SecondaryActionMenu'
 
 type StatusChip =
   | 'all'
@@ -293,19 +294,7 @@ export default function SerialManageDrawer({
       label: 'Status',
       priority: 1,
       width: '110px',
-      render: row => {
-        const color =
-          row.status === 'available' ? '#166534' :
-          row.status === 'assigned' ? '#92400E' :
-          row.status === 'sold' ? '#1E3A8A' :
-          row.status === 'written_off' ? '#991B1B' :
-          '#374151'
-        return (
-          <span className="text-xs capitalize font-bold" style={{ color }}>
-            {row.status.replace(/_/g, ' ')}
-          </span>
-        )
-      },
+      render: row => <SerialStatusPill status={row.status} />,
       exportValue: row => row.status,
     },
     {
@@ -323,6 +312,32 @@ export default function SerialManageDrawer({
     },
   ]
 
+  // One "⋯" per unit: Label, Edit, Move and Release were up to four bordered
+  // buttons on every row, taking more room than the serial itself.
+  const rowMenu = (row: SerialNumber) => (
+    <SecondaryActionMenu
+      compact
+      ariaLabel={`Actions for ${row.serial}`}
+      actions={[
+        {
+          id: 'release',
+          label: 'Release to on hand',
+          hidden: !((row.status === 'assigned' || row.status === 'returned') && canRelease),
+          onClick: () => releaseSerialToStock(row.id, 'warehouse'),
+        },
+        {
+          id: 'label',
+          label: 'Print label',
+          onClick: () => {
+            void onPrintSerials([{ serial: row.serial, barcode: row.barcode, productName: product.name, sku: product.sku, category: product.category }])
+          },
+        },
+        { id: 'edit', label: 'Edit serial', hidden: !canEdit, onClick: () => openEdit(row) },
+        { id: 'move', label: 'Move to another product…', hidden: !(canEdit && !unitMoveBlocker(row)), onClick: () => setMoveTarget(row) },
+      ]}
+    />
+  )
+
   const chips: Array<[StatusChip, string]> = [
     ['all', `All (${statusCounts.all})`],
     ['available', `Available (${statusCounts.available})`],
@@ -336,26 +351,23 @@ export default function SerialManageDrawer({
 
   return (
     <>
-      <Modal title={`Serials · ${product.name}`} onClose={onClose} width={980}>
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-text-3">
-              SKU {product.sku}
-              {locationScope === 'warehouse_filter' && warehouseFilter !== 'all'
-                ? ` · Filtered to ${LOCATIONS[warehouseFilter].name}`
-                : ' · All locations (incl. customer / sold)'}
-              {' · '}
-              Available {statusCounts.available} · On list {statusCounts.all}
-            </p>
+      <Modal
+        title={product.name}
+        subtitle={`${product.sku} · ${statusCounts.available} available of ${statusCounts.all}${locationScope === 'warehouse_filter' && warehouseFilter !== 'all' ? ` · ${LOCATIONS[warehouseFilter].name} only` : ''}`}
+        onClose={onClose}
+        width={980}
+      >
+        <div className="serial-drawer space-y-3">
+          <div className="serial-drawer__bar flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {canIntake && (
                 <button
                   type="button"
-                  className="btn-primary text-[11px]"
+                  className="serial-drawer__add"
                   onClick={() => setShowIntake(true)}
                   title="Add available on-hand serials (increases quantity)"
                 >
-                  <Fa icon={faPlus} className="mr-1" /> Add on-hand serials
+                  <Fa icon={faPlus} aria-hidden="true" /> Add serials
                 </button>
               )}
               {warehouseFilter !== 'all' && (
@@ -386,19 +398,15 @@ export default function SerialManageDrawer({
             </p>
           )}
 
-          <div className="serial-drawer__chips flex flex-wrap gap-2 text-[10px]">
+          <div className="serial-drawer__chips flex flex-wrap gap-2">
             {/* Only filters with units in them: eight chips, mostly "(0)", took three rows on a phone. */}
             {chips.filter(([id]) => id === 'all' || id === statusFilter || (statusCounts as Record<string, number>)[id] > 0).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setStatusFilter(id)}
-                className="px-2.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer"
-                style={{
-                  borderColor: statusFilter === id ? '#A8D4E8' : 'var(--border-lt)',
-                  background: statusFilter === id ? '#E8F3FA' : 'transparent',
-                  color: statusFilter === id ? 'var(--navy)' : 'var(--text-3)',
-                }}
+                className={`serial-chip${statusFilter === id ? ' is-active' : ''}`}
+                aria-pressed={statusFilter === id}
               >
                 {label}
               </button>
@@ -486,64 +494,32 @@ export default function SerialManageDrawer({
                     })))
                   }}
                 >
-                  Download PDF
+                  PDF
                 </button>
                 {canDelete && (
                   <button
                     type="button"
-                    className="dt-toolbar-btn text-[var(--danger-text)]"
+                    className="dt-toolbar-btn is-danger"
                     onClick={() => { setDeleteReason(''); setDeleteTarget({ rows: selected, clear }) }}
                   >
-                    Delete from system
+                    Delete
                   </button>
                 )}
               </div>
             )}
-            rowActions={row => (
-              <div className="flex gap-1 justify-end flex-wrap">
-                {(row.status === 'assigned' || row.status === 'returned') && canRelease && (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-lg border text-[10px] font-bold text-amber-800 border-amber-300 bg-amber-50"
-                    onClick={() => releaseSerialToStock(row.id, 'warehouse')}
-                  >
-                    Release
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded-lg border text-[10px] font-bold"
-                  onClick={() => {
-                    void onPrintSerials([{
-                      serial: row.serial,
-                      barcode: row.barcode,
-                      productName: product.name,
-                      sku: product.sku,
-                      category: product.category,
-                    }])
-                  }}
-                >
-                  Label
-                </button>
-                {canEdit && (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-lg border text-[10px] font-bold text-primary-700"
-                    onClick={() => openEdit(row)}
-                  >
-                    Edit
-                  </button>
-                )}
-                {canEdit && !unitMoveBlocker(row) && (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-lg border text-[10px] font-bold"
-                    title="Filed under the wrong model or specs? Move it to the right product"
-                    onClick={() => setMoveTarget(row)}
-                  >
-                    Move
-                  </button>
-                )}
+            rowActions={row => rowMenu(row)}
+            renderCard={row => (
+              <div className="serial-row">
+                <div className="min-w-0 flex-1">
+                  <p className="serial-row__serial">{row.serial}</p>
+                  <p className="serial-row__meta">
+                    {LOCATIONS[row.location]?.name || row.location}
+                    {row.barcode && row.barcode !== row.serial ? ` · ${row.barcode}` : ''}
+                    {soRefFor(row) ? ` · ${soRefFor(row)}` : ''}
+                  </p>
+                </div>
+                <SerialStatusPill status={row.status} />
+                {rowMenu(row)}
               </div>
             )}
           />
@@ -671,4 +647,20 @@ export default function SerialManageDrawer({
       )}
     </>
   )
+}
+
+const STATUS_PILL: Record<string, { label: string; tone: string }> = {
+  available: { label: 'Available', tone: 'success' },
+  assigned: { label: 'Reserved', tone: 'warning' },
+  sold: { label: 'Sold', tone: 'info' },
+  refurbishment: { label: 'Refurb', tone: 'neutral' },
+  under_repair: { label: 'Under repair', tone: 'warning' },
+  reconfiguration: { label: 'Reconfig', tone: 'neutral' },
+  returned: { label: 'Returned', tone: 'warning' },
+  written_off: { label: 'Written off', tone: 'danger' },
+}
+
+function SerialStatusPill({ status }: { status: string }) {
+  const meta = STATUS_PILL[status] ?? { label: status.replace(/_/g, ' '), tone: 'neutral' }
+  return <span className={`serial-pill serial-pill--${meta.tone}`}>{meta.label}</span>
 }

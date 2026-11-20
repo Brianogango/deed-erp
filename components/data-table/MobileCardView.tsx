@@ -86,7 +86,23 @@ export default function MobileCardView<T>({
           </div>
         ) : <div key={key}>{card}</div>
         if (renderCard) {
-          return withTick(rowKey(row), renderCard(row))
+          // A list that draws its own rows: the tick box sits inside the row,
+          // and the whole row toggles it (its own buttons excepted).
+          if (!selection) return <div key={rowKey(row)}>{renderCard(row)}</div>
+          const on = selection.isSelected(row)
+          return (
+            <div
+              key={rowKey(row)}
+              className={`dt-select-row${on ? ' is-selected' : ''}`}
+              onClick={e => {
+                if ((e.target as HTMLElement).closest('button, a, input, label, [role="menu"]')) return
+                selection.toggle(row)
+              }}
+            >
+              <input type="checkbox" className="dt-select-row__tick" checked={on} onChange={() => selection.toggle(row)} aria-label="Select" />
+              <div className="min-w-0 flex-1">{renderCard(row)}</div>
+            </div>
+          )
         }
         return withTick(rowKey(row),
           <RecordCard
