@@ -103,8 +103,11 @@ export function parseSpecsString(specs: string | null | undefined): Partial<Devi
   let primaryStorageGb: number | null = null
   let storageType: string | null = null
 
+  // A capacity followed by its drive type, with up to a few words between
+  // ("512GB M.2 NVMe SSD", "1TB Samsung SSD"). Those words may not be another
+  // capacity or RAM: "8GB RAM 256GB SSD" read as an 8GB drive.
   const storageMatch = text.match(
-    /(\d+(?:\.\d+)?)\s*(TB|GB)\s*(?:(?:M\.?2|PCI-?E|PCIe|NVMe|SATA|[\w.-]+)\s+){0,6}(SSD|HDD|NVMe|Storage)\b/i,
+    /(\d+(?:\.\d+)?)\s*(TB|GB)\s*(?:(?!(?:RAM|DDR\d*|SO-?DIMM|\d+(?:\.\d+)?\s*(?:TB|GB))\b)(?:M\.?2|PCI-?E|PCIe|NVMe|SATA|[\w.-]+)\s+){0,6}(SSD|HDD|NVMe|Storage)\b/i,
   )
   if (storageMatch) {
     primaryStorageGb = toGb(Number(storageMatch[1]), storageMatch[2])

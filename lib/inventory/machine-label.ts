@@ -73,8 +73,16 @@ export function compactLabelSpecs(specsText: string | null | undefined, config?:
     ?? cpuRaw.match(/Ryzen\s*\d/i)?.[0]
     ?? cpuRaw.match(/\bM\d\b/)?.[0]
     ?? ''
-  const ram = gb(Number(config?.totalRamGb) || Number(parsed.totalRamGb) || 0)
-  const storage = gb(Number(config?.primaryStorageGb) || Number(parsed.primaryStorageGb) || 0)
+  const ramGb = Number(config?.totalRamGb) || Number(parsed.totalRamGb) || 0
+  let storageGb = Number(config?.primaryStorageGb) || Number(parsed.primaryStorageGb) || 0
+  // A configuration saved by an older parser took the RAM for the drive
+  // ("8GB RAM 256GB SSD" stored as an 8GB drive; the label read "8GB 8GB").
+  // When the saved drive equals the RAM and the specs name another drive
+  // size, the specs are right.
+  const parsedStorage = Number(parsed.primaryStorageGb) || 0
+  if (config?.primaryStorageGb && Number(config.primaryStorageGb) === ramGb && parsedStorage && parsedStorage !== ramGb) storageGb = parsedStorage
+  const ram = gb(ramGb)
+  const storage = gb(storageGb)
   return [gen, cpu, ram, storage].filter(Boolean).join(' ')
 }
 
