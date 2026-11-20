@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { Html5Qrcode } from 'html5-qrcode'
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { Modal } from '@/components/ui'
 import { Fa, faCamera } from '@/components/icons'
 import { normalizeScanCode } from '@/lib/barcode-scan'
@@ -20,6 +20,28 @@ type BarcodeScannerModalProps = {
  * Phone-camera barcode / QR scanner used by POS, transfers, GRN, and ORC.
  * Requires HTTPS (or localhost) and camera permission.
  */
+/**
+ * Only the codes this business scans: its own labels (Code 128), maker serial
+ * labels (Code 128/39, QR, Data Matrix) and retail barcodes (EAN/UPC). Trying
+ * every format the library knows on each frame made a read take seconds.
+ */
+const SCAN_FORMATS = [
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+]
+
+/** A wide box for barcodes (a 250px square cropped long Code 128 labels). */
+const scanBox = (width: number, height: number) => ({
+  width: Math.max(200, Math.floor(Math.min(width * 0.9, 480))),
+  height: Math.max(120, Math.floor(Math.min(height * 0.6, 260))),
+})
+
 export function BarcodeScannerModal({
   open,
   onClose,
@@ -49,7 +71,14 @@ export function BarcodeScannerModal({
       await new Promise(r => setTimeout(r, 50))
       if (cancelled) return
       try {
-        scanner = new Html5Qrcode(readerId)
+        scanner = new Html5Qrcode(readerId, {
+          verbose: false,
+          formatsToSupport: SCAN_FORMATS,
+          // The phone's own barcode reader (Android Chrome, recent Safari) is
+          // many times faster than decoding in JavaScript.
+          useBarCodeDetectorIfSupported: true,
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        })
       } catch (err) {
         console.error('Camera init error', err)
         if (!cancelled) {
@@ -63,7 +92,16 @@ export function BarcodeScannerModal({
       try {
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          {
+            fps: 20,
+            qrbox: scanBox,
+            // A sharper picture reads small serial labels first time.
+            videoConstraints: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
           (decodedText) => {
             if (cancelled) return
             const code = normalizeScanCode(decodedText)
