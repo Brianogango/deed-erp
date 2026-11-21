@@ -1564,7 +1564,6 @@ html {
     height: 2.5rem !important;
     min-height: 2.5rem !important;
     border-radius: var(--radius-md) !important;
-    font-size: 16px !important;
   }
   html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar select {
     flex: 0 0 auto !important;
@@ -1573,7 +1572,6 @@ html {
     height: 2.5rem !important;
     min-height: 2.5rem !important;
     border-radius: var(--radius-md) !important;
-    font-size: 16px !important;
     font-weight: 400 !important;
     color: var(--text-2) !important;
   }
