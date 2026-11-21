@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { canAssignRepair } from '@/lib/repair/can-assign'
 import { AssignTechnicianModal } from './RepairModals'
 import { activeOutsourceJob, isOutsourceOverdue, outsourceBadgeLabel, outsourcedRepairCounts } from '@/lib/repair/outsource-visibility'
@@ -218,7 +218,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
       </button>
     )
   }
-  const { invoices } = useRepairStore()
+  const { invoices, remindLateOutsourceJobs } = useRepairStore()
   const paidUncollected = useMemo(
     () => new Set(visibleRepairs.filter(r => isPaidNotCollected(r as any, invoices as any)).map(r => r.id)),
     [visibleRepairs, invoices],
@@ -248,6 +248,8 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     },
   ], [visibleRepairs])
   const outsourced = useMemo(() => outsourcedRepairCounts(visibleRepairs, outsourceJobs ?? []), [visibleRepairs, outsourceJobs])
+  // Jobs past the date a vendor promised: remind the sender and the lead once.
+  useEffect(() => { remindLateOutsourceJobs?.() }, [outsourceJobs, remindLateOutsourceJobs])
 
   const patchUi = useUrlUiPatch()
   const [searchQuery, setSearchQueryValue] = useUrlUiState('q', '')

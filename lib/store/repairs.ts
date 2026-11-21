@@ -1,5 +1,6 @@
 import type { RepairStatus, IntakeChannel, RepairDiagnosis, RepairQuote, RepairQAItem, RepairPaymentConfirmationStatus } from '@/lib/repair-types'
 import type { InvoiceReissue } from '@/lib/repair/invoice-reissue'
+import type { LocationId } from './core'
 
 export interface RepairOrder {
   id: string
@@ -248,7 +249,7 @@ export interface Warranty {
   specs?: string
 }
 
-export type OutsourceJobStatus = 'sent' | 'returned_resolved' | 'returned_unresolved'
+export type OutsourceJobStatus = 'sent' | 'returned_resolved' | 'returned_unresolved' | 'cancelled'
 
 export interface OutsourcePayment {
   id: string
@@ -298,6 +299,10 @@ export interface OutsourceVendor {
   specializations: OutsourceServiceType[]
   notes?: string
   createdAt: string
+  /** Inactive vendors stay on old jobs and bills but are not offered for new jobs. */
+  active?: boolean
+  /** The Contacts record bills are raised against. */
+  contactId?: string
 }
 
 export interface OutsourceJob {
@@ -323,4 +328,24 @@ export interface OutsourceJob {
   status: OutsourceJobStatus
   notes?: string
   createdAt: string
+  /** When the vendor promised it back; overdue counts from here. */
+  expectedReturnDate?: string
+  /** Who took the machine back in (not who sent it). */
+  returnedByUserId?: string
+  returnedByName?: string
+  cancelledDate?: string
+  cancelledByName?: string
+  cancelReason?: string
+  /** A stock machine (no repair): the serial record and where it sat before it left. */
+  stockSerialId?: string
+  stockFromLocation?: LocationId
+  /** Accessories handed over with the machine, listed on the handover slip. */
+  accessories?: string
+  /** The vendor's cost added to the customer's repair quote. */
+  customerChargeAmount?: number
+  customerChargeAddedAt?: string
+  /** The promised date a "late" reminder was sent for (one reminder per promise). */
+  lateReminderFor?: string
+  /** Changes made while the job was out (vendor, cost, dates). */
+  editLog?: { date: string; by: string; note: string }[]
 }

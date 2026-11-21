@@ -41,7 +41,7 @@ const REPAIR_ACTIONS = [
     'moveRepairToPreviousProgress', 'requestProcurement', 'correctPartsCount', 'raisePartsPurchaseOrder',
     'markUnrepairable', 'declineQuote', 'returnToCustomer', 'leaveDeviceWithDeed', 'convertRetainedRepairToDonation',
     'convertRetainedRepairToBuyBack', 'createTradeInFromRepair', 'fileWarrantyClaim', 'showToast',
-    'appendRepairHistory', 'setModule', 'initRelease', 'addOutsourceJob',
+    'appendRepairHistory', 'setModule', 'initRelease', 'addOutsourceJob', 'remindLateOutsourceJobs',
 ] as const
 
 const SHELL_ACTIONS = [
@@ -66,7 +66,7 @@ const FINANCE_ACTIONS = [
     'getCustomerCreditBalance', 'initRelease', 'logReturnPickup', 'matchStatementLine', 'postInvoice',
     'recordOutsourcePayment', 'createOutsourceJobBill', 'registerPayment', 'reverseInvoicePayment',
     'setInvoicePaymentBlocked', 'payExpense', 'payPayrollRun', 'reimburseExpense', 'removePOLine',
-    'resetInvoiceToDraft', 'restoreCancelledInvoice', 'returnOutsourceJob', 'revertPOToDraft', 'reviewExpense', 'saveBankRecon',
+    'resetInvoiceToDraft', 'restoreCancelledInvoice', 'returnOutsourceJob', 'cancelOutsourceJob', 'updateOutsourceJob', 'deleteOutsourceVendor', 'chargeOutsourceToRepair', 'remindLateOutsourceJobs', 'revertPOToDraft', 'reviewExpense', 'saveBankRecon',
     'scheduleInvoiceDelivery', 'sendPO', 'setModule', 'showToast', 'submitExpense', 'unmatchStatementLine',
     'updateAccount', 'updateInvoice', 'moveInvoiceLine', 'addInvoiceSection', 'updateOutsourceVendor', 'updatePO',
     'updatePOLine', 'validateReceipt', 'getDocumentPaymentDetails', 'setDocumentPaymentDetails', 'addBankAccount',

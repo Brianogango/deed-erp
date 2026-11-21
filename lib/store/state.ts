@@ -251,7 +251,17 @@ export interface AppState {
   addOutsourceVendor: (v: Omit<OutsourceVendor, 'id' | 'createdAt'>) => OutsourceVendor
   updateOutsourceVendor: (id: string, p: Partial<OutsourceVendor>) => void
   addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob | null
-  returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => void
+  returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => boolean
+  /** Called back or sent by mistake: closes the job, frees the repair, brings a stock machine home. */
+  cancelOutsourceJob: (id: string, reason: string) => boolean
+  /** Change an open job (vendor, service, quote, promised date, notes). */
+  updateOutsourceJob: (id: string, p: Partial<Pick<OutsourceJob, 'vendorId' | 'vendorName' | 'serviceType' | 'issueDescription' | 'quotedCost' | 'expectedReturnDate' | 'notes' | 'accessories' | 'sentDate'>>) => boolean
+  /** Remove a vendor no job has used; otherwise it can only be made inactive. */
+  deleteOutsourceVendor: (id: string) => boolean
+  /** Add the vendor's work, at a price for the customer, to the linked repair's quote. */
+  chargeOutsourceToRepair: (jobId: string, amount: number) => boolean
+  /** Tell the sender and the technical lead about jobs past their promised date (once per promise). */
+  remindLateOutsourceJobs: () => void
   recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName' | 'postedToAccounts' | 'billRefs'>) => Promise<OutsourcePayment | null>
   /** Create the draft vendor bill for a returned job that has a cost but no bill yet. */
   createOutsourceJobBill: (jobId: string) => void
@@ -876,6 +886,7 @@ export type RepairStoreState = Pick<AppState,
   | 'setModule'
   | 'initRelease'
   | 'addOutsourceJob'
+  | 'remindLateOutsourceJobs'
 >
 
 export type ShellStoreState = Pick<AppState,
@@ -1025,6 +1036,11 @@ export type FinanceStoreState = Pick<AppState,
   | 'resetInvoiceToDraft'
   | 'restoreCancelledInvoice'
   | 'returnOutsourceJob'
+  | 'cancelOutsourceJob'
+  | 'updateOutsourceJob'
+  | 'deleteOutsourceVendor'
+  | 'chargeOutsourceToRepair'
+  | 'remindLateOutsourceJobs'
   | 'revertPOToDraft'
   | 'reviewExpense'
   | 'saveBankRecon'
