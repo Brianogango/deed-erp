@@ -58,8 +58,9 @@
     animation: motion-underline 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
     transform-origin: center;
   }
+  /* backwards, not both: a held opacity would trap the dialogs inside. */
   .mod-body > * {
-    animation: motion-fade 180ms ease-out both;
+    animation: motion-fade 180ms ease-out backwards;
   }
 
   /* 7 · "More details" on a sales record: the fields ease in, not pop in. */
