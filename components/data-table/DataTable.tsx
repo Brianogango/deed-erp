@@ -620,7 +620,7 @@ export default function DataTable<T>({
               variant={mobileLayout}
               lineSubtitle={mobileLineSubtitle}
               lineTitle={mobileLineTitle}
-              selection={selectable ? { isSelected: row => selectedKeys.has(rowKey(row)), toggle: row => toggleSelected(rowKey(row)) } : undefined}
+              selection={selectable ? { isSelected: row => selectedKeys.has(rowKey(row)), toggle: row => toggleSelected(rowKey(row)), count: selectedKeys.size, clear: () => setSelectedKeys(new Set()) } : undefined}
             />
           ) : null}
           {breakpoint === 'mobile' && bulkActions && (selectedRows.length > 0 || mobileBulkLeaving) ? (

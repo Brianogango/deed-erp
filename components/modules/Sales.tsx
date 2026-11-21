@@ -6,7 +6,7 @@ import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
-import { faClipboardCheck, faCircleCheck, faFileInvoiceDollar, faPlus, faArrowUp, faArrowDown, faDownload, faPrint, faTrash, faCheck, faTruck, faBan, faRotateLeft, faFileAlt, faClockRotateLeft, faThLarge, faListUl, faPencil, faXmark, faSave, faChevronDown, faCopy, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardCheck, faCircleCheck, faFileInvoiceDollar, faPlus, faArrowUp, faArrowDown, faDownload, faPrint, faTrash, faCheck, faTruck, faBan, faRotateLeft, faFileAlt, faClockRotateLeft, faThLarge, faListUl, faPencil, faXmark, faSave, faChevronDown, faCopy, faCodeBranch, faEllipsisVertical } from '@fortawesome/free-solid-svg-icons'
 import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
 import { exportToCsv } from '@/lib/export-utils'
 import { isSaleOrderDraftEditing } from '@/lib/sale-order-draft-edits'
@@ -247,7 +247,8 @@ function MoreActionsMenu({ items, label = 'More', className = '' }: { items: Mor
         onClick={() => setOpen(o => !o)}
       >
         <span>{label}</span>
-        <Fa icon={faChevronDown} className={`text-[10px] transition-transform duration-150 ease-out ${open ? 'rotate-180' : ''}`} />
+        <Fa icon={faChevronDown} className={`sp-more-chevron text-[10px] transition-transform duration-150 ease-out ${open ? 'rotate-180' : ''}`} />
+        <Fa icon={faEllipsisVertical} className="sp-more-dots" aria-hidden="true" />
       </button>
       {open && (<>
         <div className="fixed inset-0 z-[8990]" aria-hidden="true" onClick={() => setOpen(false)} />
@@ -1943,7 +1944,7 @@ function SalesContent() {
                       type="search"
                       className="sp-list-search"
                       aria-label="Search quotations and orders"
-                      placeholder="Search reference or customer…"
+                      placeholder="Search"
                       value={search}
                       onChange={e => setSearchAndReset(e.target.value)}
                     />

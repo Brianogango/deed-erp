@@ -134,6 +134,43 @@
   accent-color: var(--primary);
 }
 
+/* A card drawn by its list inside a select row: one box, not a box in a box. */
+.dt-select-row > div > :first-child {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* "Select" above a phone list; ticks appear only after it (or a long hold). */
+.dt-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  min-height: 1.75rem;
+  margin-bottom: -0.25rem;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.dt-select-bar span {
+  margin-right: auto;
+}
+.dt-select-bar button {
+  min-height: 2rem;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--primary-dark, var(--navy));
+  font-size: 13px;
+  font-weight: 600;
+}
+/* Holding a card to start selecting must not pop up the text menu. */
+.dt-hold-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* ── Phone selection bar, pinned to the bottom of the list ────────────── */
 .dt-mobile-bulk {
   position: sticky;
