@@ -1,6 +1,8 @@
 'use client'
 
 import { closeHandledPopups } from '@/lib/notifications/push-popups'
+import { isInstalledApp, isIosDevice, subscribeDeviceToPush } from '@/lib/notifications/push-client'
+import PushNudge from '@/components/layout/PushNudge'
 import { SAVE_FAILED_EVENT } from '@/lib/save-failure'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
@@ -538,16 +540,6 @@ function NotificationItem({
   )
 }
 
-function urlBase64ToUint8Array(value: string): ArrayBuffer {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4)
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = window.atob(base64)
-  const bytes = new ArrayBuffer(raw.length)
-  const view = new Uint8Array(bytes)
-  for (let i = 0; i < raw.length; i += 1) view[i] = raw.charCodeAt(i)
-  return bytes
-}
-
 type GlobalNotificationPreference = {
   inAppEnabled: boolean
   pushEnabled: boolean
@@ -648,59 +640,37 @@ function NotificationPreferenceControls({
   }, [load])
 
   const setPushForDevice = useCallback(async (enabled: boolean) => {
-    if (!pushSupported || pushBusy) return
-    if (enabled && !pushConfigured) {
+    if (pushBusy || (!enabled && !pushSupported)) return
+    if (enabled && pushSupported && !pushConfigured) {
       showToast('Browser push is not configured on this server yet', 'error')
       return
     }
     setPushBusy(true)
     try {
+      if (enabled) {
+        // Permission first, straight from the tap (iPhone refuses a late ask).
+        await subscribeDeviceToPush()
+        setPushConfigured(true)
+        setPushSubscribed(true)
+        setPref(prev => ({ ...prev, pushEnabled: true }))
+        showToast(isInstalledApp() ? 'Alerts are on: new ones show on the app icon, even when the app is closed' : 'This browser will get ERP alerts even when the tab is closed', 'success')
+        return
+      }
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
       await navigator.serviceWorker.ready
       const existing = await registration.pushManager.getSubscription()
-
-      if (!enabled) {
-        if (existing) {
-          const endpoint = existing.endpoint
-          await existing.unsubscribe()
-          await fetch('/api/notifications/endpoints', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ endpoint }),
-          })
-        }
-        setPushSubscribed(false)
-        await update({ pushEnabled: false })
-        showToast('Browser push turned off for this device', 'info')
-        return
+      if (existing) {
+        const endpoint = existing.endpoint
+        await existing.unsubscribe()
+        await fetch('/api/notifications/endpoints', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint }),
+        })
       }
-
-      const permission = await Notification.requestPermission()
-      if (permission !== 'granted') throw new Error('Allow notifications in the browser to enable Browser Push')
-
-      const configRes = await fetch('/api/notifications/endpoints', { cache: 'no-store' })
-      const config = await configRes.json()
-      if (!configRes.ok || !config.vapidPublicKey) throw new Error('Web Push is not configured on the server')
-      setPushConfigured(true)
-
-      const subscription = existing || await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey),
-      })
-      const subJson = subscription.toJSON()
-      const saveRes = await fetch('/api/notifications/endpoints', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: subscription.endpoint,
-          keys: subJson.keys,
-          deviceLabel: navigator.userAgent.includes('Mobile') ? 'Mobile browser' : 'Desktop browser',
-        }),
-      })
-      if (!saveRes.ok) throw new Error('Could not register this browser for push notifications')
-      setPushSubscribed(true)
-      await update({ pushEnabled: true })
-      showToast('This browser will get ERP alerts even when the tab is closed', 'success')
+      setPushSubscribed(false)
+      await update({ pushEnabled: false })
+      showToast('Push alerts turned off for this device', 'info')
     } catch (error) {
       console.warn('[notifications] push preference failed', error)
       setPushSubscribed(false)
@@ -740,15 +710,17 @@ function NotificationPreferenceControls({
         <div className="acct-channel-row">
           <span className="acct-channel-icon"><AccountChannelIcon kind="push" /></span>
           <span className="acct-channel-copy">
-            <span className="acct-channel-title">Browser Push</span>
+            <span className="acct-channel-title">Push alerts</span>
             <span className="acct-channel-detail">
-              {!pushSupported
+              {isIosDevice() && !isInstalledApp()
+                ? 'On iPhone: Share → Add to Home Screen, open Deed ERP from the icon, then turn this on. New alerts show as a number on the icon.'
+                : !pushSupported
                 ? 'Not supported by this browser. Use Chrome, Edge, or Firefox on HTTPS.'
                 : !pushConfigured
                   ? 'Not configured on this server yet'
                   : pushSubscribed
-                    ? 'This browser is subscribed — alerts arrive even if the ERP tab is closed'
-                    : 'Notify even when the ERP tab is closed'}
+                    ? 'On for this device. Alerts arrive and the app icon shows the count, even when the ERP is closed'
+                    : 'Alerts even when the ERP is closed, with the count on the app icon'}
             </span>
             {pushSubscribed && (
               <button
@@ -1687,6 +1659,8 @@ export default function Topbar() {
           </button>
         </div>
       </header>
+
+      <PushNudge userId={currentUserId} showToast={showToast} />
 
       <NotificationPopups
         notifications={myNotifs}
