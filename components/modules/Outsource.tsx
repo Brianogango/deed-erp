@@ -63,14 +63,14 @@ function VendorScore({ score, billed, paid, bal, balColor }: {
     <dl className="outsource-score">
       <div><dt>Jobs</dt><dd>{score.jobs}{score.out > 0 && <small>{score.out} out{score.overdueNow > 0 ? `, ${score.overdueNow} late` : ''}</small>}</dd></div>
       <div><dt>Fixed</dt><dd className={tone(score.fixRate, 80, 50)}>{score.fixRate === null ? '—' : `${score.fixRate}%`}{score.returned > 0 && <small>{score.fixed} of {score.returned}</small>}</dd></div>
-      <div><dt>Avg days</dt><dd>{score.avgDaysOut === null ? '—' : score.avgDaysOut}</dd></div>
+      <div className="is-extra"><dt>Avg days</dt><dd>{score.avgDaysOut === null ? '—' : score.avgDaysOut}</dd></div>
       <div><dt>On time</dt><dd className={tone(score.onTimeRate, 80, 50)}>{score.onTimeRate === null ? '—' : `${score.onTimeRate}%`}</dd></div>
-      <div><dt>vs quote</dt><dd className={score.avgCostVsQuotePct === null ? undefined : score.avgCostVsQuotePct > 10 ? 'is-bad' : score.avgCostVsQuotePct > 0 ? 'is-ok' : 'is-good'}>
+      <div className="is-extra"><dt>vs quote</dt><dd className={score.avgCostVsQuotePct === null ? undefined : score.avgCostVsQuotePct > 10 ? 'is-bad' : score.avgCostVsQuotePct > 0 ? 'is-ok' : 'is-good'}>
         {score.avgCostVsQuotePct === null ? '—' : `${score.avgCostVsQuotePct > 0 ? '+' : ''}${score.avgCostVsQuotePct}%`}
         {score.overQuote > 0 && <small>{score.overQuote} over</small>}
       </dd></div>
-      <div><dt>Billed</dt><dd>{fmtKes(billed)}</dd></div>
-      <div><dt>Paid</dt><dd className="is-good">{fmtKes(paid)}</dd></div>
+      <div className="is-extra"><dt>Billed</dt><dd>{fmtKes(billed)}</dd></div>
+      <div className="is-extra"><dt>Paid</dt><dd className="is-good">{fmtKes(paid)}</dd></div>
       <div><dt>Owed</dt><dd style={{ color: balColor }}>{fmtKes(bal)}</dd></div>
     </dl>
   )
@@ -849,11 +849,11 @@ function OutsourceContent() {
       <div className="mod-body outsource-body p-3 sm:p-4">
         <OperationalSummary
           items={[
-            ...(outCount > 0 ? [{ id: 'out', label: 'out with vendors', value: outCount, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
-            ...(overdueCount > 0 ? [{ id: 'overdue', label: 'past the promised date — chase the vendor or mark returned', value: overdueCount, tone: 'danger' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
-            ...(unresolvedCount > 0 ? [{ id: 'unresolved', label: 'returned unresolved', value: unresolvedCount, tone: 'warning' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('returned_unresolved') } }] : []),
+            ...(outCount > 0 ? [{ id: 'out', label: 'out', value: outCount, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
+            ...(overdueCount > 0 ? [{ id: 'overdue', label: 'late', value: overdueCount, tone: 'danger' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
+            ...(unresolvedCount > 0 ? [{ id: 'unresolved', label: 'not fixed', value: unresolvedCount, tone: 'warning' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('returned_unresolved') } }] : []),
             ...(returnedToday > 0 ? [{ id: 'today', label: 'returned today', value: returnedToday }] : []),
-            ...(vendorOutstanding > 0 ? [{ id: 'owed', label: 'owed to vendors', value: fmtKes(vendorOutstanding), onClick: () => setTab('vendors') }] : []),
+            ...(vendorOutstanding > 0 ? [{ id: 'owed', label: 'owed', value: fmtKes(vendorOutstanding), onClick: () => setTab('vendors') }] : []),
           ]}
         />
 
@@ -871,7 +871,7 @@ function OutsourceContent() {
             emptyMessage="No outsource jobs match the filter."
             searchValue={jobSearch}
             onSearchChange={setJobSearch}
-            searchPlaceholder="Search customer name, laptop, serial, phone, vendor or ref…"
+            searchPlaceholder="Search jobs"
             clientSearch
             page={jobPage}
             onPageChange={setJobPage}
@@ -919,16 +919,16 @@ function OutsourceContent() {
         {/* ── Vendors tab ── */}
         {tab === 'vendors' && !selectedVendor && (
           <>
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border-lt)]">
+            <div className="outsource-vendor-toolbar">
               <input
                 type="search"
-                className="form-input text-[12px] flex-1 min-w-[200px] max-w-md"
-                placeholder="Search vendor, phone, service, or a laptop / customer they handled…"
+                className="form-input"
+                placeholder="Search vendors"
                 value={vendorListSearch}
                 onChange={e => setVendorListSearch(e.target.value)}
                 aria-label="Search vendors"
               />
-              {isAdmin && <button type="button" className="btn-secondary text-[11px] ml-auto" onClick={openAddVendor}>+ Add Vendor</button>}
+              {isAdmin && <button type="button" className="outsource-act" onClick={openAddVendor}>+ Vendor</button>}
             </div>
             {outsourceVendors.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">

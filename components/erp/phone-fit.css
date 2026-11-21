@@ -1509,3 +1509,11 @@ html {
     display: none;
   }
 }
+
+/* The bottom bar has Menu; the top-left ☰ only shows where that bar is
+   hidden (open records, the POS till). */
+@media (max-width: 767px) {
+  body:has(.mobile-tab-bar) .app-topbar-menu {
+    display: none;
+  }
+}

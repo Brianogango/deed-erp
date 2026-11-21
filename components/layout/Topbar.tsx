@@ -1515,7 +1515,7 @@ export default function Topbar() {
         <button
           type="button"
           ref={mobileMenuButtonRef}
-          className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0
+          className="app-topbar-menu lg:hidden flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0
             bg-[var(--bg-surface)] border border-[var(--border)]
             hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
           onClick={toggleSidebar}
