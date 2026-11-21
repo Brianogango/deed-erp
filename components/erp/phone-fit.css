@@ -1634,3 +1634,79 @@ html {
     display: none !important;
   }
 }
+
+/* ── Job trail (Repair → Quote → Sale order → Invoice → Payment) ──────────
+   On a phone the steps were squeezed into narrow columns until their text
+   broke letter by letter. Now: the steps are one row you swipe, each on one
+   line, and the next action is a full-width line underneath. */
+.job-trail__steps {
+  display: contents;
+}
+@media (max-width: 767px) {
+  .job-trail,
+  html body .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    overflow: visible !important;
+    padding: 0.5rem 0.625rem !important;
+  }
+  .job-trail__steps {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .job-trail__steps::-webkit-scrollbar {
+    display: none;
+  }
+  .job-trail__steps > .job-trail__step {
+    flex: none !important;
+    min-width: auto !important;
+    scroll-snap-align: start;
+  }
+  .job-trail__steps a {
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    max-width: none !important;
+  }
+  .job-trail > a:last-child {
+    width: 100% !important;
+    margin-left: 0 !important;
+    justify-content: center !important;
+    min-height: 2.5rem;
+    font-size: 12px !important;
+  }
+}
+
+/* Repair record tabs: one row you swipe (a 4-column grid wrapped the seven
+   tabs onto two rows of big boxes). */
+@media (max-width: 767px) {
+  html body .repair-detail__tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0.25rem !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.375rem 0.5rem !important;
+  }
+  html body .repair-detail__tabs::-webkit-scrollbar {
+    display: none;
+  }
+  html body .repair-detail__tabs > .repair-detail__tab {
+    flex: none !important;
+    width: auto !important;
+    min-height: 2.5rem !important;
+    padding: 0 0.875rem !important;
+    border-radius: var(--radius-sm) !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+  }
+}
