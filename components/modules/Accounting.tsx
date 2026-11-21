@@ -1805,17 +1805,18 @@ function AccountingContent() {
                     />
                   )
                 }}
-                bulkActions={({ rows, clear }) => {
+                bulkActions={({ rows }) => {
                   const payable = rows.filter(b => invoiceDocState(b.status) === 'posted' && b.total > b.amountPaid)
                   const totalOutstanding = payable.reduce((s, b) => s + invoiceResidual(b), 0)
                   const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
                   return (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-[var(--text-2)]">
-                        {rows.length} selected
-                        {payable.length > 0 ? ` · ${payable.length} payable · ${fmtKes(totalOutstanding)} outstanding` : ''}
-                      </span>
-                      <button type="button" className="btn-ghost text-xs" onClick={clear}>Clear</button>
+                      {/* The bar itself shows "N selected" and Clear. */}
+                      {payable.length > 0 && (
+                        <span className="text-xs font-semibold text-[var(--text-2)]">
+                          {payable.length} unpaid · {fmtKes(totalOutstanding)} outstanding
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="btn-secondary text-xs flex items-center gap-1.5"
