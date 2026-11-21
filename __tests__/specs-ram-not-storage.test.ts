@@ -18,8 +18,8 @@ describe('RAM is never read as the drive', () => {
   it('the label trusts the specs over a saved configuration that took the RAM for the drive', () => {
     expect(compactLabelSpecs('Intel Core i5 6th Gen - 8GB RAM 256GB SSD', { processorGeneration: '6th Gen', processor: 'Intel Core i5', totalRamGb: 8, primaryStorageGb: 8 }))
       .toBe('6th i5 8GB 256GB')
-    // A real reconfiguration (drive changed) still wins over older specs text.
-    expect(compactLabelSpecs('Intel Core i5 6th Gen - 8GB RAM 256GB SSD', { totalRamGb: 8, primaryStorageGb: 512 })).toBe('6th i5 8GB 512GB')
+    // The unit's specs come first; the saved configuration fills what they omit.
+    expect(compactLabelSpecs('Intel Core i5 6th Gen - 8GB RAM', { totalRamGb: 8, primaryStorageGb: 512 })).toBe('6th i5 8GB 512GB')
   })
 })
 
@@ -33,5 +33,12 @@ describe('the label when the saved drive is wrong and the unit specs say nothing
   })
   it('leaves the drive out rather than print the RAM twice', () => {
     expect(compactLabelSpecs('Intel Core i5 6th Gen, 8GB RAM', badConfig, 'HP Elitebook 820 G3')).toBe('6th i5 8GB')
+  })
+})
+
+describe('a machine whose specs were changed after its configuration was saved', () => {
+  it('prints the RAM from the unit specs, not the older configuration (16GB → 8GB)', () => {
+    expect(compactLabelSpecs('Intel Core i5 8th Gen, 8GB RAM, 256GB SSD', { processorGeneration: '8th Gen', processor: 'Intel Core i5', totalRamGb: 16, primaryStorageGb: 256 }))
+      .toBe('8th i5 8GB 256GB')
   })
 })
