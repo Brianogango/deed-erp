@@ -1160,7 +1160,7 @@ function OutsourceContent() {
           <div className="outsource-statements">
             <p className="outsource-statements__intro">
               Each Monday the app puts the week's returned jobs of every weekly vendor on one statement.
-              {canConfirmStatements ? ' Check it and confirm it into a bill.' : ' Finance checks it and confirms it into a bill.'}
+              {canConfirmStatements ? ' Check it and confirm it into a bill.' : ' Finance, an Admin Officer or the Director checks it and confirms it into a bill.'}
             </p>
             {outsourceStatements.length === 0 ? (
               <p className="outsource-statements__empty">No statements yet. The first is prepared the Monday after a weekly vendor's job comes back with a cost.</p>
@@ -1589,7 +1589,7 @@ function OutsourceContent() {
             </ul>
             <p className="text-xs text-slate-500">
               {pending
-                ? `Confirming creates one draft bill, one line per job, coded to 6301 Solutions and Expert Repair Services' Costs. Hold a disputed job to leave it off; it can be billed later.${canConfirmStatements ? '' : ' Finance confirms it.'}`
+                ? `Confirming creates one draft bill, one line per job, coded to 6301 Solutions and Expert Repair Services' Costs. Hold a disputed job to leave it off; it can be billed later.${canConfirmStatements ? '' : ' Finance, an Admin Officer or the Director confirms it.'}`
                 : `Confirmed${st.confirmedByName ? ` by ${st.confirmedByName}` : ''}${st.confirmedAt ? ` on ${fmtDate(st.confirmedAt)}` : ''}. Corrections are made with a supplier credit note in Finance.`}
             </p>
 
@@ -1897,7 +1897,7 @@ function OutsourceContent() {
                 <p className="text-[11px] mb-3 rounded-lg px-3 py-2" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
                   Payments go through Finance against the vendor's bills.
                   {draftBills.length > 0 && <> {draftBills.map(b => b.ref).join(', ')} {draftBills.length === 1 ? 'is a draft' : 'are drafts'} — Finance confirms {draftBills.length === 1 ? 'it' : 'them'} before payment.</>}
-                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'is' : 'are'} not billed yet — {vendorBilling(payVendorId) === 'weekly' ? 'they go on the weekly statement, which Finance confirms into a bill' : 'use “Create bill” on the job'}.</>}
+                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'is' : 'are'} not billed yet — {vendorBilling(payVendorId) === 'weekly' ? 'they go on the weekly statement, which is confirmed into a bill' : 'use “Create bill” on the job'}.</>}
                 </p>
               )}
 

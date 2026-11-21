@@ -320,10 +320,18 @@ describe('weekly statements', () => {
     expect(store.outsourceStatementsRef.current[0].total).toBe(2000)
   })
 
-  it('only Finance confirms', () => {
-    const { store, actions } = fakeStore()
-    store.setOutsourceJobs([returned()])
-    actions.prepareOutsourceStatements()
-    expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09')).toBeNull()
+  it('Finance, an Admin Officer or the Director confirms; others cannot', () => {
+    for (const role of ['finance_officer', 'admin_officer', 'director']) {
+      const { store, actions } = fakeStore({ currentUser: () => ({ id: 'u9', name: 'X', role, modules: ['accounting'] }) })
+      store.setOutsourceJobs([returned()])
+      actions.prepareOutsourceStatements()
+      expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09'), role).toBe('BILL/DRAFT/1')
+    }
+    for (const role of ['technical_lead', 'technician', 'inventory_officer']) {
+      const { store, actions } = fakeStore({ currentUser: () => ({ id: 'u9', name: 'X', role, modules: ['repair'] }) })
+      store.setOutsourceJobs([returned()])
+      actions.prepareOutsourceStatements()
+      expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09'), role).toBeNull()
+    }
   })
 })

@@ -501,8 +501,8 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         store.setOutsourceJobs(prev => prev.map(j => assigned.has(j.id) ? { ...j, statementId: assigned.get(j.id)!.id, statementRef: assigned.get(j.id)!.ref } : j))
         for (const st of created) {
           store.notifyUsers({
-            recipientRoles: ['finance_officer'],
-            recipients: userIdsWithRoles(store.users, ['finance_officer']),
+            recipientRoles: ['finance_officer', 'admin_officer'],
+            recipients: userIdsWithRoles(store.users, ['finance_officer', 'admin_officer']),
             type: 'repair',
             title: `${st.vendorName}: weekly statement ready`,
             body: `${st.lines.length} job${st.lines.length === 1 ? '' : 's'} returned ${st.weekStart} to ${st.weekEnd}, ${store.fmtKes(st.total)}. Check and confirm it in Outsource → Statements.`,
@@ -547,7 +547,8 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
 
     confirmOutsourceStatement: (statementId) => {
         const user = store.currentUser()
-        if (!canManageFinance(user)) { store.showToast('Finance confirms vendor statements', 'error'); return null }
+        // Finance Officer, Admin Officer or Director (who may post bills and payments).
+        if (!canManageFinance(user)) { store.showToast('Only Finance, an Admin Officer or the Director can confirm a statement', 'error'); return null }
         const st = store.outsourceStatementsRef.current.find(x => x.id === statementId)
         if (!st) return null
         if (st.status !== 'pending') { store.showToast(`${st.ref} is already confirmed${st.billRef ? ` (${st.billRef})` : ''}`, 'info'); return null }
