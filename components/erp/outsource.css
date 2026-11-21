@@ -464,3 +464,23 @@ div:has(> .outsource-drawer-actions) {
     justify-content: flex-end;
   }
 }
+
+/* ── Add / edit vendor form (inside the shared Modal) ──────────────────── */
+.outsource-vendor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.outsource-vendor-form .outsource-vendor-status { margin-top: 0; }
+.outsource-vendor-hint {
+  margin: 0.25rem 0 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+@media (max-width: 767px) {
+  .outsource-vendor-form .serial-chip {
+    min-height: 34px;
+    padding: 0 0.625rem;
+    font-size: 12px;
+  }
+}

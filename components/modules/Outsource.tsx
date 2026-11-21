@@ -1761,15 +1761,23 @@ function OutsourceContent() {
 
       {/* ── Add / Edit Vendor Modal ───────────────────────────────────────── */}
       {showVendorModal && (
-        <div className="modal-overlay" style={{ zIndex: 9050 }} onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>
-          <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-t1">{editVendorId ? 'Edit Vendor' : 'Add Vendor'}</h3>
-                {vendorModalFromJob && <p className="text-[10px] text-t3 mt-0.5">← Will return to Send for Repair after saving</p>}
-              </div>
-              <button onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
+        <Modal
+          title={editVendorId ? 'Edit vendor' : 'Add vendor'}
+          subtitle={vendorModalFromJob ? 'Returns to Send for repair after saving' : undefined}
+          width={480}
+          variant="enterprise"
+          icon={<Fa icon={faBuilding} />}
+          onClose={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={submitVendor}>
+                {editVendorId ? 'Save changes' : vendorModalFromJob ? 'Save & select' : 'Add vendor'}
+              </button>
+            </>
+          )}
+        >
+          <div className="outsource-vendor-form">
 
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1799,9 +1807,12 @@ function OutsourceContent() {
                 <label htmlFor="outsource-vendor-billing" className="text-[11px] font-semibold text-t2 block mb-1">Billing</label>
                 <select id="outsource-vendor-billing" className="form-input w-full text-[12px]" value={vendorForm.billing}
                   onChange={e => setVendorForm(f => ({ ...f, billing: e.target.value as 'weekly' | 'per_job' }))}>
-                  <option value="weekly">Weekly — one bill a week</option>
-                  <option value="per_job">Per job — a bill per job</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="per_job">Per job</option>
                 </select>
+                <p className="outsource-vendor-hint">{vendorForm.billing === 'weekly'
+                  ? 'One statement and one bill for the week the machines come back.'
+                  : 'A bill for each job when the machine comes back.'}</p>
               </div>
 
               <div>
@@ -1843,14 +1854,8 @@ function OutsourceContent() {
               </div>
             )}
 
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={submitVendor}>
-                {editVendorId ? 'Save Changes' : vendorModalFromJob ? 'Save & Select Vendor' : 'Add Vendor'}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Record Payment Modal ──────────────────────────────────────────── */}
