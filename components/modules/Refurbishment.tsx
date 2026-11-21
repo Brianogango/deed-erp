@@ -69,6 +69,7 @@ function RefurbishmentContent() {
     addRefurbishmentPart, updateRefurbishmentPart, removeRefurbishmentPart,
     requestPartFromInventory, allocateRefurbPart, notifyTechPartAvailable,
     markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob, restoreRefurbishmentJob,
+    deleteRefurbishmentRecords,
     showToast,
     fixRefurbJobNumbers,
   } = useOperationsStore()
@@ -77,6 +78,8 @@ function RefurbishmentContent() {
   const can = useCan()
   const isLeadTech  = can('repair.lead')
   const canAssignJobs = can('repair.assign')
+  // Permanent delete is the Director's, as in Inventory (inventory.serials.delete).
+  const canDelete = can('inventory.serials.delete')
 
   // Job numbers used to be counted per browser, so several jobs share
   // REF/0001. A lead opening this screen gives the repeats (and any job
@@ -131,6 +134,13 @@ function RefurbishmentContent() {
   const [issuesText, setIssuesText]         = useState('')
   const [requestNow, setRequestNow]         = useState(true)
   const [writeOffReason, setWriteOffReason] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<{ jobs: RefurbishmentJob[]; units: SerialNumber[]; onDone?: () => void } | null>(null)
+  const [deleteMode, setDeleteMode] = useState<'job_and_unit' | 'job_only'>('job_and_unit')
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const openDelete = (jobs: RefurbishmentJob[], units: SerialNumber[], onDone?: () => void) => {
+    setDeleteMode('job_and_unit'); setDeleteReason(''); setDeleteTarget({ jobs, units, onDone })
+  }
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   // A part just created from the search: on screen before the list has it.
   const [createdPart, setCreatedPart] = useState<Product | null>(null)
@@ -226,6 +236,72 @@ function RefurbishmentContent() {
     done:       refurbishmentJobs.filter(j => ['transferred', 'written_off'].includes(j.status)).length,
   }
 
+  const deleteModal = deleteTarget && (() => {
+    const { jobs, units } = deleteTarget
+    const hasJobs = jobs.length > 0
+    const mode = hasJobs ? deleteMode : 'job_and_unit'
+    const names = [
+      ...jobs.map(j => `${j.ref} · ${j.productName} · ${j.serialNumber}`),
+      ...units.map(u => `${u.productName} · ${unitInfo(u).assetId || u.serial}`),
+    ]
+    const count = names.length
+    const run = () => {
+      if (!deleteReason.trim()) { showToast('Say why these are being deleted', 'error'); return }
+      setDeleting(true)
+      void deleteRefurbishmentRecords({ jobIds: jobs.map(j => j.id), serialIds: units.map(u => u.id), mode, reason: deleteReason.trim() })
+        .then(ok => { if (ok) { deleteTarget.onDone?.(); setDeleteTarget(null) } })
+        .finally(() => setDeleting(false))
+    }
+    return (
+      <Modal
+        title="Delete permanently"
+        subtitle={`${count} ${hasJobs && !units.length ? `job${count === 1 ? '' : 's'}` : `item${count === 1 ? '' : 's'}`} · cannot be undone`}
+        width={520}
+        variant="enterprise"
+        accent="#DC2626"
+        icon={<Fa icon={faTrash} />}
+        onClose={() => { if (!deleting) setDeleteTarget(null) }}
+        footer={(
+          <>
+            <button type="button" className="btn-outline min-h-11 px-5 text-sm" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button>
+            <button type="button" className="btn-danger min-h-11 px-5 text-sm" disabled={deleting} onClick={run}>
+              {deleting ? 'Deleting…' : 'Delete permanently'}
+            </button>
+          </>
+        )}
+      >
+        <ul className="refurb-delete__list">
+          {names.slice(0, 6).map(n => <li key={n}>{n}</li>)}
+          {count > 6 && <li className="is-more">and {count - 6} more</li>}
+        </ul>
+        {hasJobs && (
+          <fieldset className="refurb-delete__modes">
+            <legend>What goes</legend>
+            <label className={mode === 'job_and_unit' ? 'is-on' : ''}>
+              <input type="radio" name="refurb-delete-mode" checked={mode === 'job_and_unit'} onChange={() => setDeleteMode('job_and_unit')} />
+              <span><b>Job and machine</b>The machine leaves stock, With Issues and refurbishment, as in Inventory delete. For duplicates, tests and wrong intakes.</span>
+            </label>
+            <label className={mode === 'job_only' ? 'is-on' : ''}>
+              <input type="radio" name="refurb-delete-mode" checked={mode === 'job_only'} onChange={() => setDeleteMode('job_only')} />
+              <span><b>Job only</b>The machine stays in stock and shows again under “no job created yet”. A written-off machine stays written off.</span>
+            </label>
+          </fieldset>
+        )}
+        <p className="refurb-delete__note">
+          Kept and listed instead: jobs transferred to stock, stripped for parts or marked ready
+          {mode === 'job_and_unit' ? ', and machines a sale, invoice, delivery, purchase receipt or warranty names (write those off)' : ''}.
+          Parts taken from stock and not fitted go back to stock.
+        </p>
+        <div>
+          <label htmlFor="refurb-delete-reason" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Why *</label>
+          <textarea id="refurb-delete-reason" className="form-input min-h-[76px] w-full resize-y py-3 text-sm" rows={2}
+            placeholder="e.g. Duplicate intake of the same machine"
+            value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
+        </div>
+      </Modal>
+    )
+  })()
+
   if (!mounted) return <ModuleSkeleton />
 
   // ═══════════════════════════════════════════════════════════════════
@@ -317,6 +393,7 @@ function RefurbishmentContent() {
                       }),
                     },
                     { id: 'writeoff', label: 'Write off', danger: true, hidden: !canWriteOff(job), onClick: () => { setWriteOffReason(''); setShowWriteOffModal(true) } },
+                    { id: 'delete', label: 'Delete permanently', danger: true, hidden: !canDelete, onClick: () => openDelete([job], [], () => setActiveId(null)) },
                   ]}
                 />
               </div>
@@ -874,6 +951,7 @@ function RefurbishmentContent() {
           ) : null
         })()}
         {showHarvest && <HarvestPartsModal job={job} onClose={() => setShowHarvest(false)} onDone={() => { setShowHarvest(false); setActiveId(null) }} />}
+        {deleteModal}
       </div>
     )
   }
@@ -974,7 +1052,7 @@ function RefurbishmentContent() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-              {isLeadTech && (
+              {(isLeadTech || canDelete) && (
                 <>
                   <label className="flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none" style={{ color: 'var(--warning-text)' }}>
                     <input type="checkbox"
@@ -983,7 +1061,13 @@ function RefurbishmentContent() {
                       style={{ accentColor: '#EA580C' }} />
                     Select All
                   </label>
-                  {selectedIssueIds.size > 0 && (
+                  {selectedIssueIds.size > 0 && canDelete && (
+                    <button type="button" className="btn-outline text-[11px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                      onClick={() => openDelete([], withIssuesSerials.filter(s => selectedIssueIds.has(s.id)), () => setSelectedIssueIds(new Set()))}>
+                      <Fa icon={faTrash} className="mr-1.5" />Delete {selectedIssueIds.size}
+                    </button>
+                  )}
+                  {selectedIssueIds.size > 0 && isLeadTech && (
                     <button className="btn-primary text-[11px] py-1 px-3"
                       style={{ background: '#EA580C', borderColor: '#EA580C' }}
                       onClick={() => setShowBulkSendModal(true)}>
@@ -1000,7 +1084,7 @@ function RefurbishmentContent() {
                 return (
                   <div key={s.id} className="flex items-center gap-2.5 rounded-lg px-3 py-2 transition-all"
                     style={{ background: isSel ? 'var(--warning-bg)' : 'var(--bg-surface)', border: `1px solid ${isSel ? 'var(--warning)' : 'var(--border-lt)'}` }}>
-                    {isLeadTech && (
+                    {(isLeadTech || canDelete) && (
                       <input type="checkbox" checked={isSel} style={{ accentColor: '#EA580C', flexShrink: 0 }}
                         onChange={e => {
                           const next = new Set(selectedIssueIds)
@@ -1161,6 +1245,13 @@ function RefurbishmentContent() {
                 : 'No refurbishment jobs'
             }
             onRowClick={j => setActiveId(j.id)}
+            selectable={canDelete}
+            bulkActions={canDelete ? ({ rows, clear }) => (
+              <button type="button" className="btn-outline text-[11px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                onClick={() => openDelete(rows, [], clear)}>
+                <Fa icon={faTrash} className="mr-1.5" />Delete permanently
+              </button>
+            ) : undefined}
             rowStyle={j => ({ borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}` })}
             cardAccent={j => STATUS_LEFT_BORDER[j.status]}
             exportTitle="Refurbishment Jobs"
@@ -1230,6 +1321,7 @@ function RefurbishmentContent() {
           onCancel={() => setPendingConfirm(null)}
         />
       )}
+      {deleteModal}
     </div>
   )
 }

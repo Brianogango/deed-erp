@@ -106,7 +106,7 @@ const OPERATIONS_ACTIONS = [
     'pickRelease', 'removeRefurbishmentPart', 'requestPartFromInventory', 'showToast', 'transferToSell',
     'updateHoldover', 'updateRefurbishmentJob', 'updateRefurbishmentPart', 'updateRepair', 'updateSerial',
     'verifyReleaseItem', 'voidRelease', 'writeOffRefurbishmentJob', 'restoreRefurbishmentJob', 'fixRefurbJobNumbers',
-    'fixAdjustmentNumbers', 'intakeTaggedMachines', 'identifyRefurbUnit', 'harvestRefurbishmentJob',
+    'fixAdjustmentNumbers', 'intakeTaggedMachines', 'identifyRefurbUnit', 'harvestRefurbishmentJob', 'deleteRefurbishmentRecords',
 ] as const
 
 /** The per-area action bundles the provider hands to the narrow store contexts. */

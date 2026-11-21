@@ -1705,7 +1705,7 @@ function OutsourceContent() {
             footer={(
               <>
                 <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setCancelJobId(null)}>Keep the job</button>
-                <button type="button" className="btn-primary min-h-11 px-5 text-sm" style={{ background: 'var(--danger)' }} onClick={submitCancelJob}>Cancel job</button>
+                <button type="button" className="btn-danger min-h-11 px-5 text-sm" onClick={submitCancelJob}>Cancel job</button>
               </>
             )}
           >

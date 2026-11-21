@@ -521,6 +521,8 @@ export interface AppState {
   identifyRefurbUnit: (jobId: string, input: { serial: string; productId?: string; specs?: string }) => Promise<boolean>
   /** Not repairable: strip it; kept parts go to stock carrying part of its cost. */
   harvestRefurbishmentJob: (jobId: string, reason: string, parts: Array<{ productId: string; qty: number; unitValue: number }>) => Promise<boolean>
+  /** Director: permanently delete jobs (and, with job_and_unit, their machines). Cannot be undone. */
+  deleteRefurbishmentRecords: (input: { jobIds: string[]; serialIds: string[]; mode: 'job_and_unit' | 'job_only'; reason: string }) => Promise<boolean>
 
   // HR users & auth
   login: (username: string, password: string) => Promise<boolean>
@@ -1258,4 +1260,5 @@ export type OperationsStoreState = Pick<AppState,
   | 'fixRefurbJobNumbers'
   | 'identifyRefurbUnit'
   | 'harvestRefurbishmentJob'
+  | 'deleteRefurbishmentRecords'
 >
