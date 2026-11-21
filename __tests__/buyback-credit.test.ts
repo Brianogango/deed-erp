@@ -29,3 +29,18 @@ describe('buy-back settlement: pay or add as credit', () => {
   })
 
   })
+
+import { canReceiveFreeBuyBack } from '@/lib/buyback-credit'
+
+describe('a device given for free (KSh 0 buy-back)', () => {
+  it('is received at no cost once approved — not paid or credited', () => {
+    expect(canReceiveFreeBuyBack({ status: 'approved', total: 0 }).ok).toBe(true)
+    expect(canPayBuyBackCash({ status: 'approved', total: 0 }, 'cash').ok).toBe(false)
+    expect(canCreditBuyBack({ status: 'approved', total: 0 }).ok).toBe(false)
+  })
+  it('a buy-back with an amount, or not yet approved, is not', () => {
+    expect(canReceiveFreeBuyBack({ status: 'approved', total: 500 }).ok).toBe(false)
+    expect(canReceiveFreeBuyBack({ status: 'draft', total: 0 }).ok).toBe(false)
+    expect(canReceiveFreeBuyBack({ status: 'paid', total: 0 }).ok).toBe(false)
+  })
+})

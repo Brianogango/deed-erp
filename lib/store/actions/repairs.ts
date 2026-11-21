@@ -3900,12 +3900,15 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         const extraNotes = String(opts.notes ?? '').trim()
   
         let serialId: string | undefined
+        // No serial on the repair: an intake tag, and With Issues to identify it.
+        let tagged = false
         if (product.requiresSerial || repair.serialNumber?.trim()) {
           const matched = matchRepairDeviceSerial(store.serialRef.current, product.id, repair)
           if ('error' in matched) {
             store.showToast(matched.error, 'error')
             return { ok: false, message: matched.error }
           }
+          tagged = !!matched.tagged
           if (matched.existing) {
             serialId = matched.existing.id
             if (matched.existing.status !== 'sold' && matched.existing.location !== 'customer') {
@@ -3924,8 +3927,9 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
               status: 'sold',
               receivedDate: at,
               soldDate: at,
-              barcode: store.buildInventoryBarcodeForProduct(product.id, matched.serialText),
-            }
+              barcode: tagged ? matched.serialText : store.buildInventoryBarcodeForProduct(product.id, matched.serialText),
+              ...(tagged ? { identityPending: true, intakeTag: matched.serialText } : {}),
+            } as SerialNumber
             store.setSerials(p => [...p, newSerial])
             sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
             serialId = newSerial.id
@@ -3977,7 +3981,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             notes: `Trade-in from repair ${repair.ref}`,
           }],
           total: unitPrice,
-          destinationLocation: 'warehouse',
+          destinationLocation: tagged ? 'shop' : 'warehouse',
           notes: `Trade-in after evaluation from repair ${repair.ref}${extraNotes ? ` — ${extraNotes}` : ''}`,
         }
         store.setBuyBacks(p => [bb, ...p])
