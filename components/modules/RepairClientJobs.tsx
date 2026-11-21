@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useClientMessageUnread, unreadFor } from '@/hooks/useClientMessageUnread'
 import { canAssignRepair } from '@/lib/repair/can-assign'
 import { AssignTechnicianModal } from './RepairModals'
 import { activeOutsourceJob, isOutsourceOverdue, outsourceBadgeLabel, outsourcedRepairCounts } from '@/lib/repair/outsource-visibility'
@@ -86,6 +87,16 @@ function OutsourceLine({ repairId, outsourceJobs }: { repairId: string; outsourc
   )
 }
 
+/** The client wrote in the repair chat and nobody on staff has opened it yet. */
+function ClientWroteLine({ note }: { note?: { count: number; lastText: string } }) {
+  if (!note?.count) return null
+  return (
+    <span className="repair-client-wrote" title={`Client: “${note.lastText}”`}>
+      💬 Client wrote{note.count > 1 ? ` (${note.count})` : ''}
+    </span>
+  )
+}
+
 /** Paid in full but never marked collected — record the handover. */
 function PaidNotCollectedLine({ show }: { show: boolean }) {
   if (!show) return null
@@ -97,7 +108,7 @@ function PaidNotCollectedLine({ show }: { show: boolean }) {
   )
 }
 
-function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected, technician }: any) {
+function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected, technician, clientNote }: any) {
   const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
   const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
   const locLabel = outJob ? outJob.vendorName
@@ -142,6 +153,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected, technic
         <div className="flex flex-col items-end gap-2 shrink-0">
           <RepairStatusBadge status={r.status} />
           <OutsourceLine repairId={r.id} outsourceJobs={outsourceJobs} />
+          <ClientWroteLine note={clientNote} />
           <PaidNotCollectedLine show={!!paidUncollected?.has(r.id)} />
           <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDateTime(r.intakeDate)}</span>
         </div>
@@ -219,6 +231,9 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     )
   }
   const { invoices, remindLateOutsourceJobs } = useRepairStore()
+  // Clients who wrote in a repair chat that nobody has opened yet.
+  const clientUnread = useClientMessageUnread()
+  const clientsWaiting = visibleRepairs.filter(r => (unreadFor(clientUnread, r.ref)?.count ?? 0) > 0).length
   const paidUncollected = useMemo(
     () => new Set(visibleRepairs.filter(r => isPaidNotCollected(r as any, invoices as any)).map(r => r.id)),
     [visibleRepairs, invoices],
@@ -318,6 +333,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     if (statusFilter === 'pending_group') list = list.filter(r => ['pending_verification','received','assigned'].includes(r.status))
     else if (statusFilter === 'done_group') list = list.filter(r => ['delivered','closed'].includes(r.status))
     else if (statusFilter === 'outsourced') list = list.filter(r => !!activeOutsourceJob(r.id, outsourceJobs))
+    else if (statusFilter === 'client_wrote') list = list.filter(r => (unreadFor(clientUnread, r.ref)?.count ?? 0) > 0)
     else if (statusFilter === 'paid_uncollected') list = list.filter(r => paidUncollected.has(r.id))
     else if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
     if (techFilter !== 'all') list = techFilter === 'unassigned' ? list.filter(r => !r.assignedTechnicianId) : list.filter(r => r.assignedTechnicianId === techFilter)
@@ -329,10 +345,11 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     }
     // Always newest-first before DataTable pagination — survives cleared column sort.
     return sortRepairsNewestFirst(list)
-  }, [visibleRepairs, outsourceJobs, paidUncollected, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
+  }, [visibleRepairs, outsourceJobs, paidUncollected, clientUnread, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
 
   const selectedStatusLabel =
     statusFilter === 'outsourced' ? 'At vendors'
+    : statusFilter === 'client_wrote' ? 'Client wrote'
     : statusFilter === 'paid_uncollected' ? 'Paid, not collected'
     : statusFilter === 'pending_group' ? 'Pending Group'
     : statusFilter === 'done_group' ? 'Done Group'
@@ -493,6 +510,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
           <RepairStatusBadge status={r.status} />
           <OutsourceLine repairId={r.id} outsourceJobs={outsourceJobs} />
           <PaidNotCollectedLine show={paidUncollected.has(r.id)} />
+          <ClientWroteLine note={unreadFor(clientUnread, r.ref)} />
         </div>
       ),
       exportValue: r => r.status,
@@ -561,7 +579,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
       <div
         className="repair-metric-strip"
         aria-label="Repair workload summary"
-        style={{ '--repair-metric-count': repairStats.length + (outsourced.out > 0 ? 1 : 0) + (paidUncollected.size > 0 ? 1 : 0) } as CSSProperties}
+        style={{ '--repair-metric-count': repairStats.length + (outsourced.out > 0 ? 1 : 0) + (paidUncollected.size > 0 ? 1 : 0) + (clientsWaiting > 0 ? 1 : 0) } as CSSProperties}
       >
         {repairStats.map(stat => (
           <div className={`repair-metric repair-metric--${stat.tone}`} key={stat.label}>
@@ -586,6 +604,20 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
               {outsourced.overdue > 0 && (
                 <span className="repair-metric__note">{outsourced.overdue} out over a week</span>
               )}
+            </div>
+          </button>
+        )}
+        {clientsWaiting > 0 && (
+          <button
+            type="button"
+            className="repair-metric repair-metric--attention"
+            onClick={() => handleStatusChange('client_wrote')}
+            title="Clients who wrote in the repair chat — open the job's Chat tab to reply"
+          >
+            <span className="repair-metric__indicator" aria-hidden="true" />
+            <div>
+              <span>Client wrote</span>
+              <strong>{clientsWaiting}</strong>
             </div>
           </button>
         )}
@@ -657,7 +689,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
             onRowClick={r => onSelect(r.id)}
             rowActions={repairRowActions}
             rowStyle={r => ({ borderLeft: `3px solid ${STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'}` })}
-            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} paidUncollected={paidUncollected} technician={technicianCell(r, true)} />}
+            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} paidUncollected={paidUncollected} technician={technicianCell(r, true)} clientNote={unreadFor(clientUnread, r.ref)} />}
             exportTitle="Repair Jobs"
             exportFilename="repair-jobs"
           />

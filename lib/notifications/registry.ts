@@ -66,6 +66,9 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'repair.diagnosis_overdue': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['technical_lead'], cooldownHours: 24 }),
   'repair.parts_requested': POLICY(['in_app'], 'attention', { recipientRoles: ['inventory_officer'] }),
   'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], mandatory: true, cooldownHours: 12 }),
+  // A client wrote in the repair chat: the front desk and the workshop lead,
+  // plus the job's technician (added by the sender). One per burst.
+  'repair.client_message': POLICY(['in_app', 'push'], 'attention', { recipientRoles: ['admin_officer', 'technical_lead'] }),
   // One summary per working day for the directors (see scanRepairs).
   'repair.director_digest': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['director'] }),
 
