@@ -1,4 +1,5 @@
 'use client'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
@@ -448,7 +449,7 @@ export default function HRPayrollTab() {
                   onChange={setPayBankAccountId}
                   options={[
                     { value: '', label: 'Select bank / cash account...' },
-                    ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: a.name })),
+                    ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: bankChoiceLabel(a) })),
                   ]}
                 />
               </Field>

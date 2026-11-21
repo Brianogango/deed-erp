@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { Portal } from '@/components/ui'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFinanceStore, fmtDate, fmtKes } from '@/lib/store'
@@ -140,7 +141,7 @@ export default function Loans() {
               <div><label className={label}>Paid into</label>
                 <select className={input} value={nl.bankAccountId} onChange={e => setNl(f => ({ ...f, bankAccountId: e.target.value }))}>
                   <option value="">Select bank / cash account</option>
-                  {banks.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  {banks.map(a => <option key={a.id} value={a.id}>{bankChoiceLabel(a)}</option>)}
                 </select></div>
               <div><label className={label}>Notes</label><input className={input} value={nl.notes} onChange={e => setNl(f => ({ ...f, notes: e.target.value }))} /></div>
               <label className="flex items-start gap-2 text-[11px]"><input type="checkbox" checked={nl.drawdownBooked} onChange={e => setNl(f => ({ ...f, drawdownBooked: e.target.checked }))} />
@@ -165,7 +166,7 @@ export default function Loans() {
                 <div><label className={label}>Paid from</label>
                   <select className={input} value={rp.bankAccountId} onChange={e => setRp(f => ({ ...f, bankAccountId: e.target.value }))}>
                     <option value="">Select account</option>
-                    {banks.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    {banks.map(a => <option key={a.id} value={a.id}>{bankChoiceLabel(a)}</option>)}
                   </select></div>
                 <div><label className={label}>Principal (KSh)</label><input type="number" className={input} value={rp.principal} onChange={e => setRp(f => ({ ...f, principal: e.target.value }))} /></div>
                 <div><label className={label}>Interest (KSh)</label><input type="number" className={input} value={rp.interest} onChange={e => setRp(f => ({ ...f, interest: e.target.value }))} /></div>

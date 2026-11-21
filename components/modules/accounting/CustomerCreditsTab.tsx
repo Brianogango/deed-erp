@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes } from '@/lib/store'
@@ -241,7 +242,7 @@ export default function CustomerCreditsTab() {
                   <Field label="Paid from">
                     <Select value={refund.bankAccountId} onChange={v => setRefund(r => ({ ...r, bankAccountId: v }))} options={[
                       { value: '', label: 'Select account…' },
-                      ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id })),
+                      ...activeBanks.map(b => ({ value: b.id, label: bankChoiceLabel(b) })),
                     ]} />
                   </Field>
                 )}
