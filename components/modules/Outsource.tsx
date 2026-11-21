@@ -38,6 +38,9 @@ function dueLabel(job: OutsourceJob): { text: string; late: boolean } | null {
   return { text: `due in ${-late === 1 ? '1 day' : `${-late} days`}`, late: false }
 }
 
+/** A bill's number as people read it: a draft has no number yet. */
+const billLabel = (ref?: string | null) => (!ref || /^DRAFT\//i.test(ref) ? 'Draft bill' : `Bill ${ref}`)
+
 function OutsourceStatusBadge({ status }: { status: OutsourceJob['status'] }) {
   const m = STATUS_META[status]
   return <StatusBadge status={m.badgeStatus} label={m.label} />
@@ -323,7 +326,7 @@ function OutsourceContent() {
       const st = outsourceStatements.find(x => x.id === job.statementId)
       return st?.status === 'confirmed' ? `On ${job.statementRef} · bill ${st.billRef ?? ''}`.trim() : `On ${job.statementRef} · waiting for Finance`
     }
-    if (bill) return `Bill ${bill.ref}`
+    if (bill) return billLabel(bill.ref)
     if (job.billingHold) return `Held back: ${job.billingHold.reason}`
     if (vendorBilling(job.vendorId) === 'weekly') {
       const week = weekOf(job.returnedDate ?? '')
@@ -715,7 +718,7 @@ function OutsourceContent() {
         )}
         {bill && (
           <button type="button" className="outsource-act" onClick={e => { e.stopPropagation(); openBills() }}>
-            {bill.ref}
+            {billLabel(bill.ref)}
           </button>
         )}
       </>
@@ -741,7 +744,7 @@ function OutsourceContent() {
         {canBillJobAlone(job) && (
           <button type="button" className="outsource-act is-warning" onClick={() => createOutsourceJobBill(job.id)} title="This cost is owed but has no bill, so Finance cannot pay it yet">Create bill</button>
         )}
-        {bill && <button type="button" className="outsource-act" onClick={openBills}>Bill {bill.ref}</button>}
+        {bill && <button type="button" className="outsource-act" onClick={openBills}>{billLabel(bill.ref)}</button>}
       </div>
     )
   }
@@ -1060,10 +1063,10 @@ function OutsourceContent() {
                   ) : (
                     <div className="divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
                       {vendorJobs.map(job => (
-                        <div key={job.id} className="px-4 py-3 hover:bg-gray-50">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
+                        <div key={job.id} className="outsource-vendor-job px-4 py-3 hover:bg-gray-50">
+                          <div className="outsource-vendor-job__row flex items-start justify-between gap-2">
+                            <div className="outsource-vendor-job__info flex-1 min-w-0">
+                              <div className="outsource-vendor-job__head flex flex-wrap items-center gap-2 mb-0.5">
                                 <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
                                 <OutsourceStatusBadge status={job.status} />
                               </div>
@@ -1094,7 +1097,7 @@ function OutsourceContent() {
                                 </p>
                               )}
                             </div>
-                            <div className="text-right flex-shrink-0">
+                            <div className="outsource-vendor-job__side text-right flex-shrink-0">
                               {job.finalCost != null
                                 ? <p className="font-bold text-sm text-t1">{fmtKes(job.finalCost)}</p>
                                 : job.quotedCost != null
@@ -1107,7 +1110,7 @@ function OutsourceContent() {
                                 <button type="button" className="outsource-act" onClick={() => setActiveJobId(job.id)}>Details</button>
                                 {job.billId && (() => {
                                   const bill = invoices.find(i => i.id === job.billId)
-                                  return bill ? <button type="button" className="outsource-act" onClick={openBills}>Bill {bill.ref}</button> : null
+                                  return bill ? <button type="button" className="outsource-act" onClick={openBills}>{billLabel(bill.ref)}</button> : null
                                 })()}
                                 {canBillJobAlone(job) && (
                                   <button type="button" className="outsource-act is-warning" onClick={() => createOutsourceJobBill(job.id)} title="This cost is owed but has no bill, so Finance cannot pay it yet">Create bill</button>
@@ -1796,8 +1799,8 @@ function OutsourceContent() {
                 <label htmlFor="outsource-vendor-billing" className="text-[11px] font-semibold text-t2 block mb-1">Billing</label>
                 <select id="outsource-vendor-billing" className="form-input w-full text-[12px]" value={vendorForm.billing}
                   onChange={e => setVendorForm(f => ({ ...f, billing: e.target.value as 'weekly' | 'per_job' }))}>
-                  <option value="weekly">Weekly — one statement and one bill a week</option>
-                  <option value="per_job">Per job — a bill as each job comes back</option>
+                  <option value="weekly">Weekly — one bill a week</option>
+                  <option value="per_job">Per job — a bill per job</option>
                 </select>
               </div>
 
@@ -1807,14 +1810,8 @@ function OutsourceContent() {
                   {OUTSOURCE_SERVICE_TYPES.map(s => {
                     const active = vendorForm.specializations.includes(s.value)
                     return (
-                      <button key={s.value} onClick={() => toggleSpec(s.value)}
-                        style={{
-                          fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
-                          background:  active ? 'var(--navy)' : 'var(--bg-surface)',
-                          color:       active ? '#fff'    : 'var(--text-4)',
-                          borderColor: active ? 'var(--navy)' : 'var(--border-lt)',
-                          fontWeight:  active ? 600 : 400,
-                        }}>
+                      <button key={s.value} type="button" onClick={() => toggleSpec(s.value)}
+                        className={`serial-chip${active ? ' is-active' : ''}`} aria-pressed={active}>
                         {s.label}
                       </button>
                     )
