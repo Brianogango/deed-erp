@@ -3,7 +3,9 @@
 import JobTrail from '@/components/erp/JobTrail'
 import { canAssignRepair } from '@/lib/repair/can-assign'
 import Link from 'next/link'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useClientMessageUnread, unreadFor } from '@/hooks/useClientMessageUnread'
 import { useRepair } from './RepairContext'
 import { useRepairStore, fmtKes } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
@@ -128,7 +130,18 @@ export default function RepairDetailView() {
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showAllSteps, setShowAllSteps] = useState(false)
-  const [activeRepairTab, setActiveRepairTab] = useState<'overview' | 'diagnosis' | 'quote' | 'parts' | 'work' | 'handover' | 'activity'>('overview')
+  // A client-message alert opens the repair on its chat (?repairTab=chat).
+  const search = useSearchParams()
+  const [activeRepairTab, setActiveRepairTab] = useState<'overview' | 'diagnosis' | 'quote' | 'parts' | 'work' | 'handover' | 'chat' | 'activity'>(
+    search?.get('repairTab') === 'chat' ? 'chat' : 'overview',
+  )
+  const clientUnread = useClientMessageUnread()
+  // The open tab stays in view in the swipeable tab row (a chat alert opens on Chat).
+  useEffect(() => {
+    const row = document.querySelector<HTMLElement>('.repair-detail__tabs')
+    const tab = row?.querySelector<HTMLElement>('.repair-detail__tab--active')
+    if (row && tab) row.scrollTo({ left: Math.max(0, tab.offsetLeft - 12), behavior: 'smooth' })
+  }, [activeRepairTab])
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
   const [paymentRejectReason, setPaymentRejectReason] = useState('')
   const [waiveFeeReason, setWaiveFeeReason] = useState('')
@@ -926,6 +939,12 @@ export default function RepairDetailView() {
         <button className={tabButtonClass('parts')} type="button" onClick={() => setActiveRepairTab('parts')}>Parts</button>
         <button className={tabButtonClass('work')} type="button" onClick={() => setActiveRepairTab('work')}>Work &amp; QC</button>
         <button className={tabButtonClass('handover')} type="button" onClick={() => setActiveRepairTab('handover')}>Handover</button>
+        <button className={tabButtonClass('chat')} type="button" onClick={() => setActiveRepairTab('chat')}>
+          Chat
+          {(unreadFor(clientUnread, r.ref)?.count ?? 0) > 0 && activeRepairTab !== 'chat' && (
+            <span className="repair-chat-badge" aria-label={`${unreadFor(clientUnread, r.ref)!.count} unread from the client`}>{unreadFor(clientUnread, r.ref)!.count}</span>
+          )}
+        </button>
         <button className={tabButtonClass('activity')} type="button" onClick={() => setActiveRepairTab('activity')}>Activity</button>
       </nav>
 
@@ -934,7 +953,7 @@ export default function RepairDetailView() {
         <div className="repair-detail__grid grid grid-cols-1 lg:grid-cols-12">
 
           {/* ═══ Left Column ═══ */}
-          <div className={`repair-detail__main lg:col-span-8 ${['quote', 'handover', 'activity'].includes(activeRepairTab) ? 'hidden' : ''}`}>
+          <div className={`repair-detail__main lg:col-span-8 ${['quote', 'handover', 'chat', 'activity'].includes(activeRepairTab) ? 'hidden' : ''}`}>
 
             {/* Device & Client */}
             <SectionCard delay={60} id="repair-overview" className={activeRepairTab === 'overview' ? '' : 'hidden'}>
@@ -1614,7 +1633,7 @@ export default function RepairDetailView() {
           </div>
 
           {/* ═══ Right Column ═══ */}
-          <aside className={`repair-detail__aside ${['quote', 'handover', 'activity'].includes(activeRepairTab) ? 'lg:col-span-12 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start' : 'lg:col-span-4'}`}>
+          <aside className={`repair-detail__aside ${['quote', 'handover', 'chat', 'activity'].includes(activeRepairTab) ? 'lg:col-span-12 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start' : 'lg:col-span-4'}`}>
             {!isQuoteDeclinedReopenable(r.status) && (
               <section className="repair-section-card repair-detail__next-action border border-sky-200 bg-[var(--bg-card)] lg:sticky lg:top-[9.5rem] lg:col-start-2 lg:row-start-1">
                 <div className="border-b border-[var(--border-lt)] bg-sky-50/70 px-4 py-3">
@@ -2172,10 +2191,12 @@ export default function RepairDetailView() {
               </div>
             </SectionCard>
 
+            {activeRepairTab === 'chat' && (
+              <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} customerName={r.customerName} />
+            )}
+
             {activeRepairTab === 'activity' && (
               <>
-                {/* Customer Chat */}
-                <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
                 {/* Internal staff notes / activities (DocumentMessage) */}
                 <Chatter

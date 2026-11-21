@@ -15521,7 +15521,7 @@ button.repair-metric:hover {
   white-space: nowrap;
 }
 
-.repair-detail__tabs button:first-child,
+.repair-detail__tabs button.repair-detail__tab--active,
 .repair-detail__tabs button:hover,
 .repair-detail__tabs button:focus-visible {
   border-bottom-color: var(--repair-cyan);
