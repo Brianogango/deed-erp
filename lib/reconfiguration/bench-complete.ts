@@ -10,7 +10,8 @@ import 'server-only'
 
 import prisma from '@/lib/prisma'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { round2 } from '@/lib/inventory/valuation-math'
 import { planComponentInstall, planComponentRemoval } from '@/lib/inventory/reconfiguration-stock'
 import {
@@ -20,6 +21,7 @@ import {
   defaultPriceAfterBench,
   reconfigCompletionEventKey,
   reconfigValuationEventKey,
+  reconfigValuationJournalRef,
 } from '@/lib/reconfiguration/costing'
 import { specsFromProposed } from '@/lib/reconfiguration/diff-engine'
 import { snapshotTextFields } from '@/lib/reconfiguration/snapshot-write'
@@ -40,6 +42,7 @@ import {
   syncBlobSpecs,
 } from '@/lib/reconfiguration/service'
 import type { DeviceConfigFields } from '@/lib/reconfiguration/types'
+import { readBenchNotes, type BenchNotes } from '@/lib/reconfiguration/bench-notes'
 
 function dec(n: unknown) {
   return round2(Number(n) || 0)
@@ -297,15 +300,35 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
 
   const ref = await getNextDocNumber('reconfiguration')
   const reason = (params.reason || '').trim() || job.reason
+  const proposedConfig: DeviceConfigFields = {
+    ...device.current,
+    totalRamGb: job.after.ramGb,
+    ramComposition: job.ram.remainingModules.map(m => ({
+      slotType: 'ram_slot' as const,
+      slotNumber: m.slotNumber || 1,
+      capacityGb: m.capacityGb,
+      removable: m.removable,
+      productId: m.productId,
+      installationId: m.installationId,
+    })),
+    primaryStorageGb: job.after.storageGb,
+    storageType: job.after.storageType,
+    displayName: job.after.displayName,
+  }
+
   const notes = JSON.stringify({
     bench: {
-      version: 1,
+      version: 2,
       ram: params.ram,
       storage: params.storage,
       nameBefore: job.before.displayName,
       nameAfter: job.after.displayName,
+      // What the finish step needs, so a stuck job can be finished later.
+      finalSellingPrice: params.finalSellingPrice ?? null,
+      before: current,
+      proposed: proposedConfig,
     },
-  })
+  } satisfies { bench: BenchNotes })
 
   const wo = await prisma.reconfigurationWorkOrder.create({
     data: {
@@ -336,22 +359,6 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
     create: { serialId: device.serialId, currentCost: device.costBefore, updatedById: params.userId || null },
     update: {},
   })
-
-  const proposedConfig: DeviceConfigFields = {
-    ...device.current,
-    totalRamGb: job.after.ramGb,
-    ramComposition: job.ram.remainingModules.map(m => ({
-      slotType: 'ram_slot' as const,
-      slotNumber: m.slotNumber || 1,
-      capacityGb: m.capacityGb,
-      removable: m.removable,
-      productId: m.productId,
-      installationId: m.installationId,
-    })),
-    primaryStorageGb: job.after.storageGb,
-    storageType: job.after.storageType,
-    displayName: job.after.displayName,
-  }
 
   await prisma.deviceConfigurationSnapshot.updateMany({
     where: { serialId: device.serialId, isCurrent: true },
@@ -394,8 +401,6 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
     },
   })
 
-  // Persist snapshot FKs before stock moves. If Apply fails after the stick
-  // is in, Complete can still promote the 12GB (etc.) snapshot.
   await prisma.reconfigurationWorkOrder.update({
     where: { id: wo.id },
     data: {
@@ -405,269 +410,278 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
     },
   })
 
-  let costRemoved = 0
-  let installedCost = 0
-
-  try {
-    // Pull first, then fit. Incoming warehouse qty is already asserted above.
-    // Installing first on a swap reuses the same slot, so seeding the outgoing
-    // drive would pick up the new SSD and immediately mark it removed.
-    for (const move of [...job.ram.removals, ...job.storage.removals]) {
-      const meta = await partMeta(move.productId)
-      let installationId = move.installationId
-      if (!installationId) {
-        installationId = await seedDeclaredModule({
-          serialId: device.serialId,
-          userId: params.userId,
-          slot: move.slot,
-          productId: move.productId,
-          capacityGb: move.capacityGb,
-          slotNumber: move.slotNumber,
-        })
-      }
-      const existing = await prisma.deviceComponentInstallation.findUnique({ where: { id: installationId } })
-      const existingCost = dec(existing?.costAtInstallation)
-      costRemoved += existingCost
-
-      const removal = await prisma.reconfigurationRemovalLine.create({
-        data: {
-          workOrderId: wo.id,
-          installationId,
-          componentProductId: move.productId,
-          slotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
-          slotNumber: move.slotNumber,
-          quantity: 1,
-          existingCost,
-          destinationLocation: 'pending_testing',
-          disposition: 'pending_testing',
-          dataStatus: move.slot === 'storage' ? 'unknown' : null,
-        },
-      })
-
-      const plan = planComponentRemoval({
-        documentRef: ref,
-        productId: move.productId,
-        productName: meta.name,
-        qty: 1,
+  // ── Plan: every part to pull and fit is written down before any moves ──
+  // A job that stops half-way then knows exactly what is still owed.
+  for (const move of [...job.ram.removals, ...job.storage.removals]) {
+    const installationId = move.installationId || await seedDeclaredModule({
+      serialId: device.serialId,
+      userId: params.userId,
+      slot: move.slot,
+      productId: move.productId,
+      capacityGb: move.capacityGb,
+      slotNumber: move.slotNumber,
+    })
+    const existing = await prisma.deviceComponentInstallation.findUnique({ where: { id: installationId } })
+    await prisma.reconfigurationRemovalLine.create({
+      data: {
+        workOrderId: wo.id,
+        installationId,
+        componentProductId: move.productId,
+        slotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
+        slotNumber: move.slotNumber,
+        quantity: 1,
+        existingCost: dec(existing?.costAtInstallation),
+        destinationLocation: 'pending_testing',
         disposition: 'pending_testing',
-      })
-      const moveRef = await applyStockPlan(plan, existingCost, { workOrderId: wo.id, userId: params.userId })
-
-      await prisma.deviceComponentInstallation.update({
-        where: { id: installationId },
-        data: {
-          status: 'removed',
-          removedAt: new Date(),
-          removedById: params.userId || null,
-          removalWorkOrderId: wo.id,
-        },
-      })
-      await prisma.reconfigurationRemovalLine.update({
-        where: { id: removal.id },
-        data: {
-          actualRemovedAt: new Date(),
-          removedById: params.userId || null,
-          stockMoveRef: moveRef,
-        },
-      })
-    }
-
-    for (const move of [...job.ram.installations, ...job.storage.installations]) {
-      const meta = await partMeta(move.productId)
-      installedCost += meta.unitCost
-      const line = await prisma.reconfigurationInstallationLine.create({
-        data: {
-          workOrderId: wo.id,
-          componentProductId: move.productId,
-          requiredSpec: {
-            capacityGb: move.capacityGb,
-            category: move.slot,
-          },
-          sourceLocation: location,
-          quantity: 1,
-          unitCost: meta.unitCost,
-          targetSlotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
-          targetSlotNumber: move.slotNumber,
-          compatibilityResult: 'pass',
-        },
-      })
-
-      const plan = planComponentInstall({
-        documentRef: ref,
-        productId: move.productId,
-        productName: meta.name,
-        qty: 1,
-        from: location as any,
-      })
-      const moveRef = await applyStockPlan(plan, meta.unitCost, { workOrderId: wo.id, userId: params.userId })
-
-      const installation = await prisma.deviceComponentInstallation.create({
-        data: {
-          serialId: device.serialId,
-          componentProductId: move.productId,
-          category: move.slot === 'ram' ? 'ram' : 'storage',
-          slotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
-          slotNumber: move.slotNumber,
-          capacityGb: move.capacityGb,
-          quantity: 1,
-          removable: true,
-          status: 'installed',
-          costAtInstallation: meta.unitCost,
-          sourceStockMoveRef: moveRef,
-          installationWorkOrderId: wo.id,
-          installedById: params.userId || null,
-        },
-      })
-
-      await prisma.reconfigurationInstallationLine.update({
-        where: { id: line.id },
-        data: {
-          installedAt: new Date(),
-          installedById: params.userId || null,
-          resultingInstallationId: installation.id,
-          reservationStatus: 'fulfilled',
-          stockMoveRef: moveRef,
-        },
-      })
-    }
-
-    for (const m of remainingModulesToSeed(job.ram.remainingModules, job.ram.installations)) {
-      if (!isUuid(m.productId)) continue
-      await seedDeclaredModule({
-        serialId: device.serialId,
-        userId: params.userId,
-        slot: 'ram',
-        productId: m.productId,
-        capacityGb: m.capacityGb,
-        slotNumber: m.slotNumber || 1,
-      })
-    }
-    for (const m of remainingModulesToSeed(job.storage.remainingModules, job.storage.installations)) {
-      if (!isUuid(m.productId)) continue
-      await seedDeclaredModule({
-        serialId: device.serialId,
-        userId: params.userId,
-        slot: 'storage',
-        productId: m.productId,
-        capacityGb: m.capacityGb,
-        slotNumber: m.slotNumber || 1,
-      })
-    }
-  } catch (err) {
-    try {
-      const latest = await prisma.reconfigurationWorkOrder.findUnique({ where: { id: wo.id }, select: { version: true } })
-      if (latest) {
-        await cancelWorkOrder({
-          id: wo.id,
-          version: latest.version,
-          userId: params.userId,
-          reason: err instanceof Error ? err.message : 'Bench apply failed',
-        })
-      }
-    } catch {
-      /* stock may already have moved — leave the work order for a human */
-    }
-    throw err
+        dataStatus: move.slot === 'storage' ? 'unknown' : null,
+      },
+    })
   }
+  for (const move of [...job.ram.installations, ...job.storage.installations]) {
+    const meta = await partMeta(move.productId)
+    await prisma.reconfigurationInstallationLine.create({
+      data: {
+        workOrderId: wo.id,
+        componentProductId: move.productId,
+        requiredSpec: { capacityGb: move.capacityGb, category: move.slot },
+        sourceLocation: location,
+        quantity: 1,
+        unitCost: meta.unitCost,
+        targetSlotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
+        targetSlotNumber: move.slotNumber,
+        compatibilityResult: 'pass',
+      },
+    })
+  }
+  for (const m of remainingModulesToSeed(job.ram.remainingModules, job.ram.installations)) {
+    if (!isUuid(m.productId)) continue
+    await seedDeclaredModule({ serialId: device.serialId, userId: params.userId, slot: 'ram', productId: m.productId, capacityGb: m.capacityGb, slotNumber: m.slotNumber || 1 })
+  }
+  for (const m of remainingModulesToSeed(job.storage.remainingModules, job.storage.installations)) {
+    if (!isUuid(m.productId)) continue
+    await seedDeclaredModule({ serialId: device.serialId, userId: params.userId, slot: 'storage', productId: m.productId, capacityGb: m.capacityGb, slotNumber: m.slotNumber || 1 })
+  }
+
+  return runBenchJob(wo.id, params.userId)
+}
+
+// ── Running, finishing, undoing and reversing a bench job ────────────────────
+
+async function writeBenchNotes(id: string, patch: Partial<BenchNotes>) {
+  const wo = await prisma.reconfigurationWorkOrder.findUnique({ where: { id }, select: { notes: true } })
+  const bench = readBenchNotes(wo?.notes)
+  if (!bench) return
+  await prisma.reconfigurationWorkOrder.update({
+    where: { id },
+    data: { notes: JSON.stringify({ bench: { ...bench, ...patch } }) },
+  })
+}
+
+function configFromSnapshot(snap: Record<string, any> | null | undefined): DeviceConfigFields | null {
+  if (!snap) return null
+  return {
+    processor: snap.processor,
+    processorGeneration: snap.processorGeneration,
+    totalRamGb: Number(snap.totalRamGb) || 0,
+    ramComposition: Array.isArray(snap.ramComposition) ? snap.ramComposition : [],
+    primaryStorageGb: snap.primaryStorageGb,
+    secondaryStorageGb: snap.secondaryStorageGb,
+    storageType: snap.storageType,
+    screenSize: snap.screenSize,
+    screenResolution: snap.screenResolution,
+    touchscreen: snap.touchscreen,
+    graphics: snap.graphics,
+    operatingSystem: snap.operatingSystem,
+    keyboardLayout: snap.keyboardLayout,
+    colour: snap.colour,
+    batteryCondition: snap.batteryCondition,
+    grade: snap.grade,
+    displayName: snap.displayName,
+  }
+}
+
+const partMoved = (wo: Awaited<ReturnType<typeof getWorkOrder>>) =>
+  wo.removalLines.some(l => l.actualRemovedAt) || wo.installationLines.some(l => l.installedAt)
+
+/**
+ * Move every part the job still owes. Each move commits together with its
+ * line's "done" mark, so running this again after a failure skips what is
+ * already done and never moves a part twice.
+ */
+async function runBenchMoves(id: string, userId?: string) {
+  const wo = await getWorkOrder(id)
+  for (const line of wo.removalLines) {
+    if (line.actualRemovedAt) continue
+    const plan = planComponentRemoval({
+      documentRef: wo.ref,
+      productId: line.componentProductId,
+      productName: line.componentProduct?.name ?? 'Part',
+      qty: line.quantity,
+      disposition: 'pending_testing',
+    })
+    await applyStockPlan(plan, dec(line.existingCost), {
+      workOrderId: wo.id,
+      userId,
+      inTx: async (tx, movementId) => {
+        await tx.deviceComponentInstallation.update({
+          where: { id: line.installationId },
+          data: { status: 'removed', removedAt: new Date(), removedById: userId || null, removalWorkOrderId: wo.id },
+        })
+        await tx.reconfigurationRemovalLine.update({
+          where: { id: line.id },
+          data: { actualRemovedAt: new Date(), removedById: userId || null, stockMoveRef: movementId.slice(0, 80) },
+        })
+      },
+    })
+  }
+  for (const line of wo.installationLines) {
+    if (line.installedAt) continue
+    const plan = planComponentInstall({
+      documentRef: wo.ref,
+      productId: line.componentProductId,
+      productName: line.componentProduct?.name ?? 'Part',
+      qty: line.quantity,
+      from: (line.sourceLocation || wo.warehouseLocation || 'warehouse') as any,
+    })
+    await applyStockPlan(plan, dec(line.unitCost), {
+      workOrderId: wo.id,
+      userId,
+      inTx: async (tx, movementId) => {
+        const spec = (line.requiredSpec ?? {}) as { capacityGb?: number; category?: string }
+        const installation = await tx.deviceComponentInstallation.create({
+          data: {
+            serialId: wo.serialId,
+            componentProductId: line.componentProductId,
+            category: spec.category === 'ram' ? 'ram' : 'storage',
+            slotType: line.targetSlotType ?? (spec.category === 'ram' ? 'ram_slot' : 'm2_slot'),
+            slotNumber: line.targetSlotNumber ?? 1,
+            capacityGb: Number(spec.capacityGb) || null,
+            quantity: 1,
+            removable: true,
+            status: 'installed',
+            costAtInstallation: line.unitCost,
+            sourceStockMoveRef: movementId.slice(0, 80),
+            installationWorkOrderId: wo.id,
+            installedById: userId || null,
+          },
+        })
+        await tx.reconfigurationInstallationLine.update({
+          where: { id: line.id },
+          data: {
+            installedAt: new Date(),
+            installedById: userId || null,
+            resultingInstallationId: installation.id,
+            reservationStatus: 'fulfilled',
+            stockMoveRef: movementId.slice(0, 80),
+          },
+        })
+      },
+    })
+  }
+}
+
+/** Move what is owed, then finish. A job stopped half-way is kept for Finish or Undo. */
+export async function runBenchJob(id: string, userId?: string) {
+  const wo = await getWorkOrder(id)
+  if (wo.status === 'completed') return wo
+  if (wo.status !== 'in_progress' || !readBenchNotes(wo.notes)) {
+    throw httpError(`${wo.ref} is not a bench job waiting to finish`, 422)
+  }
+  try {
+    await runBenchMoves(id, userId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'The parts could not be moved'
+    const fresh = await getWorkOrder(id)
+    if (!partMoved(fresh)) {
+      // Nothing moved: no trace of the job is left.
+      await cancelWorkOrder({ id, version: fresh.version, userId, reason: message }).catch(() => null)
+      throw err
+    }
+    await writeBenchNotes(id, { stuck: { message, at: new Date().toISOString() } })
+    throw httpError(`${message}. ${wo.ref} is saved half-done: open it and press Finish once the cause is fixed, or Undo to put the parts back.`, 422)
+  }
+  await writeBenchNotes(id, { stuck: undefined })
+  return finishBenchJob(id, userId)
+}
+
+/**
+ * Specs, cost, price, snapshot, journal: every step can run again safely, so
+ * a job that stopped here is finished by running it again.
+ */
+async function finishBenchJob(id: string, userId?: string) {
+  const wo = await getWorkOrder(id)
+  if (wo.status === 'completed') return wo
+  const bench = readBenchNotes(wo.notes)
+  const proposed = bench?.proposed ?? configFromSnapshot(wo.proposedSnapshot)
+  if (!proposed) throw httpError(`${wo.ref} has no target configuration to finish with`, 422)
+  const location = wo.warehouseLocation || 'warehouse'
 
   const cost = calculateReconfigCost({
-    costBefore: device.costBefore,
-    costRemoved,
-    costInstalled: installedCost,
-    labourCost: params.labourCost || 0,
-    otherCost: params.otherCost || 0,
+    costBefore: dec(wo.costBefore),
+    costRemoved: wo.removalLines.reduce((sum, l) => sum + dec(l.existingCost), 0),
+    costInstalled: wo.installationLines.reduce((sum, l) => sum + dec(l.unitCost), 0),
+    labourCost: dec(wo.labourCost),
+    otherCost: dec(wo.otherCost),
   })
-
   const fallback = defaultPriceAfterBench({
-    sellingPriceBefore: device.sellingPriceBefore,
-    costBefore: device.costBefore,
+    sellingPriceBefore: dec(wo.sellingPriceBefore),
+    costBefore: dec(wo.costBefore),
     costAfter: cost.costAfter,
   })
-  const manual = params.finalSellingPrice != null && params.finalSellingPrice >= 0
+  const manualPrice = bench?.finalSellingPrice
+  const manual = manualPrice != null && manualPrice >= 0
   const price = manual
-    ? calculateRecommendedSellingPrice({ method: 'manual', costAfter: cost.costAfter, manualPrice: params.finalSellingPrice ?? undefined })
+    ? calculateRecommendedSellingPrice({ method: 'manual', costAfter: cost.costAfter, manualPrice })
     : { recommended: fallback.price, method: fallback.method }
-  const selling = manual ? dec(params.finalSellingPrice) : price.recommended
+  const selling = manual ? dec(manualPrice) : price.recommended
   const margin = calculateMargin({ sellingPrice: selling, costAfter: cost.costAfter })
   const completionKey = reconfigCompletionEventKey(wo.id)
-  const valKey = reconfigValuationEventKey(ref)
+  const valKey = reconfigValuationEventKey(wo.ref)
 
-  // Unit identity: blob specs become the new RAM/SSD string. Catalog name stays.
-  await syncBlobSpecs(
-    device.blobSerialId || device.serialId,
-    specsFromProposed(proposedConfig),
-    device.manufacturerSerial,
-  )
-
-  const state = await loadAppState(['deed_serials'])
-  const serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
-  const idx = serials.findIndex(
-    s => s.id === device.serialId || s.id === device.blobSerialId || s.serial === device.manufacturerSerial,
-  )
-  if (idx >= 0) {
-    const nextStatus =
-      serials[idx].saleOrderId || serials[idx].status === 'assigned' ? 'assigned' : 'available'
-    serials[idx] = {
-      ...serials[idx],
-      status: nextStatus,
-      location: location === 'repair_unit' ? 'warehouse' : location,
-      specs: specsFromProposed(proposedConfig),
-      salePriceOverride: selling,
-    }
-    await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
-  }
+  const device = await getDeviceConfiguration(wo.serialId)
+  const specs = specsFromProposed(proposed)
+  await syncBlobSpecs(device.blobSerialId || wo.serialId, specs, wo.manufacturerSerial)
+  await setBlobSerial([wo.serialId, device.blobSerialId], wo.manufacturerSerial, serial => ({
+    ...serial,
+    status: serial.saleOrderId || serial.status === 'assigned' ? 'assigned' : 'available',
+    location: location === 'repair_unit' ? 'warehouse' : location,
+    specs,
+    salePriceOverride: selling,
+  }))
 
   await prisma.deviceSerialCost.upsert({
-    where: { serialId: device.serialId },
-    create: {
-      serialId: device.serialId,
-      currentCost: cost.costAfter,
-      updatedById: params.userId || null,
-    },
-    update: {
-      currentCost: cost.costAfter,
-      updatedById: params.userId || null,
-    },
+    where: { serialId: wo.serialId },
+    create: { serialId: wo.serialId, currentCost: cost.costAfter, updatedById: userId || null },
+    update: { currentCost: cost.costAfter, updatedById: userId || null },
   })
-
-  await prisma.deviceConfigurationSnapshot.updateMany({
-    where: { serialId: device.serialId, isCurrent: true },
-    data: { isCurrent: false },
-  })
-  await prisma.deviceConfigurationSnapshot.update({
-    where: { id: proposedSnap.id },
-    data: { isCurrent: true },
-  })
+  if (wo.proposedSnapshotId) {
+    await prisma.deviceConfigurationSnapshot.updateMany({ where: { serialId: wo.serialId, isCurrent: true }, data: { isCurrent: false } })
+    await prisma.deviceConfigurationSnapshot.update({ where: { id: wo.proposedSnapshotId }, data: { isCurrent: true } })
+  }
 
   await prisma.reconfigurationWorkOrder.update({
     where: { id: wo.id },
     data: {
       status: 'completed',
       dateCompleted: new Date(),
-      currentSnapshotId: currentSnap.id,
-      proposedSnapshotId: proposedSnap.id,
       costRemoved: cost.costRemoved,
       costInstalled: cost.costInstalled,
       costAfter: cost.costAfter,
       recommendedSellingPrice: price.recommended,
       finalSellingPrice: selling,
-      priceDifference: round2(selling - dec(device.sellingPriceBefore)),
+      priceDifference: round2(selling - dec(wo.sellingPriceBefore)),
       grossMargin: margin.grossMargin,
       grossMarginPct: margin.grossMarginPct,
       priceMethod: manual ? 'manual' : fallback.method,
       completionEventKey: completionKey,
       valuationEventKey: valKey,
-      updatedById: params.userId || null,
+      updatedById: userId || null,
       version: { increment: 1 },
     },
   })
 
   const completed = await getWorkOrder(wo.id)
-  await postReconfigurationValuation({
-    workOrder: completed,
-    eventKey: valKey,
-    userId: params.userId,
-  })
+  await postReconfigurationValuation({ workOrder: completed, eventKey: valKey, userId })
 
   try {
     const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
@@ -677,4 +691,300 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
   }
 
   return getWorkOrder(wo.id)
+}
+
+/** Change the machine's row in the serials list, under the stock lock. */
+async function setBlobSerial(
+  ids: Array<string | null | undefined>,
+  manufacturerSerial: string | null | undefined,
+  change: (serial: Record<string, any>) => Record<string, any>,
+) {
+  await withAppStateKeyLock('deed_serials', async () => {
+    const state = await loadAppStateForWrite(['deed_serials'])
+    const serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
+    const idx = serials.findIndex(s => ids.includes(s.id) || (manufacturerSerial && s.serial === manufacturerSerial))
+    if (idx < 0) return
+    serials[idx] = change(serials[idx])
+    await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
+  })
+}
+
+/** Finish a job that stopped half-way: move what is still owed, then finish. */
+export async function finishStuckBenchJob(id: string, userId?: string) {
+  const wo = await getWorkOrder(id)
+  // Jobs started before the plan was written up front only list the parts
+  // they got to: finishing one could complete it with a part missing.
+  if ((readBenchNotes(wo.notes)?.version ?? 1) < 2) {
+    throw httpError(`${wo.ref} was started before jobs could be resumed — use Undo to put its parts back, then do the job again`, 422)
+  }
+  return runBenchJob(id, userId)
+}
+
+
+/**
+ * Undo a job that stopped half-way: put back every part that moved, then
+ * cancel it. The machine is as it was and can be reconfigured again.
+ */
+export async function undoStuckBenchJob(id: string, userId?: string, reason = 'Undone after it stopped half-way') {
+  const wo = await getWorkOrder(id)
+  if (wo.status !== 'in_progress' || !readBenchNotes(wo.notes)) {
+    throw httpError(`${wo.ref} is not a bench job that stopped half-way`, 422)
+  }
+  await putPartsBack(wo, userId)
+  const fresh = await getWorkOrder(id)
+  if (fresh.proposedSnapshotId) {
+    await prisma.deviceConfigurationSnapshot.update({ where: { id: fresh.proposedSnapshotId }, data: { isCurrent: false } })
+  }
+  if (fresh.currentSnapshotId) {
+    await prisma.deviceConfigurationSnapshot.updateMany({ where: { serialId: fresh.serialId, isCurrent: true }, data: { isCurrent: false } })
+    await prisma.deviceConfigurationSnapshot.update({ where: { id: fresh.currentSnapshotId }, data: { isCurrent: true } })
+  }
+  return cancelWorkOrder({ id, version: fresh.version, userId, reason })
+}
+
+/**
+ * Every part this job moved goes back: fitted parts return to the shelf they
+ * came from, pulled parts go back into the machine from wherever they are now.
+ * Each step commits with its line, so a second run skips what is done.
+ */
+async function putPartsBack(wo: Awaited<ReturnType<typeof getWorkOrder>>, userId?: string) {
+  const shelf = (wo.warehouseLocation || 'warehouse') as string
+  for (const line of wo.installationLines) {
+    if (!line.installedAt) continue
+    const plan = {
+      kind: 'return_bulk_to_testing' as const,
+      productId: line.componentProductId,
+      productName: line.componentProduct?.name ?? 'Part',
+      qty: line.quantity,
+      // Never used: back on the shelf it came from, ready to fit again.
+      to: (line.sourceLocation || shelf) as 'pending_testing',
+      documentRef: wo.ref,
+      reason: `Put back — ${wo.ref} undone`,
+    }
+    await applyStockPlan(plan, dec(line.unitCost), {
+      workOrderId: wo.id,
+      userId,
+      inTx: async tx => {
+        if (line.resultingInstallationId) {
+          await tx.deviceComponentInstallation.update({
+            where: { id: line.resultingInstallationId },
+            data: { status: 'removed', removedAt: new Date(), removedById: userId || null, removalWorkOrderId: wo.id },
+          })
+        }
+        await tx.reconfigurationInstallationLine.update({
+          where: { id: line.id },
+          data: { installedAt: null, reservationStatus: 'released' },
+        })
+      },
+    })
+  }
+  for (const line of wo.removalLines) {
+    if (!line.actualRemovedAt) continue
+    // Where the pulled part sits now: tested parts may have moved on.
+    const from = line.qaStatus === 'passed' ? shelf : line.qaStatus === 'failed' ? 'quarantine' : (line.destinationLocation || 'pending_testing')
+    const plan = planComponentInstall({
+      documentRef: wo.ref,
+      productId: line.componentProductId,
+      productName: line.componentProduct?.name ?? 'Part',
+      qty: line.quantity,
+      from: from as any,
+    })
+    try {
+      await applyStockPlan(plan, dec(line.existingCost), {
+        workOrderId: wo.id,
+        userId,
+        inTx: async tx => {
+          await tx.deviceComponentInstallation.update({
+            where: { id: line.installationId },
+            data: { status: 'installed', removedAt: null, removedById: null, removalWorkOrderId: null },
+          })
+          await tx.reconfigurationRemovalLine.update({
+            where: { id: line.id },
+            data: { actualRemovedAt: null, stockMoveRef: null, qaStatus: 'pending', disposition: 'pending_testing', destinationLocation: 'pending_testing' },
+          })
+        },
+      })
+    } catch (err) {
+      const name = line.componentProduct?.name ?? 'the pulled part'
+      throw httpError(`${name} is no longer in ${from.replace(/_/g, ' ')} (it may have been used or sold), so it cannot go back into the machine. ${err instanceof Error ? err.message : ''}`.trim(), 422)
+    }
+  }
+}
+
+/**
+ * Reverse a finished job: the parts go back, the machine returns to its old
+ * specs, cost and price, and the stock value entry is reversed. Only the
+ * machine's latest job, and only while the machine is still ours.
+ */
+export async function reverseBenchJob(id: string, userId?: string, reason = '') {
+  const wo = await getWorkOrder(id)
+  if (wo.status !== 'completed') throw httpError(`Only a completed job can be reversed (${wo.ref} is ${wo.status})`, 422)
+  if (!reason.trim()) throw httpError('Say why the job is reversed', 422)
+  const later = await prisma.reconfigurationWorkOrder.findFirst({
+    where: { serialId: wo.serialId, id: { not: wo.id }, status: { notIn: ['cancelled', 'reversed'] }, createdAt: { gt: wo.createdAt } },
+    select: { ref: true },
+  })
+  if (later) throw httpError(`${later.ref} was done on this machine after ${wo.ref}: reverse that one first`, 409)
+  const device = await getDeviceConfiguration(wo.serialId)
+  if (['sold', 'customer'].includes(String(device.status)) || device.location === 'customer') {
+    throw httpError('The machine has been sold — it cannot be put back', 422)
+  }
+
+  await putPartsBack(wo, userId)
+
+  const bench = readBenchNotes(wo.notes)
+  const before = bench?.before ?? configFromSnapshot(wo.currentSnapshot)
+  const specs = before ? specsFromProposed(before) : null
+  if (specs) await syncBlobSpecs(device.blobSerialId || wo.serialId, specs, wo.manufacturerSerial)
+  await setBlobSerial([wo.serialId, device.blobSerialId], wo.manufacturerSerial, serial => {
+    const next: Record<string, any> = { ...serial, ...(specs ? { specs } : {}) }
+    if (dec(wo.sellingPriceBefore) > 0) next.salePriceOverride = dec(wo.sellingPriceBefore)
+    else delete next.salePriceOverride
+    return next
+  })
+  await prisma.deviceSerialCost.upsert({
+    where: { serialId: wo.serialId },
+    create: { serialId: wo.serialId, currentCost: dec(wo.costBefore), updatedById: userId || null },
+    update: { currentCost: dec(wo.costBefore), updatedById: userId || null },
+  })
+  if (wo.currentSnapshotId) {
+    await prisma.deviceConfigurationSnapshot.updateMany({ where: { serialId: wo.serialId, isCurrent: true }, data: { isCurrent: false } })
+    await prisma.deviceConfigurationSnapshot.update({ where: { id: wo.currentSnapshotId }, data: { isCurrent: true } })
+  }
+
+  await reverseReconfigurationValuation(wo, userId)
+
+  await prisma.reconfigurationWorkOrder.update({
+    where: { id: wo.id },
+    data: {
+      status: 'reversed',
+      notes: JSON.stringify({ bench: { ...(bench ?? { version: 2, ram: null, storage: null }), reversed: { reason: reason.trim(), at: new Date().toISOString(), byUserId: userId ?? null } } }),
+      updatedById: userId || null,
+      version: { increment: 1 },
+    },
+  })
+
+  try {
+    const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
+    await refreshSaleOrderHostLineAfterReconfig(wo.id)
+  } catch (err) {
+    console.error('[reconfiguration] commercial document refresh after reversal failed:', err)
+  }
+  return getWorkOrder(wo.id)
+}
+
+/** The completion's stock value entry, undone: same lines, sides swapped. */
+async function reverseReconfigurationValuation(wo: Awaited<ReturnType<typeof getWorkOrder>>, userId?: string) {
+  const eventKey = `${reconfigValuationEventKey(wo.ref)}:reversed`
+  try {
+    if (await prisma.valuationEvent.findUnique({ where: { eventKey } })) return
+  } catch { /* */ }
+  const original = await prisma.journalEntry.findFirst({
+    where: { ref: reconfigValuationJournalRef(wo.ref) },
+    include: { lines: true },
+  }).catch(() => null)
+  if (original?.lines?.length) {
+    try {
+      await createJournalEntry({
+        ref: `${reconfigValuationJournalRef(wo.ref)}/REV`.slice(0, 80),
+        date: new Date(),
+        description: `Reversal of device reconfiguration ${wo.ref}`,
+        sourceType: 'reconfiguration',
+        sourceId: wo.id,
+        journalCode: 'STK',
+        lines: original.lines.map(l => ({
+          accountLabel: l.accountLabel,
+          partnerId: l.partnerId,
+          analyticAccountId: l.analyticAccountId,
+          debit: dec(l.credit),
+          credit: dec(l.debit),
+          label: `Reversal: ${l.label ?? wo.ref}`,
+        })),
+        createdById: userId || null,
+        skipIfExists: true,
+      })
+    } catch (err) {
+      console.error('[reconfig reversal journal]', err)
+    }
+  }
+  try {
+    await prisma.valuationEvent.create({
+      data: { eventKey, kind: 'reconfiguration', productId: wo.productId, qty: 1, unitCost: dec(wo.costBefore), reference: `${wo.ref} reversed` },
+    })
+  } catch { /* already recorded */ }
+}
+
+/**
+ * A part pulled from a machine, tested: passed → shelf stock to sell or fit
+ * again; failed → quarantine. It used to wait in "awaiting tests" forever.
+ */
+export async function recordPulledPartTest(params: { workOrderId: string; lineId: string; passed: boolean; userId?: string }) {
+  const wo = await getWorkOrder(params.workOrderId)
+  const line = wo.removalLines.find(l => l.id === params.lineId)
+  if (!line) throw httpError('That part is not on this job', 404)
+  if (!line.actualRemovedAt) throw httpError('That part was not pulled out', 422)
+  if (line.qaStatus === 'passed' || line.qaStatus === 'failed') return wo
+  const to = params.passed ? (wo.warehouseLocation || 'warehouse') : 'quarantine'
+  const from = line.destinationLocation || 'pending_testing'
+  const name = line.componentProduct?.name ?? 'Part'
+  await withAppStateKeyLock('deed_serials', async () => {
+    await prisma.$transaction(async tx => {
+      const fromRow = await tx.bulkStockLevel.findUnique({ where: { productId_location: { productId: line.componentProductId, location: from } } })
+      if ((fromRow?.qty ?? 0) < line.quantity) throw httpError(`${name} is no longer in ${from.replace(/_/g, ' ')}`, 422)
+      await tx.bulkStockLevel.update({ where: { id: fromRow!.id }, data: { qty: fromRow!.qty - line.quantity } })
+      const toRow = await tx.bulkStockLevel.findUnique({ where: { productId_location: { productId: line.componentProductId, location: to } } })
+      if (toRow) await tx.bulkStockLevel.update({ where: { id: toRow.id }, data: { qty: toRow.qty + line.quantity } })
+      else await tx.bulkStockLevel.create({ data: { productId: line.componentProductId, location: to, qty: line.quantity } })
+      await tx.stockMovement.create({
+        data: {
+          productId: line.componentProductId,
+          movementType: 'transfer',
+          qty: line.quantity,
+          qtyBefore: fromRow!.qty,
+          qtyAfter: fromRow!.qty - line.quantity,
+          unitCost: dec(line.existingCost) || null,
+          fromLocation: from,
+          toLocation: to,
+          referenceType: 'reconfiguration_work_order',
+          referenceId: wo.id,
+          documentRef: wo.ref,
+          notes: `${name} pulled in ${wo.ref} tested: ${params.passed ? 'passed' : 'failed'}`,
+          createdById: params.userId || null,
+        },
+      })
+      await tx.reconfigurationRemovalLine.update({
+        where: { id: line.id },
+        data: {
+          qaStatus: params.passed ? 'passed' : 'failed',
+          disposition: params.passed ? 'ready_for_sale' : 'quarantine',
+          destinationLocation: to,
+        },
+      })
+    })
+    // The stock screens read the blob copy: move it there too.
+    const state = await loadAppStateForWrite(['deed_bulkStock', 'deed_stockMoves'])
+    const bulk = Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as any[])] : []
+    const bump = (location: string, delta: number) => {
+      const i = bulk.findIndex(b => b.productId === line.componentProductId && b.location === location)
+      if (i >= 0) bulk[i] = { ...bulk[i], qty: Math.max(0, (Number(bulk[i].qty) || 0) + delta) }
+      else if (delta > 0) bulk.push({ productId: line.componentProductId, location, qty: delta })
+    }
+    bump(from, -line.quantity)
+    bump(to, line.quantity)
+    const moves = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as any[])] : []
+    moves.push({
+      id: `sm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: 'transfer',
+      productId: line.componentProductId,
+      productName: name,
+      qty: line.quantity,
+      fromLocation: from,
+      toLocation: to,
+      documentRef: wo.ref,
+      date: new Date().toISOString(),
+      reason: `Pulled in ${wo.ref}, tested ${params.passed ? 'good' : 'faulty'}`,
+    })
+    await saveStoreKeys({ deed_bulkStock: JSON.stringify(bulk), deed_stockMoves: JSON.stringify(moves) }, { bulkStockBase: state.deed_bulkStock })
+  })
+  return getWorkOrder(params.workOrderId)
 }
