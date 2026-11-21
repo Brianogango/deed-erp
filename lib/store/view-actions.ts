@@ -94,7 +94,7 @@ const COMMERCE_ACTIONS = [
 
 const AFTER_SALES_ACTIONS = [
     'addContact', 'approveBuyBack', 'approveExchange', 'approveReturn', 'cancelExchange', 'completeExchange',
-    'confirmDonation', 'createBuyBack', 'creditBuyBack', 'createDonation', 'createExchange', 'createReturnOrder',
+    'confirmDonation', 'createBuyBack', 'creditBuyBack', 'receiveFreeBuyBack', 'createDonation', 'createExchange', 'createReturnOrder',
     'deleteBuyBack', 'deleteDonation', 'payBuyBack', 'processReturn', 'receiveReturn', 'registerCustomerReturnSerial',
     'rejectReturn', 'cancelWarranty', 'releaseSerialToStock', 'showToast', 'stockBuyBack',
 ] as const

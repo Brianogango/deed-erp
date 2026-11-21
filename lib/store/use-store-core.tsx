@@ -753,10 +753,14 @@ export function useStoreCore({
 
     let serialId: string | undefined
     let serialText = ''
+    // No serial on the repair: the unit comes in under an intake tag and goes
+    // to With Issues to be identified (lib/repair-retain-convert.ts).
+    let tagged = false
     if (product.requiresSerial || repair.serialNumber?.trim()) {
       const matched = matchRepairDeviceSerial(serialRef.current, product.id, repair)
       if ('error' in matched) return { ok: false, message: matched.error }
       serialText = matched.serialText
+      tagged = !!matched.tagged
       if (matched.existing) {
         serialId = matched.existing.id
         if (matched.existing.status !== 'sold' && matched.existing.location !== 'customer') {
@@ -775,8 +779,9 @@ export function useStoreCore({
           status: 'sold',
           receivedDate: at,
           soldDate: at,
-          barcode: buildInventoryBarcodeForProduct(product.id, serialText),
-        }
+          barcode: tagged ? serialText : buildInventoryBarcodeForProduct(product.id, serialText),
+          ...(tagged ? { identityPending: true, intakeTag: serialText } : {}),
+        } as SerialNumber
         setSerials(p => [...p, newSerial])
         sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
         serialId = newSerial.id
@@ -788,6 +793,7 @@ export function useStoreCore({
     }
 
     const condition = buyBackConditionFromRepair(repair.deviceCondition)
+    const intoLocation: LocationId = tagged ? 'shop' : 'warehouse'
     const serialIds = serialId ? [serialId] : []
     const serialLabels = serialText
       ? [serialText]
@@ -809,7 +815,7 @@ export function useStoreCore({
           notes: `From retained repair ${repair.ref}`,
         }],
         status: 'confirmed',
-        location: 'warehouse',
+        location: intoLocation,
         notes: `Customer left device with Deed from repair ${repair.ref}${notes ? ` — ${notes}` : ''}`,
         repairId: repair.id,
         repairRef: repair.ref,
@@ -821,8 +827,8 @@ export function useStoreCore({
         setSerials(p => p.map(s => s.id === serialId
           ? {
               ...s,
-              status: condition === 'poor' ? 'refurbishment' as const : 'available' as const,
-              location: 'warehouse' as LocationId,
+              status: tagged ? 'available' as const : condition === 'poor' ? 'refurbishment' as const : 'available' as const,
+              location: intoLocation,
               soldDate: undefined,
               saleOrderId: undefined,
               repairId: undefined,
@@ -832,7 +838,7 @@ export function useStoreCore({
         setBulkStock(prev => upsertBulkStock(prev, product.id, 'warehouse', 1))
       }
       setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
-      addMove(product.id, product.name, 1, 'in', `Donation in ${don.ref} (retained repair ${repair.ref})`, don.ref, 'customer', 'warehouse', serialLabels)
+      addMove(product.id, product.name, 1, 'in', `Donation in ${don.ref} (retained repair ${repair.ref})`, don.ref, 'customer', intoLocation, serialLabels)
       return { ok: true, mode: 'donation', id: don.id, ref: don.ref }
     }
 
@@ -856,7 +862,7 @@ export function useStoreCore({
         notes: `From retained repair ${repair.ref}`,
       }],
       total: 0,
-      destinationLocation: 'warehouse',
+      destinationLocation: intoLocation,
       notes: `Customer left device with Deed from repair ${repair.ref}${notes ? ` — ${notes}` : ''}`,
       approvedByName: byName,
       approvedDate: at,
@@ -870,8 +876,8 @@ export function useStoreCore({
       setSerials(p => p.map(s => s.id === serialId
         ? {
             ...s,
-            status: condition === 'poor' ? 'refurbishment' as const : 'available' as const,
-            location: 'warehouse' as LocationId,
+            status: tagged ? 'available' as const : condition === 'poor' ? 'refurbishment' as const : 'available' as const,
+            location: intoLocation,
             soldDate: undefined,
             saleOrderId: undefined,
             repairId: undefined,
@@ -881,7 +887,7 @@ export function useStoreCore({
       setBulkStock(prev => upsertBulkStock(prev, product.id, 'warehouse', 1))
     }
     setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
-    addMove(product.id, product.name, 1, 'in', `Buy-back ${bb.ref} (retained repair ${repair.ref})`, bb.ref, 'customer', 'warehouse', serialLabels)
+    addMove(product.id, product.name, 1, 'in', `Buy-back ${bb.ref} (retained repair ${repair.ref})`, bb.ref, 'customer', intoLocation, serialLabels)
       cancelWarrantiesForTradeIn(serialIds, bb.ref, `Bought back from ${repair.customerName} (${bb.ref}, retained repair ${repair.ref})`)
     return { ok: true, mode: 'buyback', id: bb.id, ref: bb.ref }
   }

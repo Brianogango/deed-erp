@@ -690,6 +690,7 @@ export interface AppState {
   payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void | Promise<void>
   /** After approve: add the buy-back amount as store credit (3102) instead of paying cash. Marks the BBK paid so stocking can follow. */
   creditBuyBack: (id: string) => void | Promise<void>
+  receiveFreeBuyBack: (id: string) => void
   /** Intake serials/qty after either pay or add-as-credit (`status === 'paid'`). */
   stockBuyBack: (id: string) => void
   deleteBuyBack: (id: string) => void
@@ -1153,6 +1154,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'createExchange'
   | 'createReturnOrder'
   | 'creditBuyBack'
+  | 'receiveFreeBuyBack'
   | 'deleteBuyBack'
   | 'deleteDonation'
   | 'payBuyBack'

@@ -13,7 +13,7 @@ import { bankAccountIdForMethod, bankAccountLabel, accountLine } from '../journa
 import { userCan } from '@/lib/auth/can'
 import { donationAccount, donationOutJournalLines, exchangeSettlement, exchangeCreditJournalLines } from '@/lib/after-sales/value-journals'
 import { resolveProductAccounts } from '@/lib/product-accounts'
-import { canPayBuyBackCash, buildBuyBackPayoutBillLines, canCreditBuyBack, buyBackStoreCreditAmount, buildBuyBackStoreCreditJournalLines, BUYBACK_STORE_CREDIT_METHOD, resolveBuyBackProduct } from '@/lib/buyback-credit'
+import { canPayBuyBackCash, buildBuyBackPayoutBillLines, canCreditBuyBack, canReceiveFreeBuyBack, buyBackStoreCreditAmount, buildBuyBackStoreCreditJournalLines, BUYBACK_STORE_CREDIT_METHOD, resolveBuyBackProduct } from '@/lib/buyback-credit'
 import { canManageFinance } from '../permissions'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
@@ -21,7 +21,7 @@ import type { AppState } from '../state'
 import type { StoreDeps } from './deps'
 
 /** after-sales actions of the store. `store` reads the provider's current state, setters and helpers. */
-export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'createReturnOrder' | 'approveReturn' | 'receiveReturn' | 'processReturn' | 'cancelWarranty' | 'rejectReturn' | 'registerCustomerReturnSerial' | 'createBuyBack' | 'approveBuyBack' | 'payBuyBack' | 'creditBuyBack' | 'stockBuyBack' | 'deleteBuyBack' | 'createDonation' | 'confirmDonation' | 'deleteDonation' | 'createExchange' | 'approveExchange' | 'completeExchange' | 'cancelExchange'> {
+export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'createReturnOrder' | 'approveReturn' | 'receiveReturn' | 'processReturn' | 'cancelWarranty' | 'rejectReturn' | 'registerCustomerReturnSerial' | 'createBuyBack' | 'approveBuyBack' | 'payBuyBack' | 'creditBuyBack' | 'receiveFreeBuyBack' | 'stockBuyBack' | 'deleteBuyBack' | 'createDonation' | 'confirmDonation' | 'deleteDonation' | 'createExchange' | 'approveExchange' | 'completeExchange' | 'cancelExchange'> {
   return {
     createReturnOrder: (saleOrderId, saleOrderRef, customerId, customerName, reason, lines) => {
         for (const line of lines) {
@@ -668,6 +668,21 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
         store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now(), billId: posted.id, billRef: posted.ref } : b))
         store.addAuditLog('buyback_payout', bb.ref, `Paid out via bill ${posted.ref} (${method}) — ${bb.customerName}`)
         store.showToast(`Payment recorded — bill ${posted.ref} posted and paid`)
+      },
+
+    // Free path: a KSh 0 buy-back (the customer gave the device away) is
+    // settled with no bill and no credit; Add to stock follows.
+    receiveFreeBuyBack: (id) => {
+        const user = store.currentUser(); if (!user) return
+        const bb = store.buyBacks.find(b => b.id === id)
+        const allowed = canReceiveFreeBuyBack(bb)
+        if (!allowed.ok || !bb) { store.showToast(allowed.error || 'Cannot settle this buy-back', 'error'); return }
+        if (!userCan(user, 'sales.buyback.approve') && !canManageFinance(user)) {
+          store.showToast('Only Director or Finance can settle buy-backs', 'error'); return
+        }
+        store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paidDate: now(), notes: `${b.notes ? `${b.notes}\n` : ''}Received at no cost (KSh 0) — confirmed by ${user.name}` } : b))
+        store.addAuditLog('buyback_free', bb.ref, `Received at no cost from ${bb.customerName} — confirmed by ${user.name}`)
+        store.showToast(`${bb.ref} received at no cost — add it to stock next`)
       },
 
     // Credit path: same KES onto 3102. No RefundPayment, no petty cash. Status stays `paid` so Add to stock still works.

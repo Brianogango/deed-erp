@@ -243,7 +243,7 @@ function downloadBuyBackBulkTemplate() {
 }
 
 function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
-  const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, creditBuyBack, stockBuyBack, deleteBuyBack,
+  const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, creditBuyBack, receiveFreeBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
@@ -499,7 +499,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     const si = STEPS.indexOf(bb.status)
     return (
       <div>
-        <button onClick={() => onOpenDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <button type="button" className="tradein-back btn-outline text-[12px] mb-3" onClick={() => onOpenDetail(null)}>‹ Back to buy-backs</button>
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
@@ -564,13 +564,19 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
                 <Fa icon={faCheck} aria-hidden="true" /> Approve
               </button>
             )}
-            {bb.status === 'approved' && (
+            {/* Given for free (KSh 0): nothing to pay or credit. */}
+            {bb.status === 'approved' && !(bb.total > 0) && (
+              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => receiveFreeBuyBack(bb.id)}>
+                <Fa icon={faCheck} aria-hidden="true" /> Receive at no cost
+              </button>
+            )}
+            {bb.status === 'approved' && bb.total > 0 && (
               <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => { setPayMethod(''); setPayModal(bb.id) }}>
                 <Fa icon={faMoneyBillWave} aria-hidden="true" /> Pay
               </button>
             )}
             {/* Same approved state: Add as credit instead of Pay. Choosing one settles the BBK. */}
-            {bb.status === 'approved' && (
+            {bb.status === 'approved' && bb.total > 0 && (
               <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setCreditModal(bb.id)}>
                 <Fa icon={faCreditCard} aria-hidden="true" /> Add as credit
               </button>
@@ -580,9 +586,18 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
                 <Fa icon={faBox} aria-hidden="true" /> Add to Stock
               </button>
             )}
-            {bb.status === 'draft' && (
-              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteBuyBack(bb.id); onOpenDetail(null) }}>
-                <Fa icon={faTrash} aria-hidden="true" /> Delete
+            {/* Cancel before anything is paid or credited. One made from a repair
+                frees the repair to be converted again (e.g. to a donation). */}
+            {(bb.status === 'draft' || (bb.status === 'approved' && !bb.billId && !bb.creditId)) && (
+              <button
+                type="button"
+                className="btn-secondary text-[11px] flex items-center gap-1.5"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && !window.confirm(`Cancel ${bb.ref}?${bb.repairRef ? ` Repair ${bb.repairRef} can then be converted again.` : ''}`)) return
+                  deleteBuyBack(bb.id); onOpenDetail(null)
+                }}
+              >
+                <Fa icon={faTrash} aria-hidden="true" /> Cancel buy-back
               </button>
             )}
           </div>
