@@ -30,6 +30,7 @@ import { applyBulkStockDeltas, isBulkStockDeltaList } from '@/lib/inventory/bulk
 import { SLIM_RULES, restoreSlimRows } from '@/lib/store-slim'
 import { filterStateForViewer } from '@/lib/store-viewer-state.server'
 import crypto from 'crypto'
+import { guardClaimRegression } from '@/lib/expenses/claim-actions'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_repairs_v2',
@@ -427,6 +428,18 @@ export async function POST(request: Request) {
       try { incoming = JSON.parse(entries[key]) } catch { continue }
       entries[key] = JSON.stringify(mergeFilteredStoreWrite(serverState[key], incoming, { user: session.user, key }))
     }
+  }
+
+  // Expense claims: a save from an older screen can never move a claim
+  // backwards (undo an approval or payment the server recorded with its
+  // journal) or change the money on an approved / paid claim.
+  if (entries.deed_expenses && Array.isArray(serverState.deed_expenses)) {
+    try {
+      const incoming = JSON.parse(entries.deed_expenses)
+      if (Array.isArray(incoming)) {
+        entries.deed_expenses = JSON.stringify(guardClaimRegression(serverState.deed_expenses as Record<string, any>[], incoming))
+      }
+    } catch { /* left as sent; the merge below still applies */ }
   }
 
   // Posted journals are append-only: existing refs are immutable and never

@@ -25,6 +25,13 @@ import { type ReturnOrder, type ReturnOrderLine, type RMAResolution, type BuyBac
 
 // Monthly inventory snapshot
 
+export type ExpenseActionBody =
+  | { action: 'review'; ids: string[]; approved: boolean; notes?: string }
+  | { action: 'pay'; ids: string[]; method: string; bankAccountId?: string; reference?: string; date: string; notes?: string }
+  | { action: 'edit'; id: string; patch: Record<string, unknown> }
+  | { action: 'withdraw'; id: string; reason?: string }
+  | { action: 'resubmit'; id: string; patch?: Record<string, unknown>; note?: string }
+
 export interface AppState {
   activeModule: ModuleId; sidebarOpen: boolean
   toast: { msg: string; type: 'success' | 'error' | 'info' } | null
@@ -218,6 +225,12 @@ export interface AppState {
   reviewExpense: (id: string, approved: boolean, notes?: string) => void
   payExpense: (id: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string, notes?: string) => void
   reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
+  /**
+   * Everything after submission goes through the server, which changes the
+   * claim and posts its journal together: approve / reject (one or many),
+   * pay (one or many in one payment), edit, withdraw, send again.
+   */
+  expenseAction: (body: ExpenseActionBody) => Promise<{ ok: boolean; error?: string; batchRef?: string; count?: number }>
 
   // Deposits
   deposits: Deposit[]
@@ -1043,6 +1056,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'payExpense'
   | 'payPayrollRun'
   | 'reimburseExpense'
+  | 'expenseAction'
   | 'removePOLine'
   | 'resetInvoiceToDraft'
   | 'restoreCancelledInvoice'

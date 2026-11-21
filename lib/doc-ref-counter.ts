@@ -43,6 +43,8 @@ export type DocKind =
   | 'rider_pay'
   /** Expense claims (EXP/NNNN), yearless. */
   | 'expense'
+  /** One payment settling several expense claims (EXPB/NNNN), yearless. */
+  | 'expense_payment'
   /** CRM deals (OPP/NNNN), yearless. */
   | 'opportunity'
   /** Customer contracts (CTR/NNNN), yearless. */
@@ -93,6 +95,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   outsource_statement: 'OST',
   rider_pay: 'RWP',
   expense: 'EXP',
+  expense_payment: 'EXPB',
   opportunity: 'OPP',
   contract: 'CTR',
   purchase_return: 'RET',
@@ -209,6 +212,7 @@ const YEARLESS: Partial<Record<DocKind, { counter: string; key: string }>> = {
   outsource_statement: { counter: 'ost_seq', key: 'deed_outsourceStatements' },
   rider_pay: { counter: 'rwp_seq', key: 'deed_riderWeeklyPays' },
   expense: { counter: 'exp_seq', key: 'deed_expenses' },
+  expense_payment: { counter: 'expb_seq', key: 'deed_expenses' },
   opportunity: { counter: 'opp_seq', key: 'deed_opportunities' },
   contract: { counter: 'ctr_seq', key: 'deed_customerContracts' },
   purchase_return: { counter: 'ret_seq', key: 'deed_purchaseReturns' },
