@@ -1,0 +1,271 @@
+/*
+ * Outsource repairs: job actions, the due line, the vendor scorecard, photos
+ * and the charge-the-customer box. Buttons are real buttons at touch size on
+ * a phone (they were 10px inline-styled links).
+ */
+
+/* ── Actions ───────────────────────────────────────────────────────────── */
+.outsource-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.outsource-act:hover { background: var(--bg-surface); }
+.outsource-act:disabled { opacity: 0.55; cursor: not-allowed; }
+.outsource-act.is-primary {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--navy);
+}
+.outsource-act.is-danger {
+  border-color: var(--danger-text);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+.outsource-act.is-warning {
+  border-color: var(--warning-text);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.outsource-drawer-actions,
+.outsource-vendor-actions,
+.outsource-job-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.outsource-job-acts {
+  justify-content: flex-end;
+  margin-top: 0.375rem;
+}
+/* In a job's details panel the actions take their own row under the title. */
+div:has(> div > .outsource-drawer-actions) {
+  flex-wrap: wrap;
+}
+div:has(> .outsource-drawer-actions) {
+  flex: 1 1 100%;
+  order: 3;
+}
+.outsource-drawer-actions {
+  width: 100%;
+}
+
+/* ── How long it has been out ──────────────────────────────────────────── */
+.outsource-due {
+  color: var(--warning-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.outsource-due.is-late {
+  color: var(--danger-text);
+}
+
+.outsource-inactive {
+  display: inline-flex;
+  margin-left: 0.375rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* ── Vendor scorecard ──────────────────────────────────────────────────── */
+.outsource-vendor-row > .outsource-score,
+.outsource-score {
+  display: grid !important;
+  grid-template-columns: repeat(8, minmax(3.75rem, auto));
+  gap: 0.25rem 0.875rem !important;
+  margin: 0;
+  text-align: left !important;
+}
+.outsource-score dt {
+  color: var(--text-3);
+  font-size: 10px;
+}
+.outsource-score dd {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.outsource-score dd small {
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 500;
+}
+.outsource-score dd.is-good { color: var(--success-text); }
+.outsource-score dd.is-ok { color: var(--warning-text); }
+.outsource-score dd.is-bad { color: var(--danger-text); }
+
+.outsource-vendor-detail__header {
+  grid-template-columns: auto minmax(0, 1fr) auto auto !important;
+}
+.outsource-vendor-detail__header > :nth-child(3) {
+  display: inline-flex !important;
+}
+.outsource-vendor-detail__score {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-lt);
+}
+
+/* ── Changes kept on a job ─────────────────────────────────────────────── */
+.outsource-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-1);
+}
+.outsource-changes span {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+/* ── Photos ────────────────────────────────────────────────────────────── */
+.outsource-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.outsource-photos__group header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.outsource-photos__group h4 {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.outsource-photos__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.375rem;
+}
+.outsource-photos__grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+.outsource-photos__empty {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/* ── Charge the customer ───────────────────────────────────────────────── */
+.outsource-charge,
+.outsource-vendor-status {
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.outsource-charge legend {
+  padding: 0 0.25rem;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 600;
+}
+.outsource-charge p,
+.outsource-vendor-status p {
+  margin: 0;
+}
+.outsource-charge__tick,
+.outsource-vendor-status label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-1);
+  font-weight: 600;
+}
+.outsource-charge__amount {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.5rem;
+}
+.outsource-charge__amount small {
+  grid-column: 1 / -1;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.outsource-vendor-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+}
+
+@media (max-width: 1100px) {
+  .outsource-vendor-row > .outsource-score,
+  .outsource-score {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .outsource-vendor-row > .outsource-score {
+    grid-column: 2;
+    width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .outsource-vendor-row > .outsource-score {
+    grid-column: 1 / -1;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--border-lt);
+  }
+  .outsource-act {
+    min-height: 2.75rem;
+    padding: 0 0.875rem;
+    font-size: 13px;
+  }
+  .outsource-drawer-actions > .outsource-act {
+    flex: 1 1 calc(50% - 0.375rem);
+  }
+  .outsource-job-acts {
+    justify-content: flex-start;
+  }
+  .outsource-vendor-actions > .outsource-act {
+    flex: 1 1 0;
+  }
+  .outsource-vendor-detail__header {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+  }
+  .outsource-vendor-detail__header > :nth-child(n + 3) {
+    grid-column: auto;
+  }
+}
