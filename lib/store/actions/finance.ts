@@ -7,10 +7,10 @@ import { now, uid } from '../ids'
 import type { InvoicePayment, Invoice, BankRecon, Deposit, DepositPayment, DepositStatus, InvoiceLine, JournalEntry, CustomerCredit } from '../finance'
 import { autoMatchStatementLines } from '@/lib/accounting/bank-statement-match'
 import { normalizeDocumentPaymentDetails } from '@/lib/document-payment-details'
-import { buildExpenseApprovalChain, canUserReviewExpense, advanceExpenseApproval, expenseChainIsComplete } from '@/lib/expense-approval-chain'
+import { buildExpenseApprovalChain } from '@/lib/expense-approval-chain'
 import type { Expense } from '../expenses'
 import { userIdsWithRoles } from '@/lib/in-app-notifications'
-import { buildExpenseApprovalJournal, bankAccountIdForMethod, buildExpenseCompanyPaymentJournal, buildExpenseReimbursementJournal, buildReversalJournal, buildInvoicePaymentJournal, buildCustomerCreditJournal } from '../journals'
+import { bankAccountIdForMethod, buildReversalJournal, buildInvoicePaymentJournal, buildCustomerCreditJournal } from '../journals'
 import type { SaleOrder } from '../sales'
 import { userCan } from '@/lib/auth/can'
 import { validateCompanyAssetInput, type CompanyAsset, nextCompanyAssetRef, resolvedPpeAccountCode, historyEntry, canDeleteCompanyAsset, applyMove, applyCustodian, applyStatusChange, applyDispose, applyWriteOff } from '@/lib/company-property'
@@ -75,7 +75,7 @@ function notifyExpenseMoved(store: StoreDeps, params: {
   })
 }
 
-export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocatePaymentToInvoice' | 'generateReceipt' | 'getCustomerCreditBalance' | 'applyCustomerCreditToInvoice' | 'addStatementLine' | 'updateStatementLine' | 'deleteStatementLine' | 'matchStatementLine' | 'unmatchStatementLine' | 'autoMatchStatements' | 'saveBankRecon' | 'updateBankRecon' | 'updateBankAccount' | 'addBankAccount' | 'deleteBankAccount' | 'getDocumentPaymentDetails' | 'setDocumentPaymentDetails' | 'submitExpense' | 'reviewExpense' | 'payExpense' | 'reimburseExpense' | 'createDeposit' | 'addDepositPayment' | 'completeDeposit' | 'cancelDeposit' | 'createCompanyAsset' | 'updateCompanyAsset' | 'deleteCompanyAsset' | 'moveCompanyAsset' | 'setCompanyAssetCustodian' | 'setCompanyAssetStatus' | 'disposeCompanyAsset' | 'writeOffCompanyAsset' | 'runCompanyAssetDepreciation' | 'linkSerialToCompanyAsset' | 'addAccount' | 'updateAccount' | 'createManualInvoice' | 'importOpeningBalances' | 'moveInvoiceLine' | 'addInvoiceSection' | 'updateInvoice' | 'postInvoice' | 'setInvoicePaymentBlocked' | 'registerPayment' | 'reverseInvoicePayment' | 'resetInvoiceToDraft' | 'restoreCancelledInvoice' | 'cancelInvoice' | 'deleteInvoice' | 'addAuditLog' | 'allocateDocRef'> {
+export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocatePaymentToInvoice' | 'generateReceipt' | 'getCustomerCreditBalance' | 'applyCustomerCreditToInvoice' | 'addStatementLine' | 'updateStatementLine' | 'deleteStatementLine' | 'matchStatementLine' | 'unmatchStatementLine' | 'autoMatchStatements' | 'saveBankRecon' | 'updateBankRecon' | 'updateBankAccount' | 'addBankAccount' | 'deleteBankAccount' | 'getDocumentPaymentDetails' | 'setDocumentPaymentDetails' | 'submitExpense' | 'reviewExpense' | 'payExpense' | 'reimburseExpense' | 'expenseAction' | 'createDeposit' | 'addDepositPayment' | 'completeDeposit' | 'cancelDeposit' | 'createCompanyAsset' | 'updateCompanyAsset' | 'deleteCompanyAsset' | 'moveCompanyAsset' | 'setCompanyAssetCustodian' | 'setCompanyAssetStatus' | 'disposeCompanyAsset' | 'writeOffCompanyAsset' | 'runCompanyAssetDepreciation' | 'linkSerialToCompanyAsset' | 'addAccount' | 'updateAccount' | 'createManualInvoice' | 'importOpeningBalances' | 'moveInvoiceLine' | 'addInvoiceSection' | 'updateInvoice' | 'postInvoice' | 'setInvoicePaymentBlocked' | 'registerPayment' | 'reverseInvoicePayment' | 'resetInvoiceToDraft' | 'restoreCancelledInvoice' | 'cancelInvoice' | 'deleteInvoice' | 'addAuditLog' | 'allocateDocRef'> {
   return {
     allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
         if (!canManageFinance(store.currentUser())) {
@@ -381,259 +381,129 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
         return expense
       },
 
+    // Approve / reject, pay and reimburse go through the server, which
+    // changes the claim and posts its journal together (they used to be two
+    // saves that could disagree: a claim "paid" with no payment in the books).
     reviewExpense: (id, approved, notes) => {
-        const user = store.currentUser()
-        if (!user) return
-        if (!canManageFullFinanceAction(user)) {
-          store.showToast('Only Finance or Director can review expenses', 'error'); return
-        }
-        const expense = store.expenses.find(e => e.id === id)
-        if (!expense) return
-        if (expense.status === 'reimbursed' || expense.status === 'paid') { store.showToast('Paid expenses cannot be reviewed again', 'error'); return }
-        // The server refused the approval journal (closed period, …): put the
-        // claim back as it was. It used to stay "approved" with a journal only
-        // this browser had, so the books never showed the expense.
-        const undoApproval = (journalRef: string) => {
-          store.setExpenses(prev => prev.map(e => e.id === id ? expense : e))
-          store.setJournalEntries(prev => prev.filter(j => j.ref !== journalRef))
-        }
-        // Post the approval journal here and on the server; undo the approval if the server refuses it.
-        const postApprovalJournal = (reviewedExpense: Expense) => {
-          const journal = buildExpenseApprovalJournal(reviewedExpense)
-          store.setJournalEntries(prev => [journal, ...prev])
-          store.addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
-          void fetch('/api/expenses/post-journal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              kind: 'approval',
-              expenseId: reviewedExpense.id,
-              ref: reviewedExpense.ref,
-              amount: reviewedExpense.amount,
-              description: reviewedExpense.description,
-              category: reviewedExpense.category,
-              paymentMethod: reviewedExpense.paymentMethod,
-              submittedByName: reviewedExpense.submittedByName,
-              bankAccountId: journal.bankAccountId,
-              date: journal.date,
-            }),
-          }).then(async res => {
-            if (!res.ok) {
-              const payload = await res.json().catch(() => null) as { error?: string } | null
-              undoApproval(journal.ref)
-              store.showToast(`${payload?.error || 'Expense journal posting failed'} — the approval was undone`, 'error')
-            }
-          }).catch(() => {
-            undoApproval(journal.ref)
-            store.showToast('Expense journal posting failed — the approval was undone', 'error')
-          })
-        }
-  
-        const chain = expense.approvalChain
-        if (chain?.length) {
-          if (!canUserReviewExpense(user.role, chain)) {
-            const pending = chain.find(s => s.status === 'pending')
-            store.showToast(`This step requires ${pending?.role?.replace('_', ' ') ?? 'another approver'}`, 'error')
-            return
-          }
-          const nextChain = advanceExpenseApproval({
-            chain,
-            approved,
-            reviewerRole: user.role,
-            reviewerName: user.name,
-          })
-          const fullyApproved = approved && expenseChainIsComplete(nextChain)
-          const reviewedExpense: Expense = {
-            ...expense,
-            approvalChain: nextChain,
-            status: !approved ? 'rejected' : fullyApproved ? 'approved' : 'submitted',
-            reviewedByUserId: fullyApproved || !approved ? user.id : expense.reviewedByUserId,
-            reviewedByName: fullyApproved || !approved ? user.name : expense.reviewedByName,
-            reviewedDate: fullyApproved || !approved ? now() : expense.reviewedDate,
-            reviewNotes: notes ?? expense.reviewNotes,
-          }
-          store.setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
-          if (fullyApproved && !store.journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
-            postApprovalJournal(reviewedExpense)
-          }
-          if (expense?.submittedByUserId) {
-            const pending = nextChain.find(s => s.status === 'pending')
-            store.notifyUsers({
-              recipients: [expense.submittedByUserId],
-              type: 'expense',
-              title: !approved ? 'Expense claim rejected' : fullyApproved ? 'Expense claim approved ✓' : 'Expense claim — next approval',
-              body: !approved
-                ? `Your expense claim ${expense.ref} was rejected by ${user.name}.${notes ? ' Note: ' + notes : ''}`
-                : fullyApproved
-                  ? `Your expense claim ${expense.ref} (${expense.description}) is fully approved.${notes ? ' Note: ' + notes : ''}`
-                  : `Your expense claim ${expense.ref} was approved by ${user.name}. Awaiting ${pending?.role?.replace('_', ' ') ?? 'next approver'}.`,
-              module: 'expenses',
-              path: `?id=${expense.id}`,
-              icon: !approved ? '❌' : fullyApproved ? '💰' : '⏳',
-              entityKey: `expense:${expense.id}:review`,
-              excludeUserId: user.id,
-            })
-          }
-          if (approved) {
-            notifyExpenseMoved(store, {
-              expense: reviewedExpense,
-              reviewerName: user.name,
-              reviewerId: user.id,
-              fullyApproved,
-              nextApproverRole: nextChain.find(step => step.status === 'pending')?.role,
-            })
-          }
-          if (!approved) {
-            store.showToast('Expense rejected', 'error')
-          } else if (fullyApproved) {
-            store.showToast('Expense approved and posted', 'success')
-          } else {
-            store.showToast('Step approved — awaiting next approver', 'success')
-          }
-          return
-        }
-  
-        const reviewedExpense: Expense = { ...expense, status: approved ? 'approved' : 'rejected', reviewedByUserId: user.id, reviewedByName: user.name, reviewedDate: now(), reviewNotes: notes }
-        store.setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
-        if (approved && !store.journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
-          postApprovalJournal(reviewedExpense)
-        }
-        if (expense?.submittedByUserId) {
-          store.notifyUsers({
-            recipients: [expense.submittedByUserId],
-            type: 'expense',
-            title: approved ? 'Expense claim approved ✓' : 'Expense claim rejected',
-            body: `Your expense claim ${expense.ref} (${expense.description}) has been ${approved ? 'approved' : 'rejected'} by ${user.name}.${notes ? ' Note: ' + notes : ''}`,
-            module: 'expenses',
-            path: `?id=${expense.id}`,
-            icon: approved ? '💰' : '❌',
-            entityKey: `expense:${expense.id}:review`,
-            excludeUserId: user.id,
-          })
-        }
-        if (approved) {
-          notifyExpenseMoved(store, {
-            expense: reviewedExpense, reviewerName: user.name, reviewerId: user.id, fullyApproved: true,
-          })
-        }
-        store.showToast(approved ? 'Expense approved and posted' : 'Expense rejected', approved ? 'success' : 'error')
+        void store.storeCtxRef.current!.expenseAction({ action: 'review', ids: [id], approved, notes })
       },
 
     payExpense: (id, method, bankAccountId, reference, paymentDate, notes) => {
-        const user = store.currentUser()
-        if (!user) return
-        if (!canManageFullFinanceAction(user)) {
-          store.showToast('Only Finance or Director can pay approved expenses', 'error'); return
-        }
-        const expense = store.expenses.find(e => e.id === id)
-        if (!expense) return
-        if (expense.paymentMethod === 'reimbursement') {
-          store.showToast('Staff-paid claims must use Reimburse, not Pay', 'error'); return
-        }
-        if (expense.status !== 'approved') {
-          store.showToast('Expense must be approved before payment', 'error'); return
-        }
-        const actualBankId = bankAccountIdForMethod(method || expense.paymentMethod, bankAccountId)
-        const paidDate = paymentDate || now()
-        const paidExpense: Expense = {
-          ...expense,
-          status: 'paid',
-          paidDate,
-          paymentBankAccount: actualBankId,
-          paymentReference: reference,
-          reviewNotes: notes ?? expense.reviewNotes,
-        }
-        const journalRef = `JRN/EXPPAY/${expense.ref}`
-        if (store.journalEntries.some(j => j.ref === journalRef)) {
-          store.showToast('This expense payment was already posted', 'info')
-          return
-        }
-        const journal = buildExpenseCompanyPaymentJournal(paidExpense, actualBankId, method, paidDate)
-        store.setExpenses(prev => prev.map(e => e.id === id ? paidExpense : e))
-        store.setJournalEntries(prev => [journal, ...prev])
-        store.addAuditLog('post_expense_payment', expense.ref, `Expense payment ${expense.ref} posted to ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
-        void fetch('/api/expenses/post-journal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: 'payment',
-            expenseId: paidExpense.id,
-            ref: paidExpense.ref,
-            amount: paidExpense.amount,
-            paymentMethod: method || paidExpense.paymentMethod,
-            bankAccountId: actualBankId,
-            date: paidDate,
-          }),
-        }).then(async res => {
-          if (!res.ok) {
-            const payload = await res.json().catch(() => null) as { error?: string } | null
-            store.setExpenses(prev => prev.map(e => e.id === id ? expense : e))
-            store.setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
-            store.showToast(payload?.error || 'Expense payment posting failed', 'error')
-          }
-        }).catch(() => {
-          store.setExpenses(prev => prev.map(e => e.id === id ? expense : e))
-          store.setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
-          store.showToast('Expense payment posting failed', 'error')
+        void store.storeCtxRef.current!.expenseAction({
+          action: 'pay', ids: [id], method: method || 'bank', bankAccountId, reference,
+          date: paymentDate || now().slice(0, 10), notes,
         })
-        store.showToast('Expense marked paid', 'success')
       },
 
     reimburseExpense: (id, notes, method, bankAccountId, reference, paymentDate) => {
-        const user = store.currentUser()
-        if (!user) return
-        if (!canManageFullFinanceAction(user)) {
-          store.showToast('Only Finance or Director can reimburse expenses', 'error'); return
-        }
-        const expense = store.expenses.find(e => e.id === id)
-        if (!expense) return
-        if (expense.paymentMethod !== 'reimbursement') { store.showToast('Only staff reimbursement claims can be reimbursed', 'error'); return }
-        if (expense.status !== 'approved') { store.showToast('Expense must be approved before reimbursement', 'error'); return }
-        const actualBankId = bankAccountIdForMethod(method, bankAccountId)
-        const reimbursementDate = paymentDate || now()
-        const reimbursedExpense: Expense = {
-          ...expense,
-          status: 'reimbursed',
-          reviewNotes: notes ?? expense.reviewNotes,
-          reimbursementMethod: method,
-          reimbursementBankAccount: actualBankId,
-          reimbursementReference: reference,
-          reimbursementDate,
-        }
-        const journalRef = `JRN/RIM/${expense.ref}`
-        if (store.journalEntries.some(j => j.ref === journalRef)) {
-          store.showToast('This reimbursement was already posted', 'info')
-          return
-        }
-        const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId, reimbursementDate)
-        store.setExpenses(prev => prev.map(e => e.id === id ? reimbursedExpense : e))
-        store.setJournalEntries(prev => [journal, ...prev])
-        store.addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
-        void fetch('/api/expenses/post-journal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: 'reimbursement',
-            expenseId: reimbursedExpense.id,
-            ref: reimbursedExpense.ref,
-            amount: reimbursedExpense.amount,
-            submittedByName: reimbursedExpense.submittedByName,
-            bankAccountId: actualBankId,
-            date: journal.date,
-          }),
-        }).then(async res => {
-          if (!res.ok) {
-            const payload = await res.json().catch(() => null) as { error?: string } | null
-            store.setExpenses(prev => prev.map(e => e.id === id ? expense : e))
-            store.setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
-            store.showToast(payload?.error || 'Expense reimbursement posting failed', 'error')
-          }
-        }).catch(() => {
-          store.setExpenses(prev => prev.map(e => e.id === id ? expense : e))
-          store.setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
-          store.showToast('Expense reimbursement posting failed', 'error')
+        void store.storeCtxRef.current!.expenseAction({
+          action: 'pay', ids: [id], method: method || 'bank', bankAccountId, reference,
+          date: paymentDate || now().slice(0, 10), notes,
         })
-        store.showToast('Expense reimbursed and posted', 'success')
+      },
+
+    expenseAction: async (body) => {
+        const user = store.currentUser()
+        if (!user) { store.showToast('Please log in to continue', 'error'); return { ok: false } }
+        let res: Response
+        try {
+          res = await fetch('/api/expenses/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+        } catch {
+          store.showToast('No connection — nothing was changed', 'error')
+          return { ok: false, error: 'offline' }
+        }
+        const data = await res.json().catch(() => ({})) as { claims?: Expense[]; failed?: { reason: string }[]; batchRef?: string; error?: string }
+        if (!res.ok) {
+          store.showToast(data.error || 'Could not save — nothing was changed', 'error')
+          return { ok: false, error: data.error }
+        }
+        const rows = data.claims ?? []
+        const byId = new Map(rows.map(r => [r.id, r]))
+        if (rows.length) store.setExpenses(prev => prev.map(e => byId.get(e.id) ?? e))
+        const skipped = data.failed ?? []
+
+        if (body.action === 'review') {
+          for (const claim of rows) {
+            const fullyApproved = claim.status === 'approved'
+            const rejected = claim.status === 'rejected'
+            const pending = claim.approvalChain?.find(s => s.status === 'pending')
+            if (claim.submittedByUserId) {
+              store.notifyUsers({
+                recipients: [claim.submittedByUserId],
+                type: 'expense',
+                title: rejected ? 'Expense claim rejected' : fullyApproved ? 'Expense claim approved ✓' : 'Expense claim — next approval',
+                body: rejected
+                  ? `Your expense claim ${claim.ref} was rejected by ${user.name}.${body.notes ? ' Note: ' + body.notes : ''} You can correct it and send it again.`
+                  : fullyApproved
+                    ? `Your expense claim ${claim.ref} (${claim.description}) is fully approved.${body.notes ? ' Note: ' + body.notes : ''}`
+                    : `Your expense claim ${claim.ref} was approved by ${user.name}. Awaiting ${pending?.role?.replace('_', ' ') ?? 'next approver'}.`,
+                module: 'expenses',
+                path: `?id=${claim.id}`,
+                icon: rejected ? '❌' : fullyApproved ? '💰' : '⏳',
+                entityKey: `expense:${claim.id}:review`,
+                excludeUserId: user.id,
+              })
+            }
+            if (!rejected) {
+              notifyExpenseMoved(store, { expense: claim, reviewerName: user.name, reviewerId: user.id, fullyApproved, nextApproverRole: pending?.role })
+            }
+          }
+          const verb = body.approved ? 'approved' : 'rejected'
+          store.showToast(
+            rows.length === 1 && !skipped.length
+              ? (body.approved ? (rows[0].status === 'approved' ? 'Expense approved and posted' : 'Step approved — awaiting next approver') : 'Expense rejected')
+              : `${rows.length} claim${rows.length === 1 ? '' : 's'} ${verb}${skipped.length ? ` · ${skipped.length} skipped: ${skipped.map(f => f.reason).join('; ')}` : ''}`,
+            body.approved ? 'success' : 'info',
+          )
+        } else if (body.action === 'pay') {
+          const total = rows.reduce((sum, r) => sum + r.amount, 0)
+          for (const claim of rows) {
+            if (claim.submittedByUserId && claim.status === 'reimbursed') {
+              store.notifyUsers({
+                recipients: [claim.submittedByUserId],
+                type: 'expense',
+                title: 'Expense reimbursed',
+                body: `${claim.ref} (${claim.description}) was reimbursed${data.batchRef ? ` with ${data.batchRef}` : ''}.`,
+                module: 'expenses',
+                path: `?id=${claim.id}`,
+                icon: '💸',
+                entityKey: `expense:${claim.id}:paid`,
+                excludeUserId: user.id,
+              })
+            }
+          }
+          for (const claim of rows) {
+            store.addAuditLog('post_expense_payment', claim.ref, `${claim.ref} ${claim.status}${data.batchRef ? ` with ${data.batchRef}` : ''}`)
+          }
+          store.showToast(
+            rows.length > 1
+              ? `${data.batchRef}: ${rows.length} claims paid in one payment of ${store.fmtKes(total)}`
+              : rows[0]?.status === 'reimbursed' ? 'Expense reimbursed and posted' : 'Expense marked paid',
+            'success',
+          )
+        } else {
+          const done = body.action === 'edit' ? 'Claim updated' : body.action === 'withdraw' ? 'Claim withdrawn' : 'Claim sent again for approval'
+          store.showToast(done, 'success')
+          if (body.action === 'resubmit' && rows[0]) {
+            const claim = rows[0]
+            store.notifyUsers({
+              recipientRoles: ['director', 'finance_officer'],
+              recipients: userIdsWithRoles(store.users, ['director', 'finance_officer'], user.id),
+              type: 'expense',
+              title: `Expense claim sent again by ${claim.submittedByName}`,
+              body: `${claim.ref} · ${claim.description} · KES ${claim.amount.toLocaleString()}`,
+              module: 'expenses',
+              icon: '💰',
+              entityKey: `expense:${claim.id}:resubmitted:${claim.history?.length ?? 0}`,
+              excludeUserId: user.id,
+            })
+          }
+        }
+        return { ok: true, batchRef: data.batchRef, count: rows.length }
       },
 
     createDeposit: async (d) => {

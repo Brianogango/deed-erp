@@ -65,7 +65,7 @@ const FINANCE_ACTIONS = [
     'createPurchaseReturn', 'createReceiptFromPO', 'deleteInvoice', 'deletePO', 'deleteStatementLine',
     'getCustomerCreditBalance', 'initRelease', 'logReturnPickup', 'matchStatementLine', 'postInvoice',
     'recordOutsourcePayment', 'createOutsourceJobBill', 'registerPayment', 'reverseInvoicePayment',
-    'setInvoicePaymentBlocked', 'payExpense', 'payPayrollRun', 'reimburseExpense', 'removePOLine',
+    'setInvoicePaymentBlocked', 'payExpense', 'payPayrollRun', 'reimburseExpense', 'expenseAction', 'removePOLine',
     'resetInvoiceToDraft', 'restoreCancelledInvoice', 'returnOutsourceJob', 'cancelOutsourceJob', 'updateOutsourceJob', 'deleteOutsourceVendor', 'chargeOutsourceToRepair', 'remindLateOutsourceJobs', 'prepareOutsourceStatements', 'holdOutsourceStatementJob', 'releaseOutsourceJobHold', 'confirmOutsourceStatement', 'revertPOToDraft', 'reviewExpense', 'saveBankRecon',
     'scheduleInvoiceDelivery', 'sendPO', 'setModule', 'showToast', 'submitExpense', 'unmatchStatementLine',
     'updateAccount', 'updateInvoice', 'moveInvoiceLine', 'addInvoiceSection', 'updateOutsourceVendor', 'updatePO',
