@@ -4,7 +4,7 @@ import { type Product, type ProductPriceHistory, type SerialNumber, type Refurbi
 import { type Invoice, type Payment, type CustomerCredit, type JournalEntry, type Account, type BankAccount, type BankRecon, type BankStatementLine, type Deposit, type CreateDepositInput, type DepositPayment, type InvoiceType, type RefundPayment, type RefundPaymentMethod } from './finance'
 import { type Delivery, type Rider, type DeliveryJob, type RiderWeeklyPay, type DeliveryJobStatus } from './delivery'
 import { type PurchaseOrder, type Receipt, type StockTransfer, type PurchaseReturn, type POLine } from './purchasing'
-import { type RepairOrder, type Warranty, type OutsourceVendor, type OutsourceJob, type OutsourcePayment } from './repairs'
+import { type RepairOrder, type Warranty, type OutsourceVendor, type OutsourceJob, type OutsourcePayment, type OutsourceStatement } from './repairs'
 import { type Contract, type PayrollRun, type Payslip, type SalaryAdvance, type EmployeeAssetAssignment, type HRSOP, type PerformanceTarget, type RefSOP, type HRDocument } from './hr'
 import { type KilimallReturnInput } from '@/lib/kilimall/kilimall-return'
 import { type DocumentPaymentDetailsMap, type DocumentPaymentDetails } from '@/lib/document-payment-details'
@@ -248,6 +248,8 @@ export interface AppState {
   outsourceVendors: OutsourceVendor[]
   outsourceJobs: OutsourceJob[]
   outsourcePayments: OutsourcePayment[]
+  /** Weekly vendor statements: a week of returned jobs, confirmed into one bill. */
+  outsourceStatements: OutsourceStatement[]
   addOutsourceVendor: (v: Omit<OutsourceVendor, 'id' | 'createdAt'>) => OutsourceVendor
   updateOutsourceVendor: (id: string, p: Partial<OutsourceVendor>) => void
   addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob | null
@@ -262,6 +264,14 @@ export interface AppState {
   chargeOutsourceToRepair: (jobId: string, amount: number) => boolean
   /** Tell the sender and the technical lead about jobs past their promised date (once per promise). */
   remindLateOutsourceJobs: () => void
+  /** Prepare last week's (and any earlier) statements for weekly-billed vendors. */
+  prepareOutsourceStatements: () => void
+  /** Take a disputed job off a pending statement; it is not billed until released. */
+  holdOutsourceStatementJob: (statementId: string, jobId: string, reason: string) => boolean
+  /** Put a held job back: it joins its week's statement next time statements are prepared. */
+  releaseOutsourceJobHold: (jobId: string) => boolean
+  /** Finance: turn a pending statement into one draft vendor bill. Returns the bill ref. */
+  confirmOutsourceStatement: (statementId: string) => string | null
   recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName' | 'postedToAccounts' | 'billRefs'>) => Promise<OutsourcePayment | null>
   /** Create the draft vendor bill for a returned job that has a cost but no bill yet. */
   createOutsourceJobBill: (jobId: string) => void
@@ -977,6 +987,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'outboundReleases'
   | 'outsourceJobs'
   | 'outsourcePayments'
+  | 'outsourceStatements'
   | 'outsourceVendors'
   | 'payrollRuns'
   | 'posOrders'
@@ -1041,6 +1052,10 @@ export type FinanceStoreState = Pick<AppState,
   | 'deleteOutsourceVendor'
   | 'chargeOutsourceToRepair'
   | 'remindLateOutsourceJobs'
+  | 'prepareOutsourceStatements'
+  | 'holdOutsourceStatementJob'
+  | 'releaseOutsourceJobHold'
+  | 'confirmOutsourceStatement'
   | 'revertPOToDraft'
   | 'reviewExpense'
   | 'saveBankRecon'

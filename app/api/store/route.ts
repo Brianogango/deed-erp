@@ -37,6 +37,7 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_expenses',
   'deed_outsourceJobs',
   'deed_outsourcePayments',
+  'deed_outsourceStatements',
   'deed_outsourceVendors',
   'deed_purchaseOrders',
   'deed_products',
@@ -504,6 +505,7 @@ export async function POST(request: Request) {
         (
           key === 'deed_outsourceJobs'
           || key === 'deed_outsourcePayments'
+          || key === 'deed_outsourceStatements'
           || key === 'deed_outsourceVendors'
         )
         && entries[key]

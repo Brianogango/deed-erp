@@ -5,7 +5,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
 import { isOpenForOutsourcePicker, outsourcePickBlocker, repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { formatDaysOut, isOutsourceOverdue, outsourceDaysOut, outsourceDaysLate } from '@/lib/repair/outsource-visibility'
-import { defaultExpectedReturnDate, findStockSerialForOutsource, outsourceHandoverSlipHtml, statusAfterUnfixedReturn, suggestedCustomerCharge, vendorScorecard, OUTSOURCE_DEFAULT_MARKUP_PCT } from '@/lib/repair/outsource-jobs'
+import { defaultExpectedReturnDate, findStockSerialForOutsource, outsourceHandoverSlipHtml, statusAfterUnfixedReturn, suggestedCustomerCharge, vendorScorecard, weekOf, OUTSOURCE_DEFAULT_MARKUP_PCT } from '@/lib/repair/outsource-jobs'
 import { LOCATIONS } from '@/lib/store/helpers'
 import { OutsourcePhotos } from '@/components/outsource/OutsourcePhotos'
 import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker, Modal } from '@/components/ui'
@@ -101,25 +101,29 @@ function OutsourceContent() {
     addOutsourceJob, returnOutsourceJob, recordOutsourcePayment, createOutsourceJobBill,
     cancelOutsourceJob, updateOutsourceJob, deleteOutsourceVendor, chargeOutsourceToRepair,
     serials, companySettings, remindLateOutsourceJobs,
+    outsourceStatements, prepareOutsourceStatements, holdOutsourceStatementJob, releaseOutsourceJobHold, confirmOutsourceStatement,
     setModule, showToast,
   } = useFinanceStore()
 
   // Jobs past the date a vendor promised: remind the sender and the lead once.
   useEffect(() => { remindLateOutsourceJobs() }, [outsourceJobs, remindLateOutsourceJobs])
+  // Weekly vendors: last week's returned jobs become a statement for Finance.
+  useEffect(() => { prepareOutsourceStatements() }, [outsourceJobs, outsourceVendors, outsourceStatements, prepareOutsourceStatements])
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = userCan(currentUser, 'repair.outsource.vendors')
+  const canConfirmStatements = userCan(currentUser, 'postFinancial')
 
   // ── filter state ──
-  const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | null
+  const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | 'statements' | null
   const queryId = searchParams.get('id')
   const queryVendorId = searchParams.get('vendorId')
 
-  const [tab, setLocalTab] = useState<'jobs' | 'vendors'>(queryTab ?? 'jobs')
+  const [tab, setLocalTab] = useState<'jobs' | 'vendors' | 'statements'>(queryTab ?? 'jobs')
   const [selectedVendorId, setLocalSelectedVendorId] = useState<string | null>(queryVendorId ?? null)
   const [activeJobId, setLocalActiveJobId] = useState<string | null>(queryId ?? null)
 
-  const setTab = (newTab: 'jobs' | 'vendors') => {
+  const setTab = (newTab: 'jobs' | 'vendors' | 'statements') => {
     setLocalTab(newTab)
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', newTab)
@@ -153,7 +157,7 @@ function OutsourceContent() {
   }
 
   useEffect(() => {
-    const urlTab = searchParams.get('tab') as 'jobs' | 'vendors' | null
+    const urlTab = searchParams.get('tab') as 'jobs' | 'vendors' | 'statements' | null
     if (urlTab && urlTab !== tab) setLocalTab(urlTab)
 
     const urlVendorId = searchParams.get('vendorId')
@@ -236,7 +240,7 @@ function OutsourceContent() {
     setVendorSearch(query)
     setVendorModalFromJob(true)
     setEditVendorId(null)
-    setVendorForm({ name: query.trim(), phone: '', email: '', address: '', specializations: [], notes: '', active: true })
+    setVendorForm({ name: query.trim(), phone: '', email: '', address: '', specializations: [], notes: '', active: true, billing: 'weekly' })
     setShowVendorModal(true)
   }
 
@@ -268,6 +272,7 @@ function OutsourceContent() {
     specializations: [] as OutsourceServiceType[],
     notes: '',
     active: true,
+    billing: 'weekly' as 'weekly' | 'per_job',
   })
 
   // ── Payment modal ──
@@ -305,6 +310,31 @@ function OutsourceContent() {
   function jobsNeedingBill(vendorId?: string) {
     return outsourceJobs.filter(j => (!vendorId || j.vendorId === vendorId) && (j.finalCost ?? 0) > 0 && !vendorJobBill(j))
   }
+  const vendorBilling = (vendorId: string) => outsourceVendors.find(v => v.id === vendorId)?.billing ?? 'weekly'
+  /** Per-job vendors get a bill per job; weekly ones are billed by statement. */
+  const canBillJobAlone = (job: OutsourceJob) =>
+    vendorBilling(job.vendorId) === 'per_job' && (job.finalCost ?? 0) > 0 && !vendorJobBill(job) && !job.statementId
+    && job.status !== 'sent' && job.status !== 'cancelled'
+  /** Where a returned job's cost stands on the way to a bill. */
+  function billingLabel(job: OutsourceJob): string | null {
+    if (!((job.finalCost ?? 0) > 0) || job.status === 'sent' || job.status === 'cancelled') return null
+    const bill = vendorJobBill(job)
+    if (job.statementRef) {
+      const st = outsourceStatements.find(x => x.id === job.statementId)
+      return st?.status === 'confirmed' ? `On ${job.statementRef} · bill ${st.billRef ?? ''}`.trim() : `On ${job.statementRef} · waiting for Finance`
+    }
+    if (bill) return `Bill ${bill.ref}`
+    if (job.billingHold) return `Held back: ${job.billingHold.reason}`
+    if (vendorBilling(job.vendorId) === 'weekly') {
+      const week = weekOf(job.returnedDate ?? '')
+      return week ? `On the statement for the week of ${fmtDate(week.weekStart)}` : 'On its week\'s statement'
+    }
+    return 'Not billed yet'
+  }
+  const pendingStatements = outsourceStatements.filter(st => st.status === 'pending')
+  const [openStatementId, setOpenStatementId] = useState<string | null>(null)
+  const [holdJobId, setHoldJobId] = useState<string | null>(null)
+  const [holdReason, setHoldReason] = useState('')
 
   const filteredJobs = outsourceJobs
     .filter(j => jobStatusFilter === 'all' || j.status === jobStatusFilter)
@@ -520,13 +550,13 @@ function OutsourceContent() {
 
   function openAddVendor() {
     setEditVendorId(null)
-    setVendorForm({ name: '', phone: '', email: '', address: '', specializations: [], notes: '', active: true })
+    setVendorForm({ name: '', phone: '', email: '', address: '', specializations: [], notes: '', active: true, billing: 'weekly' })
     setShowVendorModal(true)
   }
 
   function openEditVendor(v: OutsourceVendor) {
     setEditVendorId(v.id)
-    setVendorForm({ name: v.name, phone: v.phone, email: v.email ?? '', address: v.address ?? '', specializations: [...v.specializations], notes: v.notes ?? '', active: v.active !== false })
+    setVendorForm({ name: v.name, phone: v.phone, email: v.email ?? '', address: v.address ?? '', specializations: [...v.specializations], notes: v.notes ?? '', active: v.active !== false, billing: v.billing ?? 'weekly' })
     setShowVendorModal(true)
   }
 
@@ -708,7 +738,7 @@ function OutsourceContent() {
         {canChargeCustomer(job) && (
           <button type="button" className="outsource-act is-primary" onClick={() => openCharge(job)}>Charge customer</button>
         )}
-        {(job.finalCost ?? 0) > 0 && !vendorJobBill(job) && job.status !== 'sent' && job.status !== 'cancelled' && (
+        {canBillJobAlone(job) && (
           <button type="button" className="outsource-act is-warning" onClick={() => createOutsourceJobBill(job.id)} title="This cost is owed but has no bill, so Finance cannot pay it yet">Create bill</button>
         )}
         {bill && <button type="button" className="outsource-act" onClick={openBills}>Bill {bill.ref}</button>}
@@ -797,6 +827,7 @@ function OutsourceContent() {
             {job.returnNotes && <InfoRow label="Return Notes" value={job.returnNotes} />}
             {job.notes && <InfoRow label="Notes" value={job.notes} />}
             {bill && <InfoRow label="Vendor Bill" value={bill.ref} mono />}
+            {billingLabel(job) && <InfoRow label="Billing" value={billingLabel(job)} />}
           </div>
         ),
       },
@@ -839,6 +870,7 @@ function OutsourceContent() {
         tabs={[
           { id: 'jobs', label: outCount > 0 ? `Jobs (${outCount})` : 'Jobs' },
           { id: 'vendors', label: `Vendors (${outsourceVendors.length})` },
+          { id: 'statements', label: pendingStatements.length > 0 ? `Statements (${pendingStatements.length})` : 'Statements' },
         ]}
         active={tab}
         onChange={id => setTab(id as typeof tab)}
@@ -853,6 +885,7 @@ function OutsourceContent() {
             ...(overdueCount > 0 ? [{ id: 'overdue', label: 'late', value: overdueCount, tone: 'danger' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
             ...(unresolvedCount > 0 ? [{ id: 'unresolved', label: 'not fixed', value: unresolvedCount, tone: 'warning' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('returned_unresolved') } }] : []),
             ...(returnedToday > 0 ? [{ id: 'today', label: 'returned today', value: returnedToday }] : []),
+            ...(pendingStatements.length > 0 ? [{ id: 'statements', label: pendingStatements.length === 1 ? 'statement to confirm' : 'statements to confirm', value: pendingStatements.length, tone: 'warning' as const, onClick: () => setTab('statements') }] : []),
             ...(vendorOutstanding > 0 ? [{ id: 'owed', label: 'owed', value: fmtKes(vendorOutstanding), onClick: () => setTab('vendors') }] : []),
           ]}
         />
@@ -1046,6 +1079,14 @@ function OutsourceContent() {
                               {job.status === 'sent' && dueLabel(job) && (
                                 <p className={`outsource-due${dueLabel(job)!.late ? ' is-late' : ''}`}>{job.expectedReturnDate ? `Promised ${fmtDate(job.expectedReturnDate)} · ` : ''}{dueLabel(job)!.text}</p>
                               )}
+                              {billingLabel(job) && (
+                                <p className="outsource-billing">
+                                  {billingLabel(job)}
+                                  {job.billingHold && (
+                                    <button type="button" className="outsource-link" onClick={() => releaseOutsourceJobHold(job.id)}>Bill it</button>
+                                  )}
+                                </p>
+                              )}
                               {job.returnedDate && (
                                 <p className="text-[11px] mt-0.5" style={{ color: job.isResolved ? 'var(--success)' : 'var(--danger)' }}>
                                   Returned {fmtDate(job.returnedDate)} · {job.isResolved ? 'Resolved' : 'Not resolved'}
@@ -1068,7 +1109,7 @@ function OutsourceContent() {
                                   const bill = invoices.find(i => i.id === job.billId)
                                   return bill ? <button type="button" className="outsource-act" onClick={openBills}>Bill {bill.ref}</button> : null
                                 })()}
-                                {(job.finalCost ?? 0) > 0 && !vendorJobBill(job) && job.status !== 'sent' && job.status !== 'cancelled' && (
+                                {canBillJobAlone(job) && (
                                   <button type="button" className="outsource-act is-warning" onClick={() => createOutsourceJobBill(job.id)} title="This cost is owed but has no bill, so Finance cannot pay it yet">Create bill</button>
                                 )}
                               </div>
@@ -1114,6 +1155,39 @@ function OutsourceContent() {
             </>
           )
         })()}
+        {/* ── Weekly statements ── */}
+        {tab === 'statements' && (
+          <div className="outsource-statements">
+            <p className="outsource-statements__intro">
+              Each Monday the app puts the week's returned jobs of every weekly vendor on one statement.
+              {canConfirmStatements ? ' Check it and confirm it into a bill.' : ' Finance checks it and confirms it into a bill.'}
+            </p>
+            {outsourceStatements.length === 0 ? (
+              <p className="outsource-statements__empty">No statements yet. The first is prepared the Monday after a weekly vendor's job comes back with a cost.</p>
+            ) : (
+              <ul className="outsource-statements__list">
+                {outsourceStatements
+                  .slice()
+                  .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || b.weekStart.localeCompare(a.weekStart))
+                  .map(st => (
+                    <li key={st.id}>
+                      <button type="button" className="outsource-statement-row" onClick={() => setOpenStatementId(st.id)}>
+                        <span className="outsource-statement-row__main">
+                          <span className="outsource-statement-row__ref">{st.ref}</span>
+                          <span className="outsource-statement-row__vendor">{st.vendorName}</span>
+                          <span className="outsource-statement-row__week">{fmtDate(st.weekStart)} – {fmtDate(st.weekEnd)} · {st.lines.length} job{st.lines.length === 1 ? '' : 's'}</span>
+                        </span>
+                        <span className="outsource-statement-row__end">
+                          <span className="outsource-statement-row__total">{fmtKes(st.total)}</span>
+                          <StatusBadge status={st.status === 'pending' ? 'pending' : 'done'} label={st.status === 'pending' ? 'To confirm' : st.billRef ?? 'Confirmed'} />
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Job Details Drawer ────────────────────────────────────────────── */}
@@ -1466,6 +1540,82 @@ function OutsourceContent() {
         )
       })()}
 
+      {/* ── A weekly statement ────────────────────────────────────────────── */}
+      {openStatementId && (() => {
+        const st = outsourceStatements.find(x => x.id === openStatementId)
+        if (!st) return null
+        const pending = st.status === 'pending'
+        return (
+          <Modal
+            title={`${st.ref} · ${st.vendorName}`}
+            subtitle={`Jobs returned ${fmtDate(st.weekStart)} – ${fmtDate(st.weekEnd)}`}
+            width={720}
+            variant="enterprise"
+            accent="#2563EB"
+            icon={<Fa icon={faBuilding} />}
+            onClose={() => setOpenStatementId(null)}
+            footer={(
+              <>
+                <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setOpenStatementId(null)}>Close</button>
+                {pending && canConfirmStatements && (
+                  <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={() => { if (confirmOutsourceStatement(st.id)) setOpenStatementId(null) }}>
+                    Confirm — create bill
+                  </button>
+                )}
+                {!pending && st.billRef && (
+                  <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={openBills}>Open bill {st.billRef}</button>
+                )}
+              </>
+            )}
+          >
+            <ul className="outsource-statement-lines">
+              {st.lines.map(line => (
+                <li key={line.jobId}>
+                  <span className="outsource-statement-lines__main">
+                    <button type="button" className="outsource-link" onClick={() => { setOpenStatementId(null); setActiveJobId(line.jobId) }}>{line.jobRef}</button>
+                    <span>{line.description}</span>
+                  </span>
+                  <span className="outsource-statement-lines__amount">{fmtKes(line.amount)}</span>
+                  {pending && (
+                    <button type="button" className="outsource-act" onClick={() => { setHoldJobId(line.jobId); setHoldReason('') }}>Hold</button>
+                  )}
+                </li>
+              ))}
+              <li className="is-total">
+                <span className="outsource-statement-lines__main">Total</span>
+                <span className="outsource-statement-lines__amount">{fmtKes(st.total)}</span>
+                {pending && <span className="outsource-statement-lines__spacer" />}
+              </li>
+            </ul>
+            <p className="text-xs text-slate-500">
+              {pending
+                ? `Confirming creates one draft bill, one line per job, coded to 6301 Solutions and Expert Repair Services' Costs. Hold a disputed job to leave it off; it can be billed later.${canConfirmStatements ? '' : ' Finance confirms it.'}`
+                : `Confirmed${st.confirmedByName ? ` by ${st.confirmedByName}` : ''}${st.confirmedAt ? ` on ${fmtDate(st.confirmedAt)}` : ''}. Corrections are made with a supplier credit note in Finance.`}
+            </p>
+
+            {holdJobId && (
+              <div className="outsource-charge">
+                <label htmlFor="outsource-hold-reason" className="outsource-charge__tick">
+                  Hold {st.lines.find(l => l.jobId === holdJobId)?.jobRef} back — why?
+                </label>
+                <textarea id="outsource-hold-reason" className="form-input mt-2 min-h-[64px] w-full resize-y py-2 text-sm" rows={2}
+                  placeholder="e.g. Vendor charged more than agreed; checking with them"
+                  value={holdReason} onChange={e => setHoldReason(e.target.value)} />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" className="outsource-act" onClick={() => setHoldJobId(null)}>Keep it on</button>
+                  <button type="button" className="outsource-act is-danger" onClick={() => {
+                    if (holdOutsourceStatementJob(st.id, holdJobId, holdReason)) {
+                      setHoldJobId(null)
+                      if (st.lines.length <= 1) setOpenStatementId(null)
+                    }
+                  }}>Hold back</button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        )
+      })()}
+
       {/* ── Edit open job ─────────────────────────────────────────────────── */}
       {editJobId && (() => {
         const job = outsourceJobs.find(j => j.id === editJobId)
@@ -1643,6 +1793,15 @@ function OutsourceContent() {
               </div>
 
               <div>
+                <label htmlFor="outsource-vendor-billing" className="text-[11px] font-semibold text-t2 block mb-1">Billing</label>
+                <select id="outsource-vendor-billing" className="form-input w-full text-[12px]" value={vendorForm.billing}
+                  onChange={e => setVendorForm(f => ({ ...f, billing: e.target.value as 'weekly' | 'per_job' }))}>
+                  <option value="weekly">Weekly — one statement and one bill a week</option>
+                  <option value="per_job">Per job — a bill as each job comes back</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-2">Specialisations</label>
                 <div className="flex flex-wrap gap-1.5">
                   {OUTSOURCE_SERVICE_TYPES.map(s => {
@@ -1738,7 +1897,7 @@ function OutsourceContent() {
                 <p className="text-[11px] mb-3 rounded-lg px-3 py-2" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
                   Payments go through Finance against the vendor's bills.
                   {draftBills.length > 0 && <> {draftBills.map(b => b.ref).join(', ')} {draftBills.length === 1 ? 'is a draft' : 'are drafts'} — Finance confirms {draftBills.length === 1 ? 'it' : 'them'} before payment.</>}
-                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'has' : 'have'} no bill yet — use “Create bill” on the job.</>}
+                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'is' : 'are'} not billed yet — {vendorBilling(payVendorId) === 'weekly' ? 'they go on the weekly statement, which Finance confirms into a bill' : 'use “Create bill” on the job'}.</>}
                 </p>
               )}
 

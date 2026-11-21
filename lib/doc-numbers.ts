@@ -21,6 +21,7 @@ type DocKind =
   | 'exchange'
   | 'outsource'
   | 'outsource_payment'
+  | 'outsource_statement'
   | 'rider_pay'
   | 'expense'
   | 'opportunity'
@@ -56,6 +57,7 @@ const PREFIX_TO_KIND: Record<string, DocKind> = {
   EXC: 'exchange',
   OUT: 'outsource',
   OPAY: 'outsource_payment',
+  OST: 'outsource_statement',
   RWP: 'rider_pay',
   EXP: 'expense',
   OPP: 'opportunity',

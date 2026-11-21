@@ -150,7 +150,7 @@ const storeCtx: AppState = {
 
     expenses: core.expenses,
 
-    outsourceVendors: core.outsourceVendors, outsourceJobs: core.outsourceJobs, outsourcePayments: core.outsourcePayments,
+    outsourceVendors: core.outsourceVendors, outsourceJobs: core.outsourceJobs, outsourcePayments: core.outsourcePayments, outsourceStatements: core.outsourceStatements,
 
     ...createRepairActions(core),
 
@@ -412,6 +412,7 @@ const storeCtx: AppState = {
     outboundReleases: core.outboundReleases,
     outsourceJobs: core.outsourceJobs,
     outsourcePayments: core.outsourcePayments,
+    outsourceStatements: core.outsourceStatements,
     outsourceVendors: core.outsourceVendors,
     payrollRuns: core.payrollRuns,
     posOrders: core.posOrders,
@@ -449,6 +450,7 @@ const storeCtx: AppState = {
     core.outboundReleases,
     core.outsourceJobs,
     core.outsourcePayments,
+    core.outsourceStatements,
     core.outsourceVendors,
     core.payrollRuns,
     core.posOrders,

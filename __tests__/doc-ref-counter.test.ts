@@ -28,6 +28,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   exchange: 'EXC',
   outsource: 'OUT',
   outsource_payment: 'OPAY',
+  outsource_statement: 'OST',
   rider_pay: 'RWP',
   expense: 'EXP',
   opportunity: 'OPP',

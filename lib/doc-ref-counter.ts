@@ -37,6 +37,8 @@ export type DocKind =
   /** Outsource jobs (OUT/NNNN) and vendor payments (OPAY/NNNN) — yearless, as they always were. */
   | 'outsource'
   | 'outsource_payment'
+  /** Weekly outsource vendor statements (OST/NNNN), yearless. */
+  | 'outsource_statement'
   /** Rider weekly pay (RWP/NNNN), yearless. */
   | 'rider_pay'
   /** Expense claims (EXP/NNNN), yearless. */
@@ -88,6 +90,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   exchange: 'EXC',
   outsource: 'OUT',
   outsource_payment: 'OPAY',
+  outsource_statement: 'OST',
   rider_pay: 'RWP',
   expense: 'EXP',
   opportunity: 'OPP',
@@ -203,6 +206,7 @@ async function maxRefFromAppStateBlob(
 const YEARLESS: Partial<Record<DocKind, { counter: string; key: string }>> = {
   outsource: { counter: 'out_seq', key: 'deed_outsourceJobs' },
   outsource_payment: { counter: 'opay_seq', key: 'deed_outsourcePayments' },
+  outsource_statement: { counter: 'ost_seq', key: 'deed_outsourceStatements' },
   rider_pay: { counter: 'rwp_seq', key: 'deed_riderWeeklyPays' },
   expense: { counter: 'exp_seq', key: 'deed_expenses' },
   opportunity: { counter: 'opp_seq', key: 'deed_opportunities' },
