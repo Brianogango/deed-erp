@@ -1,6 +1,7 @@
 'use client'
 import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
-import { useState, useRef, useEffect, useMemo, Suspense } from 'react'
+import { useState, useRef, useEffect, useMemo, Suspense, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   useFinanceStore, fmtDate, fmtKes,
@@ -25,6 +26,17 @@ import { useCan } from '@/hooks/useCan'
 import { newestDocumentFirst } from '@/lib/document-order'
 
 // ── Constants ────────────────────────────────────────────────────────────────
+
+
+/**
+ * Expense dialogs render on document.body. Inline, iPhone Safari kept them
+ * inside the page's layer, so the top bar hid the Back header and the tab bar
+ * hid Confirm. The wrapper keeps the workspace styles without adding a box.
+ */
+function ExpensesModalPortal({ children }: { children: ReactNode }) {
+  if (typeof document === 'undefined') return null
+  return createPortal(<div className="expenses-workspace expenses-modal-portal">{children}</div>, document.body)
+}
 
 const PAYMENT_METHODS: { value: ExpensePaymentMethod; label: string; desc: string; isReimbursable: boolean }[] = [
   { value: 'reimbursement',  label: 'Reimbursement',     desc: 'I paid from my own pocket',      isReimbursable: true },
@@ -560,6 +572,7 @@ function ExpensesContent() {
 
       {/* ── Submit Expense Modal ──────────────────────────────────────────── */}
       {showSubmit && (
+        <ExpensesModalPortal>
         <div className="modal-overlay expenses-modal-overlay" onClick={() => setShowSubmit(false)}>
           <div className="modal-box expenses-submit-modal w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="expenses-modal-header flex items-center justify-between mb-4">
@@ -715,6 +728,7 @@ function ExpensesContent() {
             </div>
           </div>
         </div>
+        </ExpensesModalPortal>
       )}
 
       {/* ── Approve / Reject Modal ────────────────────────────────────────── */}
@@ -724,6 +738,7 @@ function ExpensesContent() {
         const canReview = exp.status === 'submitted'
           && canUserReviewExpense(currentUser?.role, exp.approvalChain)
         return (
+          <ExpensesModalPortal>
           <div className="modal-overlay expenses-modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box expenses-review-modal w-full max-w-md" onClick={e => e.stopPropagation()}>
               <div className="expenses-review-form">
@@ -817,6 +832,7 @@ function ExpensesContent() {
               </div>
             </div>
           </div>
+          </ExpensesModalPortal>
         )
       })()}
 
@@ -825,6 +841,7 @@ function ExpensesContent() {
         const exp = expenses.find(e => e.id === reimbursingId)
         if (!exp) return null
         return (
+          <ExpensesModalPortal>
           <div className="modal-overlay expenses-modal-overlay" onClick={() => setReimbursingId(null)}>
             <div className="modal-box expenses-reimburse-modal w-full max-w-sm" onClick={e => e.stopPropagation()}>
               <div className="expenses-modal-header expenses-reimburse-header flex items-center justify-between mb-4">
@@ -916,11 +933,13 @@ function ExpensesContent() {
               </div>
             </div>
           </div>
+          </ExpensesModalPortal>
         )
       })()}
 
       {/* ── Receipt Preview Modal ─────────────────────────────────────────── */}
       {previewExp && (
+        <ExpensesModalPortal>
         <div className="modal-overlay expenses-modal-overlay" onClick={closeReceiptPreview}>
           <div className="modal-box expenses-receipt-preview w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="expenses-modal-header expenses-receipt-preview__header flex items-center justify-between mb-3">
@@ -988,6 +1007,7 @@ function ExpensesContent() {
             </div>
           </div>
         </div>
+        </ExpensesModalPortal>
       )}
       </div>{/* mod-body */}
     </div>

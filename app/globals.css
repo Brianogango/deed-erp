@@ -21852,6 +21852,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
 /* ── HR, Delivery & Expenses design system (PR #445) ───────────────────── */
 .hr-workspace,
 .delivery-workspace,
+/* Expense dialogs portalled to <body>: keep the workspace tokens, no box. */
+.expenses-workspace.expenses-modal-portal {
+  display: contents;
+}
+
 .expenses-workspace {
   --work-navy: #21124f;
   --work-navy-2: #2f1a69;
