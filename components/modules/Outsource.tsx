@@ -1,4 +1,5 @@
 'use client'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
@@ -1380,7 +1381,7 @@ function OutsourceContent() {
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
                 <select aria-label="Payment bank account" className="form-input w-full text-[12px]" value={payBankAccountId} onChange={e => setPayBankAccountId(e.target.value)}>
                   <option value="">— Select Bank Account —</option>
-                  {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{bankChoiceLabel(a)}</option>)}
                 </select>
               </div>
               <div>

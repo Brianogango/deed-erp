@@ -1,4 +1,5 @@
 'use client'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useState, useRef, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
@@ -826,7 +827,9 @@ function ExpensesContent() {
         return (
           <div className="modal-overlay expenses-modal-overlay" onClick={() => setReimbursingId(null)}>
             <div className="modal-box expenses-reimburse-modal w-full max-w-sm" onClick={e => e.stopPropagation()}>
-              <div className="expenses-modal-header flex items-center justify-between mb-4">
+              <div className="expenses-modal-header expenses-reimburse-header flex items-center justify-between mb-4">
+                {/* Phones: the form fills the screen; Back stays at the top. */}
+                <button type="button" className="expenses-modal-back" onClick={() => setReimbursingId(null)} aria-label="Back to expenses">‹ Back</button>
                 <div>
                   <h3 className="text-sm font-bold text-t1">{isReimbursable(exp.paymentMethod) ? 'Reimburse Expense' : 'Pay Expense'}</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
@@ -845,7 +848,7 @@ function ExpensesContent() {
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account *</label>
                   <select aria-label="Expense payment account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
                     <option value="">— Select Bank Account —</option>
-                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{bankChoiceLabel(a)}</option>)}
                   </select>
                 </div>
                 <div>

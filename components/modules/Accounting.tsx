@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { PERIODS, periodOf, periodRange } from '@/lib/finance/period-range'
 import { planMigrationImport } from '@/lib/finance/migration-import'
 import { newestDocumentFirst } from '@/lib/document-order'
@@ -2733,7 +2734,7 @@ function AccountingContent() {
                   <Field label={tab === 'invoices' ? 'Bank / Account Received Into *' : 'Bank / Account Paid From *'}>
                     <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
                       { value: '', label: tab === 'invoices' ? '— Select receiving account —' : '— Select paying account —' },
-                      ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))
+                      ...activeBanks.map(b => ({ value: b.id, label: bankChoiceLabel(b) }))
                     ]} />
                   </Field>
                 )}

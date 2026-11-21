@@ -1,4 +1,5 @@
 'use client'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue, startTransition } from 'react'
 import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment } from '@/lib/store'
 import { Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
@@ -1054,7 +1055,7 @@ export default function PointOfSale() {
                     <Select
                       value={bankAccountId}
                       onChange={setBankAccountId}
-                      options={[{ value: '', label: 'Select bank account…' }, ...tenderBanks.map(b => ({ value: b.id, label: b.bankName || b.name }))]}
+                      options={[{ value: '', label: 'Select bank account…' }, ...tenderBanks.map(b => ({ value: b.id, label: bankChoiceLabel(b) }))]}
                     />
                   </Field>
                   <Field label="Payment reference (optional)">

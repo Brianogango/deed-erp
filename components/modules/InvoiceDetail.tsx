@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import JobTrail from '@/components/erp/JobTrail'
 import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
 import { DocumentWarranties } from '@/components/aftersales/DocumentWarranties'
@@ -1638,7 +1639,7 @@ export default function InvoiceDetail() {
                   onChange={setPayBankAccountId}
                   options={[
                     { value: '', label: 'Select account…' },
-                    ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id })),
+                    ...activeBanks.map(b => ({ value: b.id, label: bankChoiceLabel(b) })),
                   ]}
                 />
               </Field>

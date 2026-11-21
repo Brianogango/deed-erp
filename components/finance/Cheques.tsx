@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
 import { allocateCheque, chequeLinkedRefs, chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
@@ -628,7 +629,7 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
                 }}
               >
                 <option value="">{form.direction === 'received' ? 'Bank account it will be banked into…' : 'Bank account it is drawn on…'}</option>
-                {activeBanks.map(b => <option key={b.id} value={b.id}>{b.bankName || b.name}</option>)}
+                {activeBanks.map(b => <option key={b.id} value={b.id}>{bankChoiceLabel(b)}</option>)}
               </select>
             )}
             {canWithhold && (
