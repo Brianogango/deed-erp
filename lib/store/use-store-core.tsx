@@ -28,7 +28,8 @@ import { rememberServerBaseline } from '@/lib/store-baseline'
 import { type Delivery, type Rider, type DeliveryJob, type RiderWeeklyPay } from './delivery'
 import { type Invoice, type Payment, type CustomerCredit, type BankAccount, type BankRecon, type BankStatementLine, type RefundPayment, type Deposit, type InvoiceLine } from './finance'
 import { type PurchaseOrder, type Receipt, type PurchaseReturn, type StockTransfer } from './purchasing'
-import { OUTSOURCE_SERVICE_TYPES, type RepairOrder, type Warranty, type OutsourceJob } from './repairs'
+import { OUTSOURCE_SERVICE_TYPES, type RepairOrder, type Warranty, type OutsourceJob, type OutsourceStatement } from './repairs'
+import { OUTSOURCE_COST_ACCOUNT } from '@/lib/repair/outsource-jobs'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
 import { type PayrollRun, type Payslip, type SalaryAdvance, type RefSOP, type HRSOP, type PerformanceTarget } from './hr'
 import { type DocumentPaymentDetailsMap } from '@/lib/document-payment-details'
@@ -402,6 +403,7 @@ export function useStoreCore({
   const [outsourceVendors, setOutsourceVendors] = useLS('deed_outsourceVendors', seedOutsourceVendors)
   const [outsourceJobs, setOutsourceJobs]       = useLS('deed_outsourceJobs', seedOutsourceJobs)
   const [outsourcePayments, setOutsourcePayments] = useLS('deed_outsourcePayments', seedOutsourcePayments)
+  const [outsourceStatements, setOutsourceStatements] = useLS<OutsourceStatement[]>('deed_outsourceStatements', [])
   const [outboundReleases, setOutboundReleases] = useLS<OutboundRelease[]>('deed_outboundReleases', [])
   const [deposits, setDeposits] = useLS<Deposit[]>('deed_deposits', [])
   const [companyAssets, setCompanyAssets] = useLS<CompanyAsset[]>('deed_companyAssets', [])
@@ -518,6 +520,7 @@ export function useStoreCore({
   const kilimallSettlementsRef = useRef(kilimallSettlements); kilimallSettlementsRef.current = kilimallSettlements
   const outsourceJobsRef = useRef(outsourceJobs); outsourceJobsRef.current = outsourceJobs
   const outsourcePaymentsRef = useRef(outsourcePayments); outsourcePaymentsRef.current = outsourcePayments
+  const outsourceStatementsRef = useRef(outsourceStatements); outsourceStatementsRef.current = outsourceStatements
   const customerCreditsRef = useRef(customerCredits); customerCreditsRef.current = customerCredits
   const quotesRef = useRef(quotes); quotesRef.current = quotes
   const paymentsRef = useRef(payments); paymentsRef.current = payments
@@ -650,6 +653,21 @@ export function useStoreCore({
     return provisional
   }
 
+  /** A weekly vendor statement number: unique at once, the server's OST/NNNN when it answers. */
+  const outsourceStatementRef = (): string => {
+    const provisional = allocateDocNumberSync('OST')
+    queueMicrotask(() => {
+      void storeCtxRef.current?.allocateDocRef('OST').then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        setOutsourceStatements(p => p.map(st => (st.ref === provisional ? { ...st, ref: finalRef } : st)))
+        setOutsourceJobs(p => (p.some(j => j.statementRef === provisional)
+          ? p.map(j => (j.statementRef === provisional ? { ...j, statementRef: finalRef } : j))
+          : p))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+    })
+    return provisional
+  }
+
   /** The outsource vendor's contact (Contacts / accounts), matched by name. */
   const outsourceVendorContactId = (vendorId: string, vendorName: string) =>
     contacts.find(c => c.isVendor && c.name.trim().toLowerCase() === vendorName.trim().toLowerCase())?.id ?? vendorId
@@ -670,6 +688,9 @@ export function useStoreCore({
     const line: InvoiceLine = {
       id: uid(),
       description: `Outsource Service: ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType} — ${job.deviceDescription}`,
+      // Outsourced repair work is a repair cost, not a stock purchase (a line
+      // with no account landed in 6101 Purchases).
+      accountCode: OUTSOURCE_COST_ACCOUNT.code,
       qty: 1,
       unitPrice: cost,
       taxRate: 0,
@@ -1392,6 +1413,10 @@ const storeDeps = {
   get outboundReleases() { return outboundReleases },
   get outsourceJobs() { return outsourceJobs },
   get outsourcePayments() { return outsourcePayments },
+  get outsourceStatements() { return outsourceStatements },
+  get outsourceStatementsRef() { return outsourceStatementsRef },
+  get setOutsourceStatements() { return setOutsourceStatements },
+  get outsourceStatementRef() { return outsourceStatementRef },
   get outsourceVendors() { return outsourceVendors },
   get payrollRuns() { return payrollRuns },
   get payslips() { return payslips },

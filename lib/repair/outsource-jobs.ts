@@ -207,3 +207,79 @@ export function findStockSerialForOutsource<T extends StockSerialLike>(serials: 
     s && !NOT_IN_STOCK.has(s.status) && !NOT_HERE.has(s.location)
     && (String(s.serial ?? '').trim().toLowerCase() === wanted || String(s.barcode ?? '').trim().toLowerCase() === wanted))
 }
+
+// ── Weekly vendor statements ────────────────────────────────────────────────
+
+/** Monday and Sunday (YYYY-MM-DD) of the week a date falls in. */
+export function weekOf(date: string): { weekStart: string; weekEnd: string } | null {
+  const day = isoDay(date)
+  if (!day) return null
+  const t = Date.parse(`${day}T00:00:00Z`)
+  const dow = (new Date(t).getUTCDay() + 6) % 7 // Monday = 0
+  const start = t - dow * 86_400_000
+  return {
+    weekStart: new Date(start).toISOString().slice(0, 10),
+    weekEnd: new Date(start + 6 * 86_400_000).toISOString().slice(0, 10),
+  }
+}
+
+type StatementJob = {
+  id: string
+  ref: string
+  vendorId: string
+  status: string
+  returnedDate?: string
+  finalCost?: number
+  billId?: string
+  statementId?: string
+  billingHold?: unknown
+  vendorName?: string
+  deviceDescription: string
+  serviceType: string
+}
+
+/**
+ * A returned job that belongs on its vendor's weekly statement: back (fixed
+ * or not), the vendor charged for it, and not already billed, on a statement
+ * or held back.
+ */
+export function needsWeeklyBilling(job: StatementJob): boolean {
+  return (job.status === 'returned_resolved' || job.status === 'returned_unresolved')
+    && Number(job.finalCost) > 0
+    && !!weekOf(job.returnedDate ?? '')
+    && !job.billId && !job.statementId && !job.billingHold
+}
+
+export type StatementPlan = {
+  vendorId: string
+  weekStart: string
+  weekEnd: string
+  jobs: StatementJob[]
+}
+
+/**
+ * Last week's and earlier weeks' unbilled jobs, grouped by vendor and the week
+ * they came back. The current week is left open until it ends: a statement is
+ * prepared on the Monday after.
+ */
+export function planWeeklyStatements(
+  jobs: StatementJob[],
+  weeklyVendorIds: Set<string>,
+  today: Date = new Date(),
+): StatementPlan[] {
+  const thisWeek = weekOf(today.toISOString().slice(0, 10))!.weekStart
+  const groups = new Map<string, StatementPlan>()
+  for (const job of jobs ?? []) {
+    if (!weeklyVendorIds.has(job.vendorId) || !needsWeeklyBilling(job)) continue
+    const week = weekOf(job.returnedDate!)!
+    if (week.weekStart >= thisWeek) continue
+    const key = `${job.vendorId}|${week.weekStart}`
+    const group = groups.get(key) ?? { vendorId: job.vendorId, ...week, jobs: [] }
+    group.jobs.push(job)
+    groups.set(key, group)
+  }
+  return [...groups.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart) || a.vendorId.localeCompare(b.vendorId))
+}
+
+/** The bill account for outsourced repair work. */
+export const OUTSOURCE_COST_ACCOUNT = { code: '6301', name: "Solutions and Expert Repair Services' Costs" }

@@ -94,7 +94,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/ecommerce': ['deed_products', 'deed_invoices', 'deed_contacts', 'deed_warranties'],
   '/expenses': ['deed_expenses', 'deed_accounts', 'deed_bankAccounts'],
   // Invoices: each job's vendor bill (balances, payment); bank accounts: the payment form.
-  '/outsource': ['deed_outsourceVendors', 'deed_outsourceJobs', 'deed_outsourcePayments', 'deed_contacts', 'deed_repairs_v2', 'deed_invoices', 'deed_bankAccounts'],
+  '/outsource': ['deed_outsourceVendors', 'deed_outsourceJobs', 'deed_outsourcePayments', 'deed_outsourceStatements', 'deed_contacts', 'deed_repairs_v2', 'deed_invoices', 'deed_bankAccounts'],
   '/deposits': ['deed_deposits', 'deed_invoices', 'deed_contacts', 'deed_bankAccounts'],
   '/documents': ['deed_hrDocuments', 'deed_sops', 'deed_sopActuals', 'deed_ref_sops', 'deed_hr_sops'],
   '/holdovers': ['deed_holdovers', 'deed_products', 'deed_serials', 'deed_contacts', 'deed_repairs_v2', 'deed_bulkStock'],

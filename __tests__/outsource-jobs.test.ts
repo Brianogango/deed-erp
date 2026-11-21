@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/store-freshness', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/store-freshness')>()),
+  downloadedThisSession: () => true,
+}))
 import {
   defaultExpectedReturnDate,
   findStockSerialForOutsource,
   outsourceHandoverSlipHtml,
+  planWeeklyStatements,
   statusAfterUnfixedReturn,
   suggestedCustomerCharge,
   vendorScorecard,
+  weekOf,
 } from '@/lib/repair/outsource-jobs'
 import { isOutsourceOverdue, outsourceDaysLate } from '@/lib/repair/outsource-visibility'
 import { createRepairActions } from '@/lib/store/actions/repairs'
@@ -120,6 +127,15 @@ function fakeStore(over: Record<string, unknown> = {}) {
     serialRef: { current: state.serials },
     users: [],
     outsourceVendors: [{ id: 'v1', name: 'Fastech', phone: '0700', specializations: [], createdAt: '', active: true }],
+    outsourceStatementsRef: { current: [] as any[] },
+    setOutsourceStatements: (fn: any) => { store.outsourceStatementsRef.current = apply(store.outsourceStatementsRef.current, fn) },
+    outsourceStatementRef: () => 'OST/0001',
+    invRef: { current: [] as any[] },
+    setInvoices: (fn: any) => { store.invRef.current = apply(store.invRef.current, fn) },
+    saveInvoiceToServer: vi.fn(),
+    draftInvoiceRef: () => 'BILL/DRAFT/1',
+    accounts: [{ code: '6301' }],
+    systemSettings: {},
     contacts: [],
     companySettings: { vatRate: 16 },
     currentUser: () => ({ id: 'u2', name: 'Grace' }),
@@ -149,7 +165,7 @@ const sentJob = (over: Record<string, unknown> = {}) => ({
 
 describe('returning a job', () => {
   it('bills once even when marked returned twice', () => {
-    const { store, state, actions } = fakeStore()
+    const { store, state, actions } = fakeStore({ outsourceVendors: [{ id: 'v1', name: 'Fastech', active: true, billing: 'per_job', specializations: [] }] })
     store.setOutsourceJobs([sentJob()])
     expect(actions.returnOutsourceJob('j1', { returnedDate: '2026-11-21', isResolved: false, finalCost: 1500 })).toBe(true)
     expect(actions.returnOutsourceJob('j1', { returnedDate: '2026-11-21', isResolved: false, finalCost: 1500 })).toBe(false)
@@ -228,5 +244,94 @@ describe('vendors', () => {
     store.setOutsourceJobs([])
     expect(actions.deleteOutsourceVendor('v1')).toBe(true)
     expect(removed).toEqual(['v1'])
+  })
+})
+
+describe('weekly statements', () => {
+  it('finds the Monday–Sunday week of a date', () => {
+    expect(weekOf('2026-11-19')).toEqual({ weekStart: '2026-11-16', weekEnd: '2026-11-22' })
+    expect(weekOf('2026-11-16')).toEqual({ weekStart: '2026-11-16', weekEnd: '2026-11-22' })
+    expect(weekOf('2026-11-22')).toEqual({ weekStart: '2026-11-16', weekEnd: '2026-11-22' })
+  })
+
+  const ret = (over: Record<string, unknown>) => ({
+    id: 'x', ref: 'OUT/1', vendorId: 'v1', status: 'returned_resolved', returnedDate: '2026-11-11', finalCost: 1000,
+    deviceDescription: 'HP', serviceType: 'screen_replacement', ...over,
+  })
+
+  it('groups last week and earlier by vendor and week, leaving this week open', () => {
+    const plans = planWeeklyStatements([
+      ret({ id: 'a' }),
+      ret({ id: 'b', returnedDate: '2026-11-13', status: 'returned_unresolved' }),
+      ret({ id: 'c', returnedDate: '2026-11-04' }),
+      ret({ id: 'd', returnedDate: '2026-11-18' }),            // this week
+      ret({ id: 'e', vendorId: 'v2' }),                         // per-job vendor
+      ret({ id: 'f', finalCost: 0 }),                           // no charge
+      ret({ id: 'g', billId: 'b1' }),                           // already billed
+      ret({ id: 'h', statementId: 's1' }),                      // already on a statement
+      ret({ id: 'i', billingHold: { reason: 'disputed' } }),    // held
+    ] as any, new Set(['v1']), new Date('2026-11-21T10:00:00Z'))
+    expect(plans.map(p => [p.weekStart, p.jobs.map(j => j.id)])).toEqual([
+      ['2026-11-02', ['c']],
+      ['2026-11-09', ['a', 'b']],
+    ])
+  })
+
+  const returned = (over: Record<string, unknown> = {}) => sentJob({ status: 'returned_resolved', returnedDate: '2026-11-11', finalCost: 1200, isResolved: true, ...over })
+
+  it('a weekly vendor gets no bill on return', () => {
+    const { store, state, actions } = fakeStore()
+    store.setOutsourceJobs([sentJob()])
+    actions.returnOutsourceJob('j1', { returnedDate: '2026-11-11', isResolved: true, finalCost: 1200 })
+    expect(state.bills).toBe(0)
+  })
+
+  it('prepares one statement per vendor and week, then Finance confirms it into one bill', () => {
+    const finance = { id: 'f1', name: 'Faith', role: 'finance_officer', modules: ['accounting'] }
+    const { store, state, actions } = fakeStore({ currentUser: () => finance })
+    store.setOutsourceJobs([returned(), returned({ id: 'j2', ref: 'OUT/0002', finalCost: 800, returnedDate: '2026-11-12' })])
+    actions.prepareOutsourceStatements()
+    actions.prepareOutsourceStatements() // a second run adds nothing
+    const statements = store.outsourceStatementsRef.current
+    expect(statements).toHaveLength(1)
+    expect(statements[0]).toMatchObject({ id: 'ost-v1-2026-11-09', weekStart: '2026-11-09', weekEnd: '2026-11-15', total: 2000, status: 'pending' })
+    expect(state.jobs.every((j: any) => j.statementId === 'ost-v1-2026-11-09')).toBe(true)
+
+    expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09')).toBe('BILL/DRAFT/1')
+    const bill = store.invRef.current[0]
+    expect(bill.total).toBe(2000)
+    expect(bill.lines).toHaveLength(2)
+    expect(bill.lines.every((l: any) => l.accountCode === '6301')).toBe(true)
+    expect(state.jobs.every((j: any) => j.billId === bill.id)).toBe(true)
+    expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09')).toBeNull()
+  })
+
+  it('a held job leaves the statement and comes back when released', () => {
+    const { store, state, actions } = fakeStore()
+    store.setOutsourceJobs([returned(), returned({ id: 'j2', ref: 'OUT/0002', finalCost: 800 })])
+    actions.prepareOutsourceStatements()
+    expect(actions.holdOutsourceStatementJob('ost-v1-2026-11-09', 'j2', 'Charged more than agreed')).toBe(true)
+    expect(store.outsourceStatementsRef.current[0].total).toBe(1200)
+    expect(state.jobs.find((j: any) => j.id === 'j2').billingHold.reason).toBe('Charged more than agreed')
+    actions.releaseOutsourceJobHold('j2')
+    actions.prepareOutsourceStatements()
+    // Still pending, so it rejoins the same statement.
+    expect(store.outsourceStatementsRef.current).toHaveLength(1)
+    expect(store.outsourceStatementsRef.current[0].total).toBe(2000)
+  })
+
+  it('Finance, an Admin Officer or the Director confirms; others cannot', () => {
+    for (const role of ['finance_officer', 'admin_officer', 'director']) {
+      const { store, actions } = fakeStore({ currentUser: () => ({ id: 'u9', name: 'X', role, modules: ['accounting'] }) })
+      store.setOutsourceJobs([returned()])
+      actions.prepareOutsourceStatements()
+      expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09'), role).toBe('BILL/DRAFT/1')
+    }
+    for (const role of ['technical_lead', 'technician', 'inventory_officer']) {
+      const { store, actions } = fakeStore({ currentUser: () => ({ id: 'u9', name: 'X', role, modules: ['repair'] }) })
+      store.setOutsourceJobs([returned()])
+      actions.prepareOutsourceStatements()
+      expect(actions.confirmOutsourceStatement('ost-v1-2026-11-09'), role).toBeNull()
+    }
   })
 })

@@ -20,6 +20,7 @@ const VALID_KINDS = new Set<DocKind>([
   'exchange',
   'outsource',
   'outsource_payment',
+  'outsource_statement',
   'rider_pay',
   'expense',
   'opportunity',

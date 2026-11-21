@@ -297,3 +297,147 @@ div:has(> .outsource-drawer-actions) {
     grid-column: auto;
   }
 }
+
+/* ── Billing line on a job, and plain text links ───────────────────────── */
+.outsource-billing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0.125rem 0 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.outsource-link {
+  align-self: flex-start;
+  padding: 0;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--primary-dark, var(--navy));
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Weekly statements ─────────────────────────────────────────────────── */
+.outsource-statements {
+  padding: 0.75rem 1rem 1rem;
+}
+.outsource-statements__intro,
+.outsource-statements__empty {
+  margin: 0 0 0.75rem;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.outsource-statements__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-lt);
+}
+.outsource-statements__list > li {
+  border-bottom: 1px solid var(--border-lt);
+}
+.outsource-statement-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.625rem 0.25rem;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.outsource-statement-row:hover { background: var(--bg-surface); }
+.outsource-statement-row__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.125rem;
+}
+.outsource-statement-row__ref {
+  color: var(--navy);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+}
+.outsource-statement-row__vendor {
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.outsource-statement-row__week {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.outsource-statement-row__end {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+.outsource-statement-row__total {
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.outsource-statement-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-lt);
+}
+.outsource-statement-lines > li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: 13px;
+}
+.outsource-statement-lines > li.is-total {
+  font-weight: 700;
+}
+.outsource-statement-lines__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.125rem;
+}
+.outsource-statement-lines__main > span {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.outsource-statement-lines__amount {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.outsource-statement-lines__spacer {
+  flex: none;
+  width: 3.5rem;
+}
+.outsource-statement-lines .outsource-act {
+  width: 3.5rem;
+}
+@media (max-width: 767px) {
+  .outsource-statement-lines .outsource-act,
+  .outsource-statement-lines__spacer {
+    width: 4rem;
+  }
+}
