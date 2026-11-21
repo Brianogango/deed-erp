@@ -486,6 +486,35 @@ html {
     height: auto !important;
     clip: auto !important;
   }
+  /* One quiet row: a white search field and two plain icons beside it —
+     no grey well, no boxed buttons. */
+  .dt-toolbar-row-mobile > .dt-toolbar-search,
+  .dt-toolbar-row-mobile > .dt-toolbar-search input {
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: var(--radius-md) !important;
+    background: var(--bg-card) !important;
+    box-shadow: none !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-search input {
+    border: 1px solid var(--border-lt) !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions {
+    gap: 0 !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn:not(.is-menu-only *) {
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-2) !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn:active {
+    background: var(--bg-surface) !important;
+  }
 }
 
 @media (max-width: 767px) {
@@ -1515,5 +1544,95 @@ html {
 @media (max-width: 767px) {
   body:has(.mobile-tab-bar) .app-topbar-menu {
     display: none;
+  }
+}
+
+/* Sales list on a phone: search, the date choice and ⋮ on one quiet row,
+   like every other list (it was a search bar over a big bold "Any date"
+   box and a "More" button). */
+@media (max-width: 767px) {
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    padding: 0.625rem 0.75rem !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-search {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: var(--radius-md) !important;
+    font-size: 16px !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar select {
+    flex: 0 0 auto !important;
+    width: 7.5rem !important;
+    padding: 0 1.75rem 0 0.625rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: var(--radius-md) !important;
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    color: var(--text-2) !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative {
+    flex: none !important;
+    width: auto !important;
+    margin-left: 0 !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative > .sp-btn {
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    padding: 0 !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative > .sp-btn > span {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+  }
+
+  /* iPhone date boxes: an empty one is blank and has a fixed width that
+     pushed the second box past the card. Fill the cell, show the format. */
+  input[type='date'] {
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type='date']::-webkit-date-and-time-value {
+    min-height: 1.5em;
+    text-align: left;
+  }
+}
+
+/* Sales "More": a word and a chevron on a wide screen, ⋮ on a phone list. */
+.sp-more-dots { display: none; }
+@media (max-width: 767px) {
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar .sp-more-dots { display: inline-block; }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar .sp-more-chevron { display: none; }
+}
+@media (max-width: 767px) {
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar select[aria-label='Filter by status'] {
+    display: none !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-search {
+    min-width: 0 !important;
+  }
+}
+
+/* A page header with nothing to press (the title is already in the top bar)
+   left an empty white strip above the tabs. */
+@media (max-width: 767px) {
+  .mod-page > .mod-header:not(:has(button, a, input, select)) {
+    display: none !important;
   }
 }

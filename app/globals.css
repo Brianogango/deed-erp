@@ -28323,7 +28323,10 @@ button, [role="button"], [role="tab"] {
 /* ── Phone views: module header, toolbars and floating chrome ──
    Identity gets the full row; actions wrap beneath it as a compact row. */
 @media (max-width: 639px) {
-  :not(.sales-doc) > .mod-header.mod-header.mod-header.mod-header {
+  /* Only a header with something to press: an empty one (its title is in the
+     top bar on a phone) is hidden by phone-fit.css, and forcing flex here
+     kept it as a blank strip above the tabs. */
+  :not(.sales-doc) > .mod-header.mod-header.mod-header.mod-header:has(button, a, input, select) {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
