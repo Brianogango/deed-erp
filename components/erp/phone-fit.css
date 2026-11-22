@@ -1710,3 +1710,142 @@ html {
     white-space: nowrap !important;
   }
 }
+
+/* ── Kilimall ──────────────────────────────────────────────────────────── */
+.kilimall-order-detail { display: flex; flex-direction: column; gap: 0.75rem; }
+.kilimall-order-summary {
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.kilimall-order-summary__label { margin: 0; color: var(--text-3); font-size: 11px; }
+.kilimall-order-summary__product { margin: 0.125rem 0 0.5rem; color: var(--text-1); font-size: 13px; font-weight: 600; line-height: 1.35; }
+.kilimall-order-summary__row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.kilimall-order-summary__row strong { color: var(--text-1); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kilimall-order-status {
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.kilimall-order-facts { margin: 0; }
+.kilimall-order-facts > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: 12px;
+}
+.kilimall-order-facts > div:last-child { border-bottom: 0; }
+.kilimall-order-facts dt { color: var(--text-3); }
+.kilimall-order-facts dd { margin: 0; color: var(--text-1); font-weight: 500; overflow-wrap: anywhere; }
+.kilimall-order-facts dd.is-mono { font-family: var(--font-mono, ui-monospace, monospace); }
+.kilimall-order-returns {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.kilimall-order-returns p { margin: 0; }
+.kilimall-order-returns p:first-child { margin-bottom: 0.25rem; color: var(--text-2); font-weight: 600; }
+.btn-outline.kilimall-order-return { border-color: var(--danger); color: var(--danger); }
+.kilimall-serial-check__list {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.kilimall-serial-check__list li {
+  display: flex;
+  flex-direction: column;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--border-lt);
+}
+.kilimall-serial-check__list li:last-child { border-bottom: 0; }
+.kilimall-serial-check__list b { font-family: var(--font-mono, ui-monospace, monospace); color: var(--text-1); }
+.kilimall-serial-check__list span { color: var(--text-3); font-size: 11px; }
+
+@media (max-width: 767px) {
+  /* Four counts on one row: number over a short label. */
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.375rem;
+    padding: 0.625rem 0.75rem 0;
+  }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+    min-width: 0;
+    min-height: 0;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius-sm);
+  }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) > strong {
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  html body .kpi-summary-strip { padding: 0; margin: 0 0 0.75rem; }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) > i {
+    display: none;
+  }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) > span {
+    font-size: 0.625rem;
+    line-height: 1.2;
+  }
+  /* Same width as the cards below it. */
+  .mod-body > .card.kilimall-serial-check.kilimall-serial-check {
+    margin: 0;
+    max-width: none;
+  }
+  html body .kilimall-serial-check > div:first-child { flex-wrap: nowrap; align-items: flex-start; }
+  html body .kilimall-serial-check > div:first-child > button { flex-shrink: 0; min-height: 36px; }
+}
+
+/* Kilimall: new order form */
+.kilimall-order-form { display: flex; flex-direction: column; gap: 0.875rem; }
+.kilimall-order-form > *,
+.kilimall-order-form__pair > * { margin: 0 !important; }
+.kilimall-order-form__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.kilimall-order-form__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.kilimall-order-form__total strong { color: var(--text-1); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* My Documents */
+.docs-card__head input { width: 220px; }
+.docs-empty__icon { display: block; width: 28px; height: 28px; margin: 0 auto 0.5rem; color: var(--text-4); }
+@media (max-width: 767px) {
+  /* Category chips: one row you can swipe, not two wrapped rows. */
+  .docs-chips.docs-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -0.75rem;
+    padding-inline: 0.75rem;
+  }
+  .docs-chips::-webkit-scrollbar { display: none; }
+  .docs-chips > button { flex-shrink: 0; min-height: 32px; white-space: nowrap; }
+  .mod-body > .card.docs-card.docs-card { max-width: none; }
+  .docs-card__head > p { display: none; }
+  .docs-card__head input { flex: 1; width: auto; min-width: 0; }
+}
