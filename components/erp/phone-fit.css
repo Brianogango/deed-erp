@@ -1804,3 +1804,25 @@ html {
   html body .kilimall-serial-check > div:first-child { flex-wrap: nowrap; align-items: flex-start; }
   html body .kilimall-serial-check > div:first-child > button { flex-shrink: 0; min-height: 36px; }
 }
+
+/* Kilimall: new order form */
+.kilimall-order-form { display: flex; flex-direction: column; gap: 0.875rem; }
+.kilimall-order-form > *,
+.kilimall-order-form__pair > * { margin: 0 !important; }
+.kilimall-order-form__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.kilimall-order-form__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.kilimall-order-form__total strong { color: var(--text-1); font-size: 13px; font-variant-numeric: tabular-nums; }

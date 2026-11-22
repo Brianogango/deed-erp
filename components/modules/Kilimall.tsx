@@ -717,7 +717,7 @@ function KilimallContent() {
         count={totalOrders}
         color="var(--warning)"
         primaryAction={
-          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewOrder(true)}>
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => { setNewOrder(p => ({ ...p, orderDate: p.orderDate || todayKey, qty: p.qty || '1' })); setShowNewOrder(true) }}>
             New order
           </PrimaryActionButton>
         }
@@ -1346,59 +1346,77 @@ function KilimallContent() {
 
       {/* New Order */}
       {showNewOrder && (
-        <Modal title="New Kilimall Order" onClose={() => setShowNewOrder(false)} width={520}>
-          <div className="kilimall-modal-content kilimall-modal-content--order">
-          <Field label="Kilimall Order ID" required>
-            <Input value={newOrder.kilimallRef} onChange={v => setNewOrder(p => ({ ...p, kilimallRef: v }))} placeholder="e.g. KLM-20240419-001" />
-          </Field>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Order Date" required>
-              <Input value={newOrder.orderDate} onChange={v => setNewOrder(p => ({ ...p, orderDate: v }))} type="date" />
-            </Field>
-            <Field label="Customer Name" hint="Optional">
-              <Input value={newOrder.customerName} onChange={v => setNewOrder(p => ({ ...p, customerName: v }))} placeholder="Kilimall buyer name" />
-            </Field>
-          </div>
-          <Field label="Product" required>
-            <div className="relative">
-              <input className="form-input w-full" value={newOrder.productName}
-                onChange={e => {
-                  const v = e.target.value
-                  const normalized = v.trim().toLowerCase()
-                  const match = products.find(product => product.name.trim().toLowerCase() === normalized)
-                  setNewOrder(previous => ({
-                    ...previous,
-                    productName: v,
-                    productId: match?.id ?? '',
-                    unitPrice: match ? String(match.salePrice ?? 0) : '',
-                  }))
-                }}
-                placeholder="Search product…" list="ko-products" />
-              <datalist id="ko-products">
-                {products.filter(p => p.canBeSold && p.isActive).map(p => <option key={p.id} value={p.name} />)}
-              </datalist>
-            </div>
-          </Field>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Quantity" required>
-              <Input value={newOrder.qty} onChange={v => setNewOrder(p => ({ ...p, qty: v }))} type="number" />
-            </Field>
-            <Field label="Unit Price (KES)" required>
-              <Input value={newOrder.unitPrice} onChange={v => setNewOrder(p => ({ ...p, unitPrice: v }))} type="number" />
-            </Field>
-          </div>
-          <Field label="Notes" hint="Optional">
-            <Textarea value={newOrder.notes} onChange={v => setNewOrder(p => ({ ...p, notes: v }))} rows={2} />
-          </Field>
-          {newOrder.unitPrice && newOrder.qty && (
-            <div className="text-right text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>
-              Total: {fmtKes(Number(newOrder.qty) * Number(newOrder.unitPrice))}
-            </div>
+        <Modal
+          title="New Kilimall order"
+          width={520}
+          variant="enterprise"
+          onClose={() => setShowNewOrder(false)}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setShowNewOrder(false)}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={handleCreateOrder}>Create order</button>
+            </>
           )}
-          <div className="flex gap-2 justify-end">
-            <button className="btn-outline" onClick={() => setShowNewOrder(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleCreateOrder}>Create Order</button>
-          </div>
+        >
+          <div className="kilimall-order-form">
+            <Field label="Kilimall order ID" required>
+              <Input value={newOrder.kilimallRef} onChange={v => setNewOrder(p => ({ ...p, kilimallRef: v }))} placeholder="e.g. 611065555441587" />
+            </Field>
+            <div className="kilimall-order-form__pair">
+              <Field label="Order date" required>
+                <Input value={newOrder.orderDate} onChange={v => setNewOrder(p => ({ ...p, orderDate: v }))} type="date" />
+              </Field>
+              <Field label="Customer">
+                <Input value={newOrder.customerName} onChange={v => setNewOrder(p => ({ ...p, customerName: v }))} placeholder="Optional" />
+              </Field>
+            </div>
+            <SearchPicker
+              label="Product *"
+              placeholder="Search product, SKU or barcode…"
+              items={sellableProducts}
+              onSelect={pr => setNewOrder(previous => ({
+                ...previous,
+                productId: pr.id,
+                productName: pr.name,
+                unitPrice: previous.productId === pr.id && previous.unitPrice ? previous.unitPrice : String(pr.salePrice ?? ''),
+              }))}
+              formatSelected={pr => pr.name}
+              selectedLabel={newOrder.productId ? newOrder.productName : undefined}
+              searchText={pr => [pr.sku, pr.barcode, pr.category].filter(Boolean).join(' ')}
+              emptyText="No sellable product matches"
+              renderItem={pr => {
+                const available = availableSerialCount.get(pr.id) ?? 0
+                return (
+                  <div className="min-w-0">
+                    <p className="font-bold text-xs truncate">{pr.name}</p>
+                    <p className="text-[11px] text-[var(--text-4)] truncate">
+                      {[pr.sku, fmtKes(pr.salePrice)].filter(Boolean).join(' · ')}
+                      {' · '}
+                      <span style={{ color: available > 0 ? 'var(--success)' : 'var(--text-4)' }}>
+                        {available > 0 ? `${available} in stock` : 'none in stock'}
+                      </span>
+                    </p>
+                  </div>
+                )
+              }}
+            />
+            <div className="kilimall-order-form__pair">
+              <Field label="Quantity" required>
+                <Input value={newOrder.qty} onChange={v => setNewOrder(p => ({ ...p, qty: v }))} type="number" />
+              </Field>
+              <Field label="Unit price (KES)" required>
+                <Input value={newOrder.unitPrice} onChange={v => setNewOrder(p => ({ ...p, unitPrice: v }))} type="number" />
+              </Field>
+            </div>
+            <Field label="Notes">
+              <Textarea value={newOrder.notes} onChange={v => setNewOrder(p => ({ ...p, notes: v }))} rows={2} placeholder="Optional" />
+            </Field>
+            {Number(newOrder.qty) > 0 && Number(newOrder.unitPrice) > 0 && (
+              <p className="kilimall-order-form__total">
+                <span>Total</span>
+                <strong>{fmtKes(Number(newOrder.qty) * Number(newOrder.unitPrice))}</strong>
+              </p>
+            )}
           </div>
         </Modal>
       )}
