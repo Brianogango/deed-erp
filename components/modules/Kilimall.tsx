@@ -1405,58 +1405,70 @@ function KilimallContent() {
 
       {/* Order detail */}
       {viewOrder && (
-        <Modal title={viewOrder.ref} subtitle={`Kilimall Ref: ${viewOrder.kilimallRef}`} onClose={() => setDetailId(null)} width={500}>
-          <div className="kilimall-modal-content kilimall-modal-content--detail">
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            {[
-              ['Ordered product', viewOrder.productName],
-              ['Shipped product', viewOrder.fulfilledProductName && viewOrder.fulfilledProductId !== viewOrder.productId
-                ? viewOrder.fulfilledProductName
-                : (viewOrder.serialNumber ? viewOrder.productName : '—')],
-              ['Quantity', String(viewOrder.qty)],
-              ['Unit Price', fmtKes(viewOrder.unitPrice)],
-              ['Total', fmtKes(viewOrder.total)],
-              ['Order Date', fmtDate(viewOrder.orderDate)],
-              ['Customer', viewOrder.customerName || '—'],
-              ['Serial', viewOrder.serialNumber || '—'],
-              ['Settlement', viewOrder.settlementRef || '—'],
-              ...(viewOrder.substitutionReason
-                ? [['Substitution reason', viewOrder.substitutionReason] as const]
-                : []),
-            ].map(([k, v]) => (
-              <div key={k} className="p-2.5 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
-                <p className="text-[10px] text-t3 mb-0.5">{k}</p>
-                <p className="font-medium">{v}</p>
-              </div>
-            ))}
-          </div>
-          {(viewOrder.returns?.length ?? 0) > 0 && (
-            <div className="mt-3 rounded-lg border border-[var(--border-lt)] p-2.5 text-[11px]">
-              <p className="m-0 mb-1 font-semibold text-t2">Returns</p>
-              {viewOrder.returns!.map((r, k) => (
-                <p key={k} className="m-0 text-t3">
-                  {fmtDate(r.date)} · {r.serialNumber || r.productName} · {r.condition} · {r.outcome === 'exchange' ? 'exchange' : 'refund'} — {r.reason}
-                </p>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-[11px] px-2.5 py-1 rounded font-semibold capitalize"
-              style={{ background: STATUS_COLOR[viewOrder.status] + '20', color: STATUS_COLOR[viewOrder.status] }}>
-              {viewOrder.status}
-            </span>
-            {viewOrder.status === 'dispatched' && (
-              <button className="btn-primary text-[11px]" onClick={() => {
-                updateKilimallOrder(viewOrder.id, { status: 'delivered' })
-                showToast('Order marked as delivered')
-              }}>Mark Delivered</button>
-            )}
-            {(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered' || isLegacyReturned(viewOrder)) && (
-              <button className="btn-outline text-[11px]" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+        <Modal
+          title={viewOrder.ref}
+          subtitle={`Kilimall ${viewOrder.kilimallRef}`}
+          width={500}
+          variant="enterprise"
+          onClose={() => setDetailId(null)}
+          footer={(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered' || isLegacyReturned(viewOrder)) ? (
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm kilimall-order-return"
                 onClick={() => { const id = viewOrder.id; setDetailId(null); openReturn(id) }}>Record return</button>
-            )}
-          </div>
-          </div>
+              {viewOrder.status === 'dispatched' && (
+                <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={() => {
+                  updateKilimallOrder(viewOrder.id, { status: 'delivered' })
+                  showToast('Order marked as delivered')
+                }}>Mark delivered</button>
+              )}
+            </>
+          ) : undefined}
+        >
+          {(() => {
+            const substituted = Boolean(viewOrder.fulfilledProductName && viewOrder.fulfilledProductId !== viewOrder.productId)
+            const facts: Array<[string, string, boolean?]> = [
+              ...(substituted ? [['Ordered', viewOrder.productName] as [string, string]] : []),
+              ...(viewOrder.qty > 1 ? [['Quantity', `${viewOrder.qty} × ${fmtKes(viewOrder.unitPrice)}`] as [string, string]] : []),
+              ['Customer', viewOrder.customerName || '—'],
+              ['Order date', fmtDate(viewOrder.orderDate)],
+              ['Serial', viewOrder.serialNumber || 'Not dispatched yet', true],
+              ['Settlement', viewOrder.settlementRef || 'Not settled yet'],
+              ...(viewOrder.substitutionReason ? [['Why substituted', viewOrder.substitutionReason] as [string, string]] : []),
+            ]
+            return (
+              <div className="kilimall-order-detail">
+                <div className="kilimall-order-summary">
+                  <p className="kilimall-order-summary__label">{substituted ? 'Shipped (substitute)' : viewOrder.serialNumber ? 'Shipped' : 'Ordered'}</p>
+                  <p className="kilimall-order-summary__product">{substituted ? viewOrder.fulfilledProductName : viewOrder.productName}</p>
+                  <div className="kilimall-order-summary__row">
+                    <strong>{fmtKes(viewOrder.total)}</strong>
+                    <span className="kilimall-order-status"
+                      style={{ background: STATUS_COLOR[viewOrder.status] + '1f', color: STATUS_COLOR[viewOrder.status] }}>
+                      {viewOrder.status}
+                    </span>
+                  </div>
+                </div>
+                <dl className="kilimall-order-facts">
+                  {facts.map(([k, v, mono]) => (
+                    <div key={k}>
+                      <dt>{k}</dt>
+                      <dd className={mono && viewOrder.serialNumber ? 'is-mono' : ''}>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {(viewOrder.returns?.length ?? 0) > 0 && (
+                  <div className="kilimall-order-returns">
+                    <p>Returns</p>
+                    {viewOrder.returns!.map((r, k) => (
+                      <p key={k}>
+                        {fmtDate(r.date)} · {r.serialNumber || r.productName} · {r.condition} · {r.outcome === 'exchange' ? 'exchange' : 'refund'} — {r.reason}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </Modal>
       )}
 
