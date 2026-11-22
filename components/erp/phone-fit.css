@@ -1722,7 +1722,7 @@ html {
 .kilimall-order-summary__label { margin: 0; color: var(--text-3); font-size: 11px; }
 .kilimall-order-summary__product { margin: 0.125rem 0 0.5rem; color: var(--text-1); font-size: 13px; font-weight: 600; line-height: 1.35; }
 .kilimall-order-summary__row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.kilimall-order-summary__row strong { color: var(--text-1); font-size: 16px; font-variant-numeric: tabular-nums; }
+.kilimall-order-summary__row strong { color: var(--text-1); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kilimall-order-status {
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-sm);
@@ -1786,7 +1786,7 @@ html {
     border-radius: var(--radius-sm);
   }
   html body .kilimall-kpi-strip > .kilimall-kpi > strong {
-    font-size: 0.875rem;
+    font-size: 13px;
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
