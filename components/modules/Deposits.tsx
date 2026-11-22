@@ -797,7 +797,7 @@ function DepositsContent() {
 
       <div className="deposit-notice px-3 sm:px-4 pt-2">
         <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
-          Use this module for layby / reservation deposits (liability 3100). For Odoo-style down payments on a confirmed Sale Order, create a down-payment invoice from Sales instead — those reduce AR on the final invoice.
+          For laybys and reservations (held in account 3100). For a down payment on a confirmed sale order, raise a down-payment invoice from Sales instead; it comes off the final invoice.
         </p>
       </div>
 
