@@ -1833,7 +1833,7 @@ html {
 
 /* My Documents */
 .docs-card__head input { width: 220px; }
-.docs-empty__icon { display: block; margin: 0 auto 0.5rem; font-size: 28px; color: var(--text-4); }
+.docs-empty__icon { display: block; width: 28px; height: 28px; margin: 0 auto 0.5rem; color: var(--text-4); }
 @media (max-width: 767px) {
   /* Category chips: one row you can swipe, not two wrapped rows. */
   .docs-chips.docs-chips {
