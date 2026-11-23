@@ -489,6 +489,9 @@ function RefurbishmentContent() {
                   {next.mine && next.key === 'mark_ready' && (
                     <button className="btn-primary text-xs py-1.5" onClick={() => markRefurbishmentReady(job.id)}>Mark ready</button>
                   )}
+                  {next.mine && next.key === 'retest' && !job.identityPending && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => transferToSell(job.id)}>Send for retest</button>
+                  )}
                 </div>
               </div>
             )
