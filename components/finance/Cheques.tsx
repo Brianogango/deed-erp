@@ -83,7 +83,7 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
   const [direction, setDirection] = useState<'all' | ChequeDirection>('all')
   const [statusFilter, setStatusFilter] = useState<'open' | 'deposited' | 'closed' | 'all'>('open')
   const [adding, setAdding] = useState(false)
-  const [bulk, setBulk] = useState(false)
+  const [bulk, setBulk] = useState<false | { files?: File[] }>(false)
   const [applying, setApplying] = useState(false)
   const applyDue = async () => {
     setApplying(true)
@@ -245,7 +245,7 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
           <option value="closed">Closed</option>
           <option value="all">All</option>
         </select>
-        <button type="button" className="btn-secondary shrink-0 px-3 py-1.5 text-[12px]" onClick={() => setBulk(true)}>Many</button>
+        <button type="button" className="btn-secondary shrink-0 px-3 py-1.5 text-[12px]" onClick={() => setBulk({})}>Many</button>
         <button type="button" className="btn-primary shrink-0 px-3 py-1.5 text-[12px]" onClick={() => setAdding(true)}>Add</button>
       </div>
 
@@ -271,7 +271,7 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
         <button type="button" className="btn-secondary ml-auto text-[12px]" disabled={applying} onClick={() => void applyDue()} title="Pay the invoices / bills of cheques whose date has come (the server also does this on its own)">
           {applying ? 'Applying…' : 'Apply due now'}
         </button>
-        <button type="button" className="btn-secondary text-[12px]" onClick={() => setBulk(true)}>Upload many</button>
+        <button type="button" className="btn-secondary text-[12px]" onClick={() => setBulk({})}>Upload many</button>
         <button type="button" className="btn-primary text-[12px]" onClick={() => setAdding(true)}>Add cheque</button>
       </div>
 
@@ -298,8 +298,8 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
         }}
       />
 
-      {bulk && <BulkCheques showToast={showToast} onClose={() => setBulk(false)} onSaved={load} />}
-      {adding && <AddCheque showToast={showToast} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await load() }} />}
+      {bulk && <BulkCheques showToast={showToast} initialFiles={bulk.files} onClose={() => setBulk(false)} onSaved={load} />}
+      {adding && <AddCheque showToast={showToast} onMany={files => { setAdding(false); setBulk({ files }) }} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await load() }} />}
       {selected && <ChequeDetail cheque={selected} now={now} onClose={() => setSelected(null)} onMove={move} />}
     </div>
   )
@@ -371,7 +371,7 @@ function ChequeDetail({ cheque, now, onClose, onMove }: {
   )
 }
 
-function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose: () => void; onSaved: () => Promise<void> }) {
+function AddCheque({ showToast, onClose, onSaved, onMany }: { showToast: Toast; onClose: () => void; onSaved: () => Promise<void>; onMany: (files: File[]) => void }) {
   const [form, setForm] = useState({ ...EMPTY_FORM, receivedDate: today() })
   const [image, setImage] = useState<{ base64: string; mimeType: string; previewUrl: string } | null>(null)
   const [scan, setScan] = useState<Scan | null>(null)
@@ -537,8 +537,13 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
     <Modal title="Add cheque" subtitle="Scan a photo of the cheque or type the details in" onClose={onClose} width={680}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3" style={{ borderColor: 'var(--border)' }}>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) void onPhoto(f); e.currentTarget.value = '' }} />
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+            onChange={e => {
+              const picked = Array.from(e.target.files ?? [])
+              e.currentTarget.value = ''
+              if (picked.length > 1) onMany(picked) // several photos: carry on in "Upload many"
+              else if (picked[0]) void onPhoto(picked[0])
+            }} />
           <button type="button" className="btn-secondary text-[12px]" disabled={scanning} onClick={() => fileRef.current?.click()}>
             {scanning ? 'Reading the cheque…' : image ? 'Scan another photo' : 'Scan cheque photo'}
           </button>
