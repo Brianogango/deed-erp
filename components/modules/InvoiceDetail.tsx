@@ -23,6 +23,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
+import { paymentInstruction } from '@/lib/contacts/payment-details'
 import { financePaymentPreview } from '@/lib/finance-payment-preview'
 import { suggestedWithholding, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
 import { WithholdingFields, NO_WITHHOLDING, type WithholdingEntry } from '@/components/finance/WithholdingFields'
@@ -1538,6 +1539,15 @@ export default function InvoiceDetail() {
                 <p className="text-xs font-black font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
               </div>
             </div>
+
+            {/* How this supplier is paid, at the moment of paying them — so
+                nobody has to leave the screen to look it up in Contacts. */}
+            {invoice.type !== 'customer_invoice' && partnerContact && (
+              <p className="text-[10px] text-[var(--text-3)] -mt-2">
+                <span className="uppercase font-bold text-[var(--text-4)]">Pay to </span>
+                {paymentInstruction(partnerContact)}
+              </p>
+            )}
 
             <Field label={invoice.type === 'customer_invoice' ? 'Receipt date *' : 'Payment date *'}>
               <Input type="date" value={payDate} onChange={setPayDate} />

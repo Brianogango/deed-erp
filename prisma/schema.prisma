@@ -786,6 +786,11 @@ model Client {
   bankName      String?  @map("bank_name") @db.VarChar(100)
   bankAccount   String?  @map("bank_account") @db.VarChar(80)
   bankBranch    String?  @map("bank_branch") @db.VarChar(100)
+  /// Paybill or Till number. A Till has no account number, so mpesaAccount stays empty.
+  mpesaPaybill  String?  @map("mpesa_paybill") @db.VarChar(20)
+  mpesaAccount  String?  @map("mpesa_account") @db.VarChar(60)
+  /// 'bank' | 'mpesa' — which rail this vendor prefers when both are on file.
+  payBy         String?  @map("pay_by") @db.VarChar(10)
   vendorRating  Decimal? @map("vendor_rating") @db.Decimal(4, 2)
   loyaltyPoints Int      @default(0) @map("loyalty_points")
   notes         String?

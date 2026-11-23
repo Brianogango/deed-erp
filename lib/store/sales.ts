@@ -280,6 +280,11 @@ export interface Contact {
   bankAccount?: string
   bankBranch?: string
   bankDetails?: string    // kept for backward compat
+  /** Paybill or Till number. A Till has no account number, so mpesaAccount stays empty. */
+  mpesaPaybill?: string
+  mpesaAccount?: string
+  /** Which rail this vendor prefers when both bank and M-Pesa are on file. */
+  payBy?: 'bank' | 'mpesa'
   // Other
   notes?: string
   vendorRating?: number

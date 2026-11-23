@@ -46,6 +46,19 @@ function cleanTextOrEmpty(value: unknown, fallback = ''): string {
   return cleanText(value) ?? fallback
 }
 
+/**
+ * The payment rail, or undefined for anything that is not one of the two.
+ *
+ * The column is a plain varchar, so a legacy row or a hand-written payload can
+ * hold anything. Narrowing here means the form and the detail panel only ever
+ * see a value they have a label for, and an unrecognised one reads as "not
+ * set" rather than printing itself at the reader.
+ */
+function payBy(value: unknown): 'bank' | 'mpesa' | undefined {
+  const next = cleanText(value)?.toLowerCase()
+  return next === 'bank' || next === 'mpesa' ? next : undefined
+}
+
 function numberOr(value: unknown, fallback: number): number {
   if (value === undefined || value === null || value === '') return fallback
   const next = Number(value)
@@ -123,6 +136,9 @@ export function clientToContact(client: any): Contact {
     bankName: client.bankName ?? undefined,
     bankAccount: client.bankAccount ?? undefined,
     bankBranch: client.bankBranch ?? undefined,
+    mpesaPaybill: client.mpesaPaybill ?? undefined,
+    mpesaAccount: client.mpesaAccount ?? undefined,
+    payBy: payBy(client.payBy),
     notes: client.notes ?? undefined,
     vendorRating: numberOr(client.vendorRating, 0),
     loyaltyPoints: numberOr(client.loyaltyPoints, 0),
@@ -179,6 +195,9 @@ function normalizeContact(body: ContactInput, existing?: Contact): Contact | str
     bankName: cleanText(body.bankName) ?? existing?.bankName,
     bankAccount: cleanText(body.bankAccount) ?? existing?.bankAccount,
     bankBranch: cleanText(body.bankBranch) ?? existing?.bankBranch,
+    mpesaPaybill: cleanText(body.mpesaPaybill) ?? existing?.mpesaPaybill,
+    mpesaAccount: cleanText(body.mpesaAccount) ?? existing?.mpesaAccount,
+    payBy: payBy(body.payBy) ?? existing?.payBy,
     notes: cleanText(body.notes) ?? existing?.notes,
     vendorRating: body.vendorRating === undefined ? existing?.vendorRating : numberOr(body.vendorRating, 0),
     loyaltyPoints: numberOr(body.loyaltyPoints, existing?.loyaltyPoints ?? 0),
@@ -215,6 +234,9 @@ function contactToClientData(contact: Contact, includeCreateFields = false): Rec
     bankName: contact.bankName ?? null,
     bankAccount: contact.bankAccount ?? null,
     bankBranch: contact.bankBranch ?? null,
+    mpesaPaybill: contact.mpesaPaybill ?? null,
+    mpesaAccount: contact.mpesaAccount ?? null,
+    payBy: contact.payBy ?? null,
     notes: contact.notes ?? null,
     vendorRating: contact.vendorRating ?? 0,
     loyaltyPoints: contact.loyaltyPoints ?? 0,

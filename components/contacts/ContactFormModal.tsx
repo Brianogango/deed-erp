@@ -1,5 +1,6 @@
 'use client'
 import { kraPinWarning } from '@/lib/contacts/kra-pin'
+import { PAY_BY_OPTIONS, hasPaymentDetails } from '@/lib/contacts/payment-details'
 
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
@@ -47,6 +48,7 @@ export function blankCompanyContact(overrides: Partial<ContactFormValues> = {}):
     // Country, payment terms and credit limit start empty — the user must set them.
     paymentTermsDays: undefined, creditLimit: undefined,
     bankName: '', bankAccount: '', bankBranch: '',
+    mpesaPaybill: '', mpesaAccount: '', payBy: undefined,
     notes: '',
     ...overrides,
   }
@@ -60,6 +62,8 @@ export function blankIndividualContact(overrides: Partial<ContactFormValues> = {
     companyId: undefined,
     isCustomer: true, isVendor: false, tags: [],
     paymentTermsDays: undefined,
+    bankName: '', bankAccount: '', bankBranch: '',
+    mpesaPaybill: '', mpesaAccount: '', payBy: undefined,
     notes: '',
     ...overrides,
   }
@@ -107,7 +111,7 @@ export default function ContactFormModal({
     ...(forceVendor ? { isVendor: true } : {}),
   }))
   const [saving, setSaving] = useState(false)
-  type DetailsTab = 'other' | 'address' | 'persons' | 'remarks' | 'documents'
+  type DetailsTab = 'other' | 'payment' | 'address' | 'persons' | 'remarks'
   const [activeDetailsTab, setActiveDetailsTab] = useState<DetailsTab>('other')
   type PersonDraft = { id?: string; salutation: string; firstName: string; lastName: string; email: string; phone: string; mobile: string; position: string }
   const blankPerson = (): PersonDraft => ({ salutation: '', firstName: '', lastName: '', email: '', phone: '', mobile: '', position: '' })
@@ -165,28 +169,27 @@ export default function ContactFormModal({
     [contacts, editId],
   )
 
-  const detailsTabs = useMemo<readonly (readonly [DetailsTab, string])[]>(() => (
-    form.type === 'company'
-      ? [
-          ['other', 'Business Details'],
-          ['address', 'Address'],
-          ['persons', 'Contact Persons'],
-          ['remarks', 'Remarks'],
-          ['documents', 'Company Documents'],
-        ]
-      : [
-          ['other', 'Personal Details'],
-          ['address', 'Address'],
-          ['remarks', 'Remarks'],
-          ['documents', 'Identity Documents'],
-        ]
-  ), [form.type])
+  // Payment details are how we pay THEM, so the tab belongs to vendors. It
+  // stays available to a contact that already has details on file, so turning
+  // the Vendor tick off cannot hide a bank account somebody still has to
+  // correct.
+  const showPaymentTab = form.isVendor || forceVendor || hasPaymentDetails(form)
+  const detailsTabs = useMemo<readonly (readonly [DetailsTab, string])[]>(() => ([
+    ['other', form.type === 'company' ? 'Business Details' : 'Personal Details'],
+    ...(showPaymentTab ? [['payment', 'Payment Details'] as const] : []),
+    ['address', 'Address'],
+    ...(form.type === 'company' ? [['persons', 'Contact Persons'] as const] : []),
+    ['remarks', 'Remarks'],
+  ]), [form.type, showPaymentTab])
 
   useEffect(() => {
     if (form.type === 'individual' && activeDetailsTab === 'persons') {
       setActiveDetailsTab('other')
     }
-  }, [form.type, activeDetailsTab])
+    if (!showPaymentTab && activeDetailsTab === 'payment') {
+      setActiveDetailsTab('other')
+    }
+  }, [form.type, activeDetailsTab, showPaymentTab])
 
   const paymentTermsValue = form.paymentTermsDays == null ? '' : String(form.paymentTermsDays)
   const paymentTermsOptions = useMemo(() => {
@@ -224,6 +227,12 @@ export default function ContactFormModal({
       tags: form.tags,
       paymentTermsDays: form.paymentTermsDays,
       creditLimit: form.creditLimit,
+      bankName: form.bankName,
+      bankAccount: form.bankAccount,
+      bankBranch: form.bankBranch,
+      mpesaPaybill: form.mpesaPaybill,
+      mpesaAccount: form.mpesaAccount,
+      payBy: form.payBy,
     }
     setForm(type === 'company'
       ? blankCompanyContact(shared)
@@ -266,9 +275,6 @@ export default function ContactFormModal({
         payload.registrationNumber = undefined
         payload.industry = undefined
         payload.postalAddress = undefined
-        payload.bankName = undefined
-        payload.bankAccount = undefined
-        payload.bankBranch = undefined
       } else {
         payload.jobTitle = undefined
         payload.idNumber = undefined
@@ -456,12 +462,6 @@ export default function ContactFormModal({
                     <Field label="Trading Name">
                       <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="Business name (if different)" />
                     </Field>
-                    <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'company') ?? 'Shown on invoices and tax documents'}>
-                      <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051234567X" />
-                    </Field>
-                    <Field label="Currency" hint="Defaults to your base currency">
-                      <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
-                    </Field>
                     <Field label="Credit limit (KES)" required={canSetCreditTerms} id="contact-creditLimit" error={fieldErrors.creditLimit} hint={canSetCreditTerms ? 'Maximum approved account exposure (0 for none)' : creditTermsHint}>
                       <Input type="number" disabled={!canSetCreditTerms} value={creditLimitText} onChange={v => { setCreditLimitText(String(v)); if (fieldErrors.creditLimit) setFieldErrors(prev => ({ ...prev, creditLimit: undefined })) }} placeholder="0.00" />
                     </Field>
@@ -524,14 +524,34 @@ export default function ContactFormModal({
               </Field>
             )}
 
-            {activeDetailsTab === 'documents' && (
-              <div className="contacts-documents-empty">
-                <strong>{form.type === 'company' ? 'Company Documents' : 'Identity Documents'}</strong>
-                <span>
-                  {form.type === 'company'
-                    ? 'Save the company, then attach its CR12, certificate of incorporation, KRA PIN certificate and other compliance documents from the contact record.'
-                    : 'Save the individual, then attach a National ID or passport only when identification is required.'}
-                </span>
+            {activeDetailsTab === 'payment' && (
+              <div className="contacts-form-optional__grid">
+                <div className="contacts-form-wide">
+                  <Field label="Pay by" hint="Which way this supplier is normally paid. Finance sees it on the bill.">
+                    <Select
+                      value={form.payBy ?? ''}
+                      onChange={v => f('payBy')(v === '' ? undefined : v)}
+                      options={[{ value: '', label: 'Not set' }, ...PAY_BY_OPTIONS]}
+                    />
+                  </Field>
+                </div>
+                <Field label="Bank name">
+                  <Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. NCBA Bank Kenya PLC" maxLength={100} />
+                </Field>
+                <Field label="Bank account number">
+                  <Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 1005157785" maxLength={80} />
+                </Field>
+                <div className="contacts-form-wide">
+                  <Field label="Bank branch">
+                    <Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Eastleigh" maxLength={100} />
+                  </Field>
+                </div>
+                <Field label="M-Pesa Paybill / Till number">
+                  <Input value={form.mpesaPaybill ?? ''} onChange={f('mpesaPaybill')} placeholder="e.g. 303030" maxLength={20} />
+                </Field>
+                <Field label="M-Pesa account number" hint="Leave empty for a Till (Buy Goods) number">
+                  <Input value={form.mpesaAccount ?? ''} onChange={f('mpesaAccount')} placeholder="Account shown to the payer" maxLength={60} />
+                </Field>
               </div>
             )}
           </div>

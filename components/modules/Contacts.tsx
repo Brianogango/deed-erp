@@ -3,6 +3,7 @@ import { rememberRecentRecord } from '@/lib/recent-records'
 import { RecordPager } from '@/components/erp/RecordPager'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
 import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
+import { PAY_BY_LABELS } from '@/lib/contacts/payment-details'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
@@ -813,14 +814,17 @@ function ContactsInner() {
                 </section>
 
                 <section className="contacts-panel contacts-panel--banking">
-                  <h4>Banking details</h4>
-                  <dl className="contacts-banking-details" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 0 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Bank</dt><dd>{vc.bankName || '—'}</dd></div>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd></div>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd></div>
-                    {Boolean(vc.vendorRating) && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></div>}
-                    {vc.isCustomer && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Loyalty points</dt><dd>{vc.loyaltyPoints ?? 0}</dd></div>}
-                  </dl>
+                  <h4>Payment details</h4>
+                  <div className="contacts-info-list">
+                    {vc.isVendor && <InfoRow label="Pay by" value={PAY_BY_LABELS[vc.payBy ?? ''] ?? 'Not set'} />}
+                    <InfoRow label="Bank" value={vc.bankName || '—'} />
+                    <InfoRow label="Account" value={vc.bankAccount || '—'} mono />
+                    <InfoRow label="Branch" value={vc.bankBranch || '—'} />
+                    {Boolean(vc.mpesaPaybill) && <InfoRow label="M-Pesa" value={vc.mpesaPaybill!} mono />}
+                    {Boolean(vc.mpesaAccount) && <InfoRow label="M-Pesa account" value={vc.mpesaAccount!} mono />}
+                    {Boolean(vc.vendorRating) && <InfoRow label="Vendor rating" value={`${vc.vendorRating} / 5`} />}
+                    {vc.isCustomer && <InfoRow label="Loyalty points" value={vc.loyaltyPoints ?? 0} />}
+                  </div>
                 </section>
 
                 <section className="contacts-panel contacts-panel--credits">
