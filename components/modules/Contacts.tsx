@@ -3,6 +3,7 @@ import { rememberRecentRecord } from '@/lib/recent-records'
 import { RecordPager } from '@/components/erp/RecordPager'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
 import MergeContactModal from '@/components/contacts/MergeContactModal'
+import { paymentDetailRows } from '@/lib/contacts/payment-details'
 import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
@@ -831,11 +832,9 @@ function ContactsInner() {
                 {/* Only what is filled in: a block of dashes said nothing. */}
                 {(vc.bankName || vc.bankAccount || vc.bankBranch || Boolean(vc.vendorRating) || (vc.isCustomer && Number(vc.loyaltyPoints) > 0)) && (
                 <section className="contacts-panel contacts-panel--banking">
-                  <h4>{vc.bankName || vc.bankAccount || vc.bankBranch ? 'Banking details' : 'Other details'}</h4>
+                  <h4>{vc.bankName || vc.bankAccount || vc.bankBranch ? 'Payment details' : 'Other details'}</h4>
                   <dl className="contacts-banking-details" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 0 }}>
-                    {vc.bankName && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Bank</dt><dd>{vc.bankName}</dd></div>}
-                    {vc.bankAccount && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Account</dt><dd className="font-mono">{vc.bankAccount}</dd></div>}
-                    {vc.bankBranch && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Branch</dt><dd>{vc.bankBranch}</dd></div>}
+                    {paymentDetailRows(vc).map(r => <div key={r.label} style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>{r.label}</dt><dd className={r.mono ? 'font-mono' : undefined}>{r.value}</dd></div>)}
                     {Boolean(vc.vendorRating) && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></div>}
                     {vc.isCustomer && Number(vc.loyaltyPoints) > 0 && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Loyalty points</dt><dd>{vc.loyaltyPoints}</dd></div>}
                   </dl>

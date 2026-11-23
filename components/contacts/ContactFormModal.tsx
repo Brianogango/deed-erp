@@ -18,13 +18,6 @@ function focusFieldControl(fieldId: string) {
   ;(target as HTMLElement | null)?.focus?.()
 }
 
-const CONTACT_INDUSTRIES = [
-  'Financial Services', 'Telecommunications', 'Electronics', 'IT Services',
-  'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Construction',
-  'Real Estate', 'Hospitality', 'Transport & Logistics', 'Agriculture',
-  'Government', 'NGO / Non-profit', 'Media & Entertainment', 'Other',
-] as const
-
 /** Standard payment-terms presets (days); 0 = cash / due immediately. New contacts start with none selected. */
 const PAYMENT_TERMS_DAY_OPTIONS = [
   { value: '0', label: 'Cash / due immediately (0 days)' },
@@ -107,8 +100,8 @@ export default function ContactFormModal({
     ...(forceVendor ? { isVendor: true } : {}),
   }))
   const [saving, setSaving] = useState(false)
-  type DetailsTab = 'other' | 'address' | 'persons' | 'remarks' | 'documents'
-  const [activeDetailsTab, setActiveDetailsTab] = useState<DetailsTab>('other')
+  type DetailsTab = 'payment' | 'terms' | 'address' | 'persons' | 'remarks'
+  const [activeDetailsTab, setActiveDetailsTab] = useState<DetailsTab>(() => (initial?.isVendor || forceVendor) && !forceCustomer ? 'payment' : 'terms')
   type PersonDraft = { id?: string; salutation: string; firstName: string; lastName: string; email: string; phone: string; mobile: string; position: string }
   const blankPerson = (): PersonDraft => ({ salutation: '', firstName: '', lastName: '', email: '', phone: '', mobile: '', position: '' })
   const [contactPersons, setContactPersons] = useState<PersonDraft[]>([])
@@ -165,28 +158,43 @@ export default function ContactFormModal({
     [contacts, editId],
   )
 
-  const detailsTabs = useMemo<readonly (readonly [DetailsTab, string])[]>(() => (
-    form.type === 'company'
-      ? [
-          ['other', 'Business Details'],
-          ['address', 'Address'],
-          ['persons', 'Contact Persons'],
-          ['remarks', 'Remarks'],
-          ['documents', 'Company Documents'],
-        ]
-      : [
-          ['other', 'Personal Details'],
-          ['address', 'Address'],
-          ['remarks', 'Remarks'],
-          ['documents', 'Identity Documents'],
-        ]
-  ), [form.type])
+  // Only the sections that apply: payment details for vendors, credit and
+  // terms for customers, contact persons for companies.
+  const detailsTabs = useMemo<readonly (readonly [DetailsTab, string])[]>(() => {
+    const tabs: Array<readonly [DetailsTab, string]> = []
+    if (form.isVendor) tabs.push(['payment', 'Payment details'])
+    tabs.push(['terms', form.isCustomer ? 'Credit & terms' : 'Terms'])
+    tabs.push(['address', 'Address'])
+    if (form.type === 'company') tabs.push(['persons', 'Contact persons'])
+    tabs.push(['remarks', 'Notes'])
+    return tabs
+  }, [form.type, form.isVendor, form.isCustomer])
 
   useEffect(() => {
-    if (form.type === 'individual' && activeDetailsTab === 'persons') {
-      setActiveDetailsTab('other')
-    }
-  }, [form.type, activeDetailsTab])
+    if (!detailsTabs.some(([id]) => id === activeDetailsTab)) setActiveDetailsTab(detailsTabs[0][0])
+  }, [detailsTabs, activeDetailsTab])
+
+  // How the vendor is paid. Stored in the bank fields so nothing new is needed
+  // on the server: bank → bank / branch / account; Paybill → "M-Pesa Paybill",
+  // paybill number, account number; Till → "M-Pesa Till", till number;
+  // Send money → "M-Pesa", phone number.
+  type PayMethod = 'bank' | 'paybill' | 'till' | 'mpesa'
+  const payMethod: PayMethod = (() => {
+    const n = String(form.bankName ?? '').trim().toLowerCase()
+    if (n === 'm-pesa paybill') return 'paybill'
+    if (n === 'm-pesa till') return 'till'
+    if (n === 'm-pesa') return 'mpesa'
+    return 'bank'
+  })()
+  const setPayMethod = (m: PayMethod) => {
+    if (m === payMethod) return
+    setForm(prev => ({
+      ...prev,
+      bankName: m === 'paybill' ? 'M-Pesa Paybill' : m === 'till' ? 'M-Pesa Till' : m === 'mpesa' ? 'M-Pesa' : '',
+      bankBranch: '',
+      bankAccount: '',
+    }))
+  }
 
   const paymentTermsValue = form.paymentTermsDays == null ? '' : String(form.paymentTermsDays)
   const paymentTermsOptions = useMemo(() => {
@@ -233,10 +241,9 @@ export default function ContactFormModal({
   const save = async () => {
     const errors: Partial<Record<ErrorField, string>> = {}
     if (!form.name.trim()) errors.name = form.type === 'company' ? 'Company name is required' : 'Full name is required'
-    if (!(form.country ?? '').trim()) errors.country = 'Country is required'
-    if (canSetCreditTerms && (form.paymentTermsDays == null || !Number.isFinite(form.paymentTermsDays))) errors.paymentTermsDays = 'Payment terms are required'
+    if (canSetCreditTerms && form.isCustomer && (form.paymentTermsDays == null || !Number.isFinite(form.paymentTermsDays))) errors.paymentTermsDays = 'Payment terms are required'
     const creditLimitNum = creditLimitText.trim() === '' ? NaN : Number(creditLimitText)
-    if (canSetCreditTerms && form.type === 'company' && (!Number.isFinite(creditLimitNum) || creditLimitNum < 0)) {
+    if (canSetCreditTerms && form.isCustomer && form.type === 'company' && (!Number.isFinite(creditLimitNum) || creditLimitNum < 0)) {
       errors.creditLimit = creditLimitText.trim() === '' ? 'Credit limit is required (enter 0 for none)' : 'Credit limit must be a number of 0 or more'
     }
     const errorKeys = Object.keys(errors) as ErrorField[]
@@ -245,8 +252,7 @@ export default function ContactFormModal({
       const labels: Record<ErrorField, string> = { name: form.type === 'company' ? 'Company name' : 'Full name', country: 'Country', paymentTermsDays: 'Payment terms', creditLimit: 'Credit limit' }
       showToast(`Please fill in: ${errorKeys.map(k => labels[k]).join(', ')}`, 'error')
       const first = errorKeys[0]
-      if (first === 'country') setActiveDetailsTab('address')
-      else if (first === 'paymentTermsDays' || first === 'creditLimit') setActiveDetailsTab('other')
+      if (first === 'paymentTermsDays' || first === 'creditLimit') setActiveDetailsTab('terms')
       requestAnimationFrame(() => focusFieldControl(first === 'name' ? 'contact-name' : `contact-${first}`))
       return
     }
@@ -256,7 +262,7 @@ export default function ContactFormModal({
       const payload: ContactFormValues = {
         ...form,
         name: form.name.trim(),
-        country: (form.country ?? '').trim(),
+        country: (form.country ?? '').trim() || 'Kenya',
         ...(form.type === 'company' && canSetCreditTerms ? { creditLimit: creditLimitNum } : {}),
         ...(forceCustomer ? { isCustomer: true } : {}),
         ...(forceVendor ? { isVendor: true } : {}),
@@ -348,96 +354,52 @@ export default function ContactFormModal({
       )}
 
       <div className="contacts-form-grid contacts-form-grid--progressive">
-        {form.type === 'company' ? (
-          <>
-            <div className="contacts-form-wide">
-              <Field label="Company Name" required id="contact-name" error={fieldErrors.name}>
-                <Input value={form.name} onChange={f('name')} placeholder="e.g. Acme Corporation Ltd" autoFocus />
-              </Field>
-            </div>
-            <Field label="Phone">
-              <Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
-            </Field>
-            <Field label="Email">
-              <Input value={form.email} onChange={f('email')} type="email" placeholder="info@company.com" maxLength={100} />
-            </Field>
-            <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'company') ?? undefined}>
-              <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051130572W" />
-            </Field>
-            <Field label="Industry">
-              <Select
-                value={form.industry ?? ''}
-                onChange={f('industry')}
-                options={[{ value: '', label: 'Select industry...' }, ...CONTACT_INDUSTRIES.map(i => ({ value: i, label: i }))]}
-              />
-            </Field>
-          </>
-        ) : (
-          <>
-            <div className="contacts-form-wide">
-              <Field label="Linked Company">
-                <Select
-                  value={form.companyId ?? ''}
-                  onChange={f('companyId')}
-                  options={[{ value: '', label: 'No company / Independent' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
-                />
-              </Field>
-            </div>
-            <div className="contacts-form-wide">
-              <Field label="Full Name" required id="contact-name" error={fieldErrors.name}>
-                <Input value={form.name} onChange={f('name')} placeholder="e.g. John Kamau Mwangi" autoFocus />
-              </Field>
-            </div>
-            <div className="contacts-form-wide">
-              <Field label="Job Title">
-                <Input value={form.jobTitle ?? ''} onChange={f('jobTitle')} placeholder="e.g. IT Manager" />
-              </Field>
-            </div>
-            <Field label="Email">
-              <Input value={form.email} onChange={f('email')} type="email" placeholder="name@company.com" maxLength={100} />
-            </Field>
-            <Field label="Phone">
-              <Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
-            </Field>
-            <div className="contacts-form-wide contacts-form-mobile-field">
-              <Field label="Mobile">
-                <Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
-              </Field>
-            </div>
-          </>
-        )}
-
-        <div className="contacts-form-relationship-block">
-          <div className="contacts-form-inline-heading">
-            <div>
-              <strong>Business relationship</strong>
-              <span>Select one or both</span>
-            </div>
-          </div>
+        <div className="contacts-form-relationship-block contacts-form-wide">
           <div className="contacts-relationship-options contacts-relationship-options--compact">
             <label className={form.isCustomer ? 'is-selected' : ''}>
-              <input
-                type="checkbox"
-                checked={form.isCustomer}
-                disabled={forceCustomer}
-                onChange={e => f('isCustomer')(e.target.checked)}
-              />
+              <input type="checkbox" checked={form.isCustomer} disabled={forceCustomer} onChange={e => f('isCustomer')(e.target.checked)} />
               <span><strong>Customer</strong><small>Buys from us</small></span>
             </label>
             <label className={form.isVendor ? 'is-selected' : ''}>
-              <input
-                type="checkbox"
-                checked={form.isVendor}
-                disabled={forceVendor}
-                onChange={e => f('isVendor')(e.target.checked)}
-              />
+              <input type="checkbox" checked={form.isVendor} disabled={forceVendor} onChange={e => { f('isVendor')(e.target.checked); if (e.target.checked) setActiveDetailsTab('payment') }} />
               <span><strong>Vendor</strong><small>Supplies to us</small></span>
             </label>
           </div>
         </div>
 
+        <div className="contacts-form-wide">
+          <Field label={form.type === 'company' ? 'Company name' : 'Full name'} required id="contact-name" error={fieldErrors.name}>
+            <Input value={form.name} onChange={f('name')} placeholder={form.type === 'company' ? 'e.g. Acme Corporation Ltd' : 'e.g. John Kamau Mwangi'} autoFocus />
+          </Field>
+        </div>
+        {form.type === 'individual' && (
+          <>
+            <Field label="Works at">
+              <Select
+                value={form.companyId ?? ''}
+                onChange={f('companyId')}
+                options={[{ value: '', label: 'No company' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
+              />
+            </Field>
+            <Field label="Job title">
+              <Input value={form.jobTitle ?? ''} onChange={f('jobTitle')} placeholder="e.g. IT Manager" />
+            </Field>
+          </>
+        )}
+        <Field label="Phone">
+          <Input value={form.phone} onChange={f('phone')} type="tel" placeholder="0712 345 678" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
+        </Field>
+        <Field label="Email">
+          <Input value={form.email} onChange={f('email')} type="email" placeholder={form.type === 'company' ? 'info@company.co.ke' : 'name@example.com'} maxLength={100} />
+        </Field>
+        <div className="contacts-form-wide">
+          <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, form.type) ?? 'Shown on invoices and tax documents'}>
+            <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder={form.type === 'company' ? 'e.g. P051234567X' : 'e.g. A012345678B'} />
+          </Field>
+        </div>
+
         <section className="contacts-details-tabs">
-          <nav className="contacts-details-tabs__nav" aria-label="Additional contact details">
+          <nav className="contacts-details-tabs__nav" aria-label="More details">
             {detailsTabs.map(([id, label]) => (
               <button key={id} type="button" className={activeDetailsTab === id ? 'is-active' : ''} onClick={() => setActiveDetailsTab(id)}>
                 {label}{id === 'persons' && contactPersons.length > 0 ? <span>{contactPersons.length}</span> : null}
@@ -446,56 +408,60 @@ export default function ContactFormModal({
           </nav>
 
           <div className="contacts-details-tabs__panel">
-            {activeDetailsTab === 'other' && (
+            {activeDetailsTab === 'payment' && (
               <div className="contacts-form-optional__grid">
-                {form.type === 'company' ? (
+                <div className="contacts-form-wide">
+                  <div className="contacts-paymethod" role="radiogroup" aria-label="How we pay them">
+                    {([['bank', 'Bank'], ['paybill', 'M-Pesa Paybill'], ['till', 'M-Pesa Till'], ['mpesa', 'Send money']] as const).map(([m, label]) => (
+                      <button key={m} type="button" role="radio" aria-checked={payMethod === m} className={payMethod === m ? 'is-active' : ''} onClick={() => setPayMethod(m)}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                {payMethod === 'bank' && (
                   <>
-                    <Field label="Registration Number" hint="As shown on the certificate of incorporation">
-                      <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="e.g. PVT-ABCD123" />
-                    </Field>
-                    <Field label="Trading Name">
-                      <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="Business name (if different)" />
-                    </Field>
-                    <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'company') ?? 'Shown on invoices and tax documents'}>
-                      <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051234567X" />
-                    </Field>
-                    <Field label="Currency" hint="Defaults to your base currency">
-                      <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
-                    </Field>
-                    <Field label="Credit limit (KES)" required={canSetCreditTerms} id="contact-creditLimit" error={fieldErrors.creditLimit} hint={canSetCreditTerms ? 'Maximum approved account exposure (0 for none)' : creditTermsHint}>
-                      <Input type="number" disabled={!canSetCreditTerms} value={creditLimitText} onChange={v => { setCreditLimitText(String(v)); if (fieldErrors.creditLimit) setFieldErrors(prev => ({ ...prev, creditLimit: undefined })) }} placeholder="0.00" />
-                    </Field>
-                    <Field label="Payment terms" required={canSetCreditTerms} id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint={canSetCreditTerms ? 'Used to calculate invoice due dates' : creditTermsHint}>
-                      <Select disabled={!canSetCreditTerms} value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
-                    </Field>
-                  </>
-                ) : (
-                  <>
-                    <Field label="National ID / Passport Number" hint="For identification where required">
-                      <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="National ID or passport number" />
-                    </Field>
-                    <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'individual') ?? 'Optional — shown on invoices and tax documents'}>
-                      <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. A012345678B" />
-                    </Field>
-                    <Field label="Payment terms" required={canSetCreditTerms} id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint={canSetCreditTerms ? 'Used when this individual buys on account' : creditTermsHint}>
-                      <Select disabled={!canSetCreditTerms} value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
-                    </Field>
+                    <Field label="Bank"><Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" /></Field>
+                    <Field label="Branch"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Moi Avenue" /></Field>
+                    <div className="contacts-form-wide"><Field label="Account number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0170291234567" /></Field></div>
                   </>
                 )}
-                <div className="contacts-form-wide">
-                  <Field label="Reporting tags" hint="Press Enter or use commas to separate tags">
-                    <Input value={(form.tags ?? []).join(', ')} onChange={v => f('tags')(String(v).split(',').map(tag => tag.trim()).filter(Boolean))} placeholder={form.type === 'company' ? 'vip, wholesale...' : 'vip, retail...'} />
+                {payMethod === 'paybill' && (
+                  <>
+                    <Field label="Paybill number"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. 247247" /></Field>
+                    <Field label="Account number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0712345678" /></Field>
+                  </>
+                )}
+                {payMethod === 'till' && (
+                  <div className="contacts-form-wide"><Field label="Till number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 5123456" /></Field></div>
+                )}
+                {payMethod === 'mpesa' && (
+                  <div className="contacts-form-wide"><Field label="M-Pesa number" hint="Registered name should match the vendor"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} type="tel" placeholder="e.g. 0712 345 678" /></Field></div>
+                )}
+              </div>
+            )}
+
+            {activeDetailsTab === 'terms' && (
+              <div className="contacts-form-optional__grid">
+                <Field label="Payment terms" required={canSetCreditTerms && form.isCustomer} id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays}
+                  hint={!canSetCreditTerms ? creditTermsHint : form.isCustomer ? 'Days they have to pay our invoices' : 'Days we have to pay their bills'}>
+                  <Select disabled={!canSetCreditTerms} value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
+                </Field>
+                {form.isCustomer && form.type === 'company' && (
+                  <Field label="Credit limit (KES)" required={canSetCreditTerms} id="contact-creditLimit" error={fieldErrors.creditLimit} hint={canSetCreditTerms ? '0 for none' : creditTermsHint}>
+                    <Input type="number" disabled={!canSetCreditTerms} value={creditLimitText} onChange={v => { setCreditLimitText(String(v)); if (fieldErrors.creditLimit) setFieldErrors(prev => ({ ...prev, creditLimit: undefined })) }} placeholder="0" />
                   </Field>
-                </div>
+                )}
+                {form.type === 'individual' && (
+                  <Field label="National ID / passport" hint="Only when identification is needed">
+                    <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="ID or passport number" />
+                  </Field>
+                )}
               </div>
             )}
 
             {activeDetailsTab === 'address' && (
               <div className="contacts-form-optional__grid">
-                <div className="contacts-form-wide"><Field label="Physical Address"><Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" /></Field></div>
-                {form.type === 'company' && <Field label="Postal Address"><Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" /></Field>}
-                <Field label="City"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
-                <Field label="Country" required id="contact-country" error={fieldErrors.country}><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
+                <div className="contacts-form-wide"><Field label="Physical address"><Input value={form.address} onChange={f('address')} placeholder="Building, street, area" /></Field></div>
+                <Field label="Town / city"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
               </div>
             )}
 
@@ -519,20 +485,9 @@ export default function ContactFormModal({
             )}
 
             {activeDetailsTab === 'remarks' && (
-              <Field label="Internal remarks" hint="Preferences, context or useful information for your team">
-                <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Add internal notes..." rows={6} />
+              <Field label="Notes" hint="For your team only">
+                <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Preferences, context…" rows={5} />
               </Field>
-            )}
-
-            {activeDetailsTab === 'documents' && (
-              <div className="contacts-documents-empty">
-                <strong>{form.type === 'company' ? 'Company Documents' : 'Identity Documents'}</strong>
-                <span>
-                  {form.type === 'company'
-                    ? 'Save the company, then attach its CR12, certificate of incorporation, KRA PIN certificate and other compliance documents from the contact record.'
-                    : 'Save the individual, then attach a National ID or passport only when identification is required.'}
-                </span>
-              </div>
             )}
           </div>
         </section>
