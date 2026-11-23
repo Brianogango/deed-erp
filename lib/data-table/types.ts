@@ -58,7 +58,32 @@ export function getColumnValue<T>(
   if (column.accessor) return column.accessor(row)
   if (purpose !== 'export' && column.searchValue) return column.searchValue(row)
   if (column.exportValue) return column.exportValue(row)
-  return column.render(row)
+  // Older columns only have render(): read the text out of what it draws, so
+  // an export or search never says "[object Object]". A badge component with
+  // no text of its own falls back to the record's field of the same name.
+  const rendered = column.render(row)
+  if (rendered == null || typeof rendered !== 'object') return rendered
+  const text = reactNodeText(rendered)
+  if (text) return text
+  const raw = row && typeof row === 'object' ? (row as Record<string, unknown>)[column.key] : undefined
+  return raw == null || typeof raw === 'object' ? '' : raw
+}
+
+/** Visible text of a React node: strings and numbers, through elements' children. */
+export function reactNodeText(node: unknown): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(reactNodeText).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+  if (typeof node === 'object' && 'props' in (node as object)) {
+    const props = (node as { props?: Record<string, unknown> }).props ?? {}
+    const inner = reactNodeText(props.children)
+    if (inner) return inner
+    for (const k of ['label', 'title', 'value', 'status']) {
+      const v = props[k]
+      if (typeof v === 'string' || typeof v === 'number') return String(v)
+    }
+  }
+  return ''
 }
 
 /** Value used when sorting a column (never falls back to React render output). */

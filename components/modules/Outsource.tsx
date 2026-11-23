@@ -626,6 +626,7 @@ function OutsourceContent() {
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
       render: job => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>,
+      exportValue: job => job.ref,
     },
     {
       key: 'device', label: 'Device', priority: 1, width: '1.8fr',
@@ -667,6 +668,7 @@ function OutsourceContent() {
     {
       key: 'vendor', label: 'Vendor', priority: 2, width: '140px',
       render: job => <span className="erp-truncate" title={job.vendorName}>{job.vendorName}</span>,
+      exportValue: job => job.vendorName,
     },
     {
       key: 'sent', label: 'Sent', priority: 2, width: '100px',
@@ -688,6 +690,7 @@ function OutsourceContent() {
     {
       key: 'service', label: 'Service', priority: 3, width: '120px',
       render: job => <span className="whitespace-nowrap">{svcLabel(job.serviceType)}</span>,
+      exportValue: job => svcLabel(job.serviceType),
     },
     {
       key: 'by', label: 'By', priority: 3, width: '90px',

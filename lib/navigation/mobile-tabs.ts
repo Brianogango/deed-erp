@@ -3,11 +3,12 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { canonicalRole } from '@/lib/auth/roles'
 
 /**
- * The phone tab bar: Home, two working modules, My work, Menu.
+ * The phone tab bar: Home, three working modules, My work (five tabs, the
+ * most a phone bar should carry; the full menu is the ☰ at the top).
  *
- * Which two modules is the only judgement here. A person who pinned modules
- * in the side menu has said what they use, so their first two pins win. Others
- * get their role's usual pair; anything their access does not allow is
+ * Which three modules is the only judgement here. A person who pinned modules
+ * in the side menu has said what they use, so their first pins win. Others
+ * get their role's usual three; anything their access does not allow is
  * skipped, and the gap is filled from the modules they do have, in menu order.
  */
 
@@ -43,19 +44,19 @@ const MENU_ORDER: ModuleId[] = [
 ]
 
 const ROLE_TABS: Record<string, ModuleId[]> = {
-  director: ['sales', 'accounting'],
-  admin_officer: ['sales', 'repair'],
-  finance_officer: ['accounting', 'expenses'],
-  inventory_officer: ['inventory', 'purchase'],
-  kilimall_officer: ['kilimall', 'inventory'],
-  sales_rep: ['sales', 'crm'],
-  technical_lead: ['repair', 'inventory'],
-  technician: ['repair'],
+  director: ['sales', 'accounting', 'inventory'],
+  admin_officer: ['sales', 'repair', 'delivery'],
+  finance_officer: ['accounting', 'expenses', 'deposits'],
+  inventory_officer: ['inventory', 'purchase', 'delivery'],
+  kilimall_officer: ['kilimall', 'inventory', 'delivery'],
+  sales_rep: ['sales', 'crm', 'contacts'],
+  technical_lead: ['repair', 'inventory', 'refurbishment'],
+  technician: ['repair', 'refurbishment'],
 }
 
 type TabUser = { role?: string | null; modules?: ModuleId[] | null } | null | undefined
 
-export function mobileTabModules(user: TabUser, pinned: readonly string[] = [], count = 2): ModuleId[] {
+export function mobileTabModules(user: TabUser, pinned: readonly string[] = [], count = 3): ModuleId[] {
   if (!user) return []
   const allowed = (id: string): id is ModuleId =>
     id in MOBILE_TAB_MODULES && hasModuleAccess(user as never, id as ModuleId)

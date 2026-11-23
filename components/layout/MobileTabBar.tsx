@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import {
-  faHouse, faListCheck, faBars, faShoppingCart, faUsers, faDesktop, faGlobe, faAddressBook,
+  faHouse, faListCheck, faShoppingCart, faUsers, faDesktop, faGlobe, faAddressBook,
   faBoxesStacked, faCartShopping, faTruck, faScrewdriverWrench, faArrowsRotate, faMicrochip,
   faShieldHalved, faHandHolding, faChair, faBuildingColumns, faMoneyBillWave, faReceipt, faIdCard,
 } from '@fortawesome/free-solid-svg-icons'
@@ -39,15 +39,15 @@ function readPinned(userId: string | null | undefined): string[] {
 }
 
 /**
- * Bottom tab bar on phones: Home, the person's two working modules, My work,
- * and Menu (the full side menu). Thumb-reach navigation instead of opening
- * the side menu for every move. Hidden from tablet width up, on open records
+ * Bottom tab bar on phones: Home, the person's three working modules and My
+ * work, each with its label; the open one has a pill behind its icon. The
+ * full menu is the ☰ at the top left. Hidden from tablet width up, on open records
  * (they carry their own actions along the bottom) and on the POS till.
  */
 export default function MobileTabBar() {
   const pathname = usePathname() || '/'
   const search = useSearchParams()
-  const { users, currentUserId, toggleSidebar, sidebarOpen } = useShellStore()
+  const { users, currentUserId } = useShellStore()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [pinned, setPinned] = useState<string[]>([])
@@ -74,21 +74,11 @@ export default function MobileTabBar() {
             className={`mobile-tab-bar__tab ${active ? 'is-active' : ''}`}
             aria-current={active ? 'page' : undefined}
           >
-            <Fa icon={tab.icon} className="mobile-tab-bar__icon" aria-hidden="true" />
+            <span className="mobile-tab-bar__pill"><Fa icon={tab.icon} className="mobile-tab-bar__icon" aria-hidden="true" /></span>
             <span>{tab.label}</span>
           </Link>
         )
       })}
-      <button
-        type="button"
-        className={`mobile-tab-bar__tab ${sidebarOpen ? 'is-active' : ''}`}
-        onClick={toggleSidebar}
-        aria-expanded={sidebarOpen}
-        aria-label="Open the full menu"
-      >
-        <Fa icon={faBars} className="mobile-tab-bar__icon" aria-hidden="true" />
-        <span>Menu</span>
-      </button>
     </nav>
   )
 }
