@@ -157,6 +157,7 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '1800', name: 'Accounts Receivable (Products)', type: 'asset', group: 'Receivables - Product', subGroup: 'Product', balance: 0, isDynamic: true, dynamicKey: 'ar' },
     { code: '1931', name: 'Employee Salary Advances', type: 'asset', group: 'Receivables - Other', subGroup: 'Other Debtors', balance: 0 },
     { code: '1933', name: 'Outstanding Receipts', type: 'asset', group: 'Receivables - Other', subGroup: 'Other Debtors', balance: 0, notes: 'Unallocated customer receipts awaiting invoice application' },
+    { code: '1934', name: 'Advances to Suppliers', type: 'asset', group: 'Receivables - Other', subGroup: 'Other Debtors', balance: 0, notes: 'Paid to a supplier before the goods arrive; cleared when their bill is booked' },
     // Cash & banks
     { code: '2201', name: 'ABSA Bank', type: 'asset', group: 'Cash at Bank', subGroup: 'Cash at Bank', balance: 0 },
     { code: '2202', name: 'Equity Bank', type: 'asset', group: 'Cash at Bank', subGroup: 'Cash at Bank', balance: 0 },

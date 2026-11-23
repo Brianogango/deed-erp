@@ -1362,7 +1362,7 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
               // assert using received vs (billed − this line) + this line ≡ received ≥ billed.
               const alreadyBilledExcludingThis = Math.max(0, (poLine.qtyBilled ?? 0) - Math.floor(Number(line.qty) || 0))
               assertBillableQty(
-                { qty: poLine.qty, qtyReceived: poLine.qtyReceived, qtyBilled: alreadyBilledExcludingThis },
+                { qty: poLine.qty, qtyReceived: poLine.qtyReceived, qtyBilled: alreadyBilledExcludingThis, prepaid: Number(po.advancePaid ?? 0) > 0 },
                 Number(line.qty) || 0,
               )
             }
@@ -1432,6 +1432,23 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
           store.showToast(`${finalRef} is confirmed but NOT booked in the ledger: ${ledgerWarning}. Tell Finance — it shows in the health check.`, 'error')
         } else {
           store.showToast(`${finalRef} posted to accounting`)
+        }
+        // A bill on an order paid in advance: the advance settles it now
+        // (Dr Payables / Cr Advances to Suppliers, on the server).
+        const advancePo = inv.type === 'vendor_bill' && inv.purchaseOrderId
+          ? store.poRef.current.find(p => p.id === inv.purchaseOrderId)
+          : undefined
+        if (!ledgerWarning && advancePo && Number(advancePo.advanceOpen ?? advancePo.advancePaid ?? 0) > 0) {
+          void fetch(`/api/invoices/${inv.id}/apply-advance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(async r => {
+              const d = await r.json().catch(() => ({}))
+              if (!r.ok) { store.showToast(`${finalRef}: the advance on ${advancePo.ref} could not be applied — ${d.error || d.message || 'try Apply advance again'}`, 'error'); return }
+              if (Number(d.applied) > 0) {
+                store.setInvoices(p => p.map(i => i.id === inv.id ? { ...i, amountPaid: Number(i.amountPaid ?? 0) + Number(d.applied) } : i))
+                store.showToast(`${store.fmtKes(Number(d.applied))} of ${finalRef} paid from the advance on ${advancePo.ref}`)
+              }
+            })
+            .catch(() => store.showToast(`${finalRef}: could not reach the server to apply the advance`, 'error'))
         }
       },
 

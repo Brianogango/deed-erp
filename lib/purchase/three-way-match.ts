@@ -8,13 +8,24 @@ interface ThreeWayPoLine {
   qty?: number
   qtyReceived: number
   qtyBilled?: number
+  /**
+   * The order was paid in advance: the supplier may invoice before delivery,
+   * so the ordered quantity covers the bill (lib/purchase/vendor-advance-core.ts).
+   */
+  prepaid?: boolean
+}
+
+/** Units a bill may cover: received, or ordered when the order is paid in advance. */
+function coverQty(line: ThreeWayPoLine): number {
+  const received = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
+  if (!line.prepaid) return received
+  return Math.max(received, Math.max(0, Math.floor(Number(line.qtyOrdered ?? line.qty) || 0)))
 }
 
 
 export function billableQty(poLine: ThreeWayPoLine): number {
-  const received = Math.max(0, Math.floor(Number(poLine.qtyReceived) || 0))
   const billed = Math.max(0, Math.floor(Number(poLine.qtyBilled) || 0))
-  return Math.max(0, received - billed)
+  return Math.max(0, coverQty(poLine) - billed)
 }
 
 /**
@@ -33,10 +44,11 @@ export function assertBillableQty(poLine: ThreeWayPoLine, qtyToBill: number): vo
   if (qty <= 0) return
   const received = Math.max(0, Math.floor(Number(poLine.qtyReceived) || 0))
   const billed = Math.max(0, Math.floor(Number(poLine.qtyBilled) || 0))
-  const remaining = received - billed
+  const remaining = coverQty(poLine) - billed
   if (qty > remaining) {
-    throw new Error(
-      `Cannot bill ${qty} units: only ${remaining} received and unbilled (received ${received}, billed ${billed})`,
+    throw new Error(poLine.prepaid
+      ? `Cannot bill ${qty} units: only ${remaining} ordered and unbilled (ordered ${Math.max(received, Math.floor(Number(poLine.qtyOrdered ?? poLine.qty) || 0))}, billed ${billed})`
+      : `Cannot bill ${qty} units: only ${remaining} received and unbilled (received ${received}, billed ${billed})`,
     )
   }
 }

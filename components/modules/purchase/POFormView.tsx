@@ -13,6 +13,7 @@ import { RecordPager } from '@/components/erp/RecordPager'
 import { SmartButtons } from '@/components/erp/SmartButtons'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { poStatusView } from '@/lib/purchase/po-status'
+import PoAdvancePanel from '@/components/modules/purchase/PoAdvancePanel'
 import { billableQty } from '@/lib/purchase/three-way-match'
 import {
   Fa, faBox, faCheck, faCreditCard, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload,
@@ -88,6 +89,10 @@ export default function POFormView() {
   } = usePurchase()
 
   const [sendingRfqMail, setSendingRfqMail] = useState(false)
+  // Paid to the supplier before delivery (components/modules/purchase/PoAdvancePanel.tsx).
+  const [showPayAdvance, setShowPayAdvance] = useState(false)
+  const [advanceTotals, setAdvanceTotals] = useState({ paid: 0, open: 0 })
+  const prepaid = Number(activePO?.advancePaid ?? 0) > 0 || advanceTotals.paid > 0
   const canCreateProduct = canCreateProductFromSales(currentUser?.role)
   const [creatingProductName, setCreatingProductName] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState<string | null>(null)
@@ -121,7 +126,7 @@ export default function POFormView() {
       return total + billQty
     }, 0)
   const billableQtyForLine = (line: typeof activePO.lines[number]) =>
-    billableQty({ ...line, qtyBilled: billedQtyForLine(line) })
+    billableQty({ ...line, qtyBilled: billedQtyForLine(line), prepaid })
 
   const handleMailRfq = async () => {
     if (!vendor?.email) {
@@ -215,7 +220,10 @@ export default function POFormView() {
     const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && userCan(currentUser, 'validatePurchaseReceipt')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && userCan(currentUser, 'manageProcurement')
     const hasBillableQty = activePO.lines.some(line => billableQtyForLine(line) > 0)
-    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && userCan(currentUser, 'postFinancial')
+    // A paid order can be billed before the goods arrive (supplier invoiced upfront).
+    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial' || (prepaid && activePO.status === 'confirmed')) && hasBillableQty && userCan(currentUser, 'postFinancial')
+    const canPayAdvance  = ['sent', 'confirmed', 'partial', 'received'].includes(activePO.status) && userCan(currentUser, 'recordPayment')
+      && Math.round((Number(activePO.total) - Math.max(advanceTotals.paid, Number(activePO.advancePaid ?? 0))) * 100) / 100 > 0
     const canValidateBill = linkedBill?.status === 'draft' && userCan(currentUser, 'postFinancial')
     const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && userCan(currentUser, 'recordPayment')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
@@ -453,6 +461,12 @@ export default function POFormView() {
                 { id: 'add', label: 'Add product', hidden: !canEdit, onClick: () => setShowAddLine(true) },
                 { id: 'receive', label: 'Process GRN', hidden: !canReceive || canSend || canConfirm, onClick: () => { void openReceive() } },
                 {
+                  id: 'pay-advance',
+                  label: 'Pay in advance',
+                  hidden: !canPayAdvance,
+                  onClick: () => setShowPayAdvance(true),
+                },
+                {
                   id: 'bill',
                   label: 'Create bill',
                   // Not hidden behind "Receive goods": on a part-received order
@@ -515,6 +529,15 @@ export default function POFormView() {
             <strong>{nextActionLabel}</strong>
           </div>
         </section>
+
+        <PoAdvancePanel
+          po={activePO}
+          canPay={userCan(currentUser, 'recordPayment')}
+          payOpen={showPayAdvance}
+          onPayClose={() => setShowPayAdvance(false)}
+          onTotals={setAdvanceTotals}
+          showToast={showToast}
+        />
 
         {/* Stepper + smart buttons */}
         <div className="card purchase-order-detail__progress">

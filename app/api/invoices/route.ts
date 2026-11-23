@@ -8,6 +8,7 @@ import { invoiceReadScope } from '@/lib/auth/authorization'
 import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney, inferInvoiceLineTaxCategory } from '@/lib/finance-invoice'
 import { assertBillableQty } from '@/lib/purchase/three-way-match'
+import { orderIsPrepaid } from '@/lib/purchase/vendor-advance.server'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { isPosNumber } from '@/lib/accounting/till-sale'
@@ -344,6 +345,8 @@ export async function POST(request: Request) {
                 }))
                 .filter((m): m is { item: typeof items[number]; poItem: NonNullable<typeof m.poItem> } => Boolean(m.poItem))
             : []
+          // Paid in advance: the supplier may invoice before delivery.
+          const prepaid = po ? await orderIsPrepaid(tx, po.id) : false
           // Billed so far per PO line (a product can be on several lines;
           // counting per product made each line count the other's bills).
           const poLinesForMatch = (po?.items ?? []).map(i => ({ id: i.id, productId: i.productId, productName: i.description, qty: i.qtyOrdered }))
@@ -353,7 +356,7 @@ export async function POST(request: Request) {
           for (const { item, poItem } of matchedItems) {
             const qty = Math.max(0, Math.floor(Number(item.qty) || 0))
             const alreadyBilled = (billedByLine.get(poItem.id) ?? 0) + (thisBill.get(poItem.id) ?? 0)
-            assertBillableQty({ qtyReceived: poItem.qtyReceived, qtyBilled: alreadyBilled }, qty)
+            assertBillableQty({ qtyReceived: poItem.qtyReceived, qtyOrdered: poItem.qtyOrdered, qtyBilled: alreadyBilled, prepaid }, qty)
             thisBill.set(poItem.id, (thisBill.get(poItem.id) ?? 0) + qty)
           }
 

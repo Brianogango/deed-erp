@@ -35,6 +35,7 @@ export type CoaRole =
   | 'pension_payable'
   | 'other_payroll_deductions'
   | 'employee_advances'
+  | 'supplier_advances'
 
 /** Canonical live codes — keep stable. Aligned to the official Deed CoA (2025). */
 export const COA_ROLE_CODES: Record<CoaRole, string> = {
@@ -67,6 +68,7 @@ export const COA_ROLE_CODES: Record<CoaRole, string> = {
   pension_payable: '3306',
   other_payroll_deductions: '3311',
   employee_advances: '1931',
+  supplier_advances: '1934',
 }
 
 /**
@@ -103,6 +105,7 @@ const COA_ROLE_LABELS: Record<CoaRole, string> = {
   pension_payable: '3306 - Pension Payable',
   other_payroll_deductions: '3311 - Other Payroll Deductions Payable',
   employee_advances: '1931 - Employee Salary Advances',
+  supplier_advances: '1934 - Advances to Suppliers',
 }
 
 export function labelForRole(role: CoaRole): string {

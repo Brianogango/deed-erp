@@ -3,6 +3,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { cachedByFingerprint } from '@/lib/read-model-cache'
 import { mapPOToClient } from '@/lib/purchase/po-api-shared'
+import { advanceTotalsByPo } from '@/lib/purchase/vendor-advance.server'
 
 /**
  * Purchase orders as the screens use them, read from purchase_orders (the
@@ -45,7 +46,11 @@ export async function loadScreenPurchaseOrders(screenCopy: unknown, receiptsCopy
           (SELECT md5(coalesce(string_agg(p::text, ',' ORDER BY p.id), ''))
              FROM products p WHERE p.id IN (SELECT product_id FROM purchase_order_items)),
           (SELECT md5(coalesce(string_agg(b.id::text || ':' || b.status || ':' || b.purchase_order_id, ',' ORDER BY b.id), ''))
-             FROM invoices b WHERE b.purchase_order_id IS NOT NULL)
+             FROM invoices b WHERE b.purchase_order_id IS NOT NULL),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(p.id::text || ':' || p.amount || ':' || p.is_voided, ',' ORDER BY p.id), ''))
+             FROM payments p WHERE p.payment_type LIKE 'vendor_advance%'),
+          (SELECT count(*) || ':' || coalesce(sum(a.amount), 0) FROM payment_allocations a
+             WHERE a.payment_id IN (SELECT id FROM payments WHERE payment_type = 'vendor_advance'))
         ) AS fp`)
       const fp = rows[0]?.fp
       return fp ? `${fp}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}|receipts:${receiptLinks}` : ''
@@ -64,9 +69,16 @@ async function buildScreenPurchaseOrders(copy: Row[], receiptsByPo: Map<string, 
     orderBy: { orderDate: 'desc' },
   })
 
+  // Money paid before delivery, per order (lib/purchase/vendor-advance-core.ts).
+  const advances = await advanceTotalsByPo().catch(err => {
+    console.error('[purchase-orders] advances not read:', err)
+    return new Map<string, { paid: number; open: number }>()
+  })
   const out: Row[] = orders.map(order => {
     const { invoices, ...rest } = order
     const po: Row = mapPOToClient(rest)
+    const adv = advances.get(order.id)
+    if (adv && adv.paid > 0) { po.advancePaid = adv.paid; po.advanceOpen = adv.open }
     po.receiptIds = [...new Set([...(po.receiptIds ?? []), ...(receiptsByPo.get(order.id) ?? [])])]
     const bill = [...invoices]
       .filter(i => !CLOSED.has(String(i.status)))

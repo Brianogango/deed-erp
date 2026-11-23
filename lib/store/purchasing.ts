@@ -18,6 +18,8 @@ export interface PurchaseOrder {
   date: string; expectedDate: string
   lines: POLine[]; subtotal: number; taxTotal: number; total: number
   billId?: string; notes: string; receiptIds: string[]
+  /** Paid to the supplier before delivery (net of refunds), and what of it is not yet used on bills. */
+  advancePaid?: number; advanceOpen?: number
   lockVersion?: number
   approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected'
   approvalRequestIds?: string[]
