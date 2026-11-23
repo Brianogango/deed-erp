@@ -66,6 +66,44 @@ export async function exportToExcel(
   XLSX.writeFile(wb, `${filename}.xlsx`)
 }
 
+// ─── PDF text helpers ────────────────────────────────────────────────────────
+// The PDF uses the built-in Helvetica in WinAnsi encoding: Latin-1 letters
+// plus the dashes, quotes, bullet and ellipsis below print as themselves.
+const WIN_ANSI: Record<string, number> = {
+  '€': 0x80, '‚': 0x82, '„': 0x84, '…': 0x85, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94,
+  '•': 0x95, '–': 0x96, '—': 0x97, '™': 0x99,
+}
+const PDF_SUBSTITUTE: Record<string, string> = { '→': '->', '←': '<-', '×': 'x', '≈': '~', '✓': 'v' }
+
+/** Text a WinAnsi font can print: known symbols kept, others replaced, the rest dropped. */
+export function pdfText(input: string): string {
+  let out = ''
+  for (const ch of input.replace(/\s+/g, ' ')) {
+    const code = ch.codePointAt(0) ?? 0
+    if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || ch in WIN_ANSI) out += ch
+    else if (ch in PDF_SUBSTITUTE) out += PDF_SUBSTITUTE[ch]
+  }
+  return out.replace(/ {2,}/g, ' ').trim()
+}
+
+/** Shorten to fit, ending in an ellipsis; done before escaping so no escape is cut. */
+export function pdfFit(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : `${text.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`
+}
+
+/** PDF string escape, with non-ASCII as octal codes in WinAnsi. */
+export function pdfEscape(text: string): string {
+  let out = ''
+  for (const ch of text) {
+    if (ch === '\\' || ch === '(' || ch === ')') out += `\\${ch}`
+    else {
+      const code = WIN_ANSI[ch] ?? ch.codePointAt(0) ?? 0x3f
+      out += code < 0x80 ? ch : `\\${code.toString(8).padStart(3, '0')}`
+    }
+  }
+  return out
+}
+
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 // Uses raw PDF spec (no external dep) — multi-page tables supported.
 export function exportToPDF(
@@ -81,23 +119,26 @@ export function exportToPDF(
   const usableW = W - margin * 2
   const footerH = 18
 
-  // Column widths proportional to header length
-  const totalChars = headers.reduce((s, h) => s + Math.max(h.length, 6), 0)
-  const colWidths = headers.map(h => (Math.max(h.length, 6) / totalChars) * usableW)
-
   const headerH = 18
   const rowH = 14
   const fontSize = 7
   const lineGap = 4
 
+  // Column widths follow what the column holds (header and a sample of
+  // cells), so a device name gets room and a date column stays narrow.
+  const sample = rows.slice(0, 300)
+  const weights = headers.map((h, i) => {
+    const lens = sample.map(r => pdfText(String(r[i] ?? '')).length).sort((a, b) => a - b)
+    const typical = lens.length ? lens[Math.floor(lens.length * 0.9)] : 0
+    return Math.min(Math.max(h.length, typical, 4), 42)
+  })
+  const totalWeight = weights.reduce((a, b) => a + b, 0) || 1
+  const colWidths = weights.map(w => (w / totalWeight) * usableW)
+
   const encoder = new TextEncoder()
-  const escape = (s: string) =>
-    String(s ?? '')
-      .replace(/\\/g, '\\\\')
-      .replace(/\(/g, '\\(')
-      .replace(/\)/g, '\\)')
-      .replace(/[^\x20-\x7E]/g, '?')
-      .substring(0, 35) // truncate long cells
+  // Helvetica averages about half the font size per character.
+  const fitChars = (width: number, size: number) => Math.max(3, Math.floor((width - 6) / (size * 0.52)))
+  const escape = (s: string, maxChars = 140) => pdfEscape(pdfFit(pdfText(String(s ?? '')), maxChars))
 
   const co = getStoredCompanyData()
 
@@ -125,7 +166,7 @@ export function exportToPDF(
     lines.push(`${WHITE[0]} ${WHITE[1]} ${WHITE[2]} rg`)
     let cx = margin
     headers.forEach((h, i) => {
-      lines.push(`BT /F2 ${fontSize} Tf 1 0 0 1 ${cx + 3} ${y - headerH + lineGap + 3} Tm (${escape(h)}) Tj ET`)
+      lines.push(`BT /F2 ${fontSize} Tf 1 0 0 1 ${cx + 3} ${y - headerH + lineGap + 3} Tm (${escape(h, fitChars(colWidths[i], fontSize))}) Tj ET`)
       cx += colWidths[i]
     })
     return y - headerH
@@ -174,7 +215,7 @@ export function exportToPDF(
     let cx2 = margin
     row.forEach((cell, ci) => {
       pageLines.push(
-        `BT /F1 ${fontSize} Tf 1 0 0 1 ${cx2 + 3} ${y - rowH + lineGap + 1} Tm (${escape(String(cell ?? ''))}) Tj ET`,
+        `BT /F1 ${fontSize} Tf 1 0 0 1 ${cx2 + 3} ${y - rowH + lineGap + 1} Tm (${escape(String(cell ?? ''), fitChars(colWidths[ci], fontSize))}) Tj ET`,
       )
       cx2 += colWidths[ci]
     })
@@ -227,8 +268,8 @@ export function exportToPDF(
     const streamLen = encoder.encode(streamContent).length
     objects[contentIds[i]] = `<< /Length ${streamLen} >>\nstream\n${streamContent}\nendstream`
   }
-  objects[font1Id] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
-  objects[font2Id] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>'
+  objects[font1Id] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'
+  objects[font2Id] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'
 
   let pdf = '%PDF-1.4\n'
   const offsets: number[] = []
