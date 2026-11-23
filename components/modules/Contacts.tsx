@@ -2,6 +2,7 @@
 import { rememberRecentRecord } from '@/lib/recent-records'
 import { RecordPager } from '@/components/erp/RecordPager'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
+import MergeContactModal from '@/components/contacts/MergeContactModal'
 import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
@@ -171,6 +172,9 @@ function ContactsInner() {
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const canSeeCredit = userCan(currentUser, 'sales.credit_applications')
+  // Duplicate contacts: a Director merges one into the other (sales.contacts.merge).
+  const canMerge = userCan(currentUser, 'sales.contacts.merge')
+  const [mergeFrom, setMergeFrom] = useState<Contact | null>(null)
   const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
   const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
     ? tabValue as FilterTab
@@ -491,6 +495,15 @@ function ContactsInner() {
             Restore
           </button>
         ) : (
+          <>
+          {canMerge && (
+            <button
+              className="contacts-row-action"
+              title="Merge this duplicate into another contact"
+              onClick={e => { e.stopPropagation(); setMergeFrom(c) }}>
+              Merge
+            </button>
+          )}
           <button
             className="contacts-row-action"
             onClick={async e => {
@@ -504,6 +517,7 @@ function ContactsInner() {
             }}>
             Archive
           </button>
+          </>
         )}
       </div>
     )
@@ -672,6 +686,9 @@ function ContactsInner() {
                 <button className="btn-outline" onClick={() => { openEdit(vc); setViewContact(null) }}>
                   <Fa icon={faPen} className="mr-1" /> Edit
                 </button>
+                {canMerge && !vc.isArchived && (
+                  <button className="btn-outline" onClick={() => setMergeFrom(vc)} title="Merge this duplicate into another contact">Merge</button>
+                )}
               </div>
             </div>
 
@@ -1174,6 +1191,9 @@ function ContactsInner() {
           </div>
           </div>
         </Modal>
+      )}
+      {mergeFrom && (
+        <MergeContactModal duplicate={mergeFrom} contacts={contacts} onClose={() => setMergeFrom(null)} showToast={showToast} />
       )}
     </ModuleChrome>
   )
