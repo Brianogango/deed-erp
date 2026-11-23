@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFinanceStore, fmtKes } from '@/lib/store'
 import { Modal } from '@/components/ui'
 import { prepareImage } from '@/components/finance/cheque-image'
@@ -36,7 +36,7 @@ const norm = (s: unknown) => String(s ?? '').trim().toLowerCase()
  * photos. Each cheque linked to an invoice / bill pays it on its own date,
  * straight to the bank (lib/cheques/cheque-schedule.server.ts).
  */
-export default function BulkCheques({ showToast, onClose, onSaved }: { showToast: Toast; onClose: () => void; onSaved: () => Promise<void> }) {
+export default function BulkCheques({ showToast, onClose, onSaved, initialFiles }: { showToast: Toast; onClose: () => void; onSaved: () => Promise<void>; initialFiles?: File[] }) {
   const { invoices, bankAccounts, contacts } = useFinanceStore()
   const [direction, setDirection] = useState<ChequeDirection>('received')
   const [party, setParty] = useState('')
@@ -59,19 +59,20 @@ export default function BulkCheques({ showToast, onClose, onSaved }: { showToast
 
   const patch = (key: string, p: Partial<Row>) => setRows(list => list.map(r => (r.key === key ? { ...r, ...p } : r)))
 
-  const addPhotos = async (files: FileList) => {
-    const fresh: Row[] = []
-    for (const file of Array.from(files)) {
+  const addPhotos = async (picked: File[]) => {
+    // One at a time from start to finish: each photo is shrunk, shown, then read, so the
+    // phone never holds more than one full-size picture and rows appear as they go.
+    let failed = 0
+    for (const file of picked) {
+      let row: Row
       try {
         const img = await prepareImage(file)
-        fresh.push({ key: uid(), preview: img.previewUrl, base64: img.base64, mimeType: img.mimeType, reading: true, warnings: [], chequeNumber: '', bankName: '', chequeDate: '', amount: '', docId: defaultDoc })
+        row = { key: uid(), preview: img.previewUrl, base64: img.base64, mimeType: img.mimeType, reading: true, warnings: [], chequeNumber: '', bankName: '', chequeDate: '', amount: '', docId: defaultDoc }
       } catch {
-        showToast(`${file.name} is not a picture that can be read`, 'error')
+        failed += 1
+        continue
       }
-    }
-    setRows(list => [...list, ...fresh])
-    // Read them one after another: kinder to the reader, and rows fill in as they go.
-    for (const row of fresh) {
+      setRows(list => [...list, row])
       try {
         const res = await fetch('/api/cheques/scan', {
           method: 'POST',
@@ -88,15 +89,21 @@ export default function BulkCheques({ showToast, onClose, onSaved }: { showToast
           chequeDate: scan.chequeDate || '',
           amount: scan.amount ? String(scan.amount) : '',
         })
-        if (!party.trim()) {
-          const name = direction === 'received' ? scan.accountName : scan.payeeName
-          if (name) setParty(p => p || name)
-        }
+        const name = direction === 'received' ? scan.accountName : scan.payeeName
+        if (name) setParty(p => p || name)
       } catch (err) {
         patch(row.key, { reading: false, warnings: [err instanceof Error ? err.message : 'Could not read it — type the details'] })
       }
     }
+    if (failed) showToast(`${failed} of ${picked.length} file${picked.length === 1 ? '' : 's'} could not be opened as a picture — add ${failed === 1 ? 'it' : 'them'} by hand`, 'error')
   }
+
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current || !initialFiles?.length) return
+    started.current = true
+    void addPhotos(initialFiles)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addBlank = () => setRows(list => [...list, { key: uid(), reading: false, warnings: [], chequeNumber: '', bankName: list[list.length - 1]?.bankName ?? '', chequeDate: '', amount: list[list.length - 1]?.amount ?? '', docId: defaultDoc }])
 
@@ -216,7 +223,7 @@ export default function BulkCheques({ showToast, onClose, onSaved }: { showToast
 
         <div className="bulk-cheques__add">
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
-            onChange={e => { if (e.target.files?.length) void addPhotos(e.target.files); e.currentTarget.value = '' }} />
+            onChange={e => { const picked = Array.from(e.target.files ?? []); e.currentTarget.value = ''; if (picked.length) void addPhotos(picked) }} />
           <button type="button" className="btn-primary text-[13px]" onClick={() => fileRef.current?.click()}>Add cheque photos</button>
           <button type="button" className="btn-outline text-[13px]" onClick={addBlank}>Add a row by hand</button>
           <span>Pick all the photos at once; each is read and kept with its cheque.</span>
