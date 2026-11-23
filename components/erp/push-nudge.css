@@ -32,7 +32,7 @@
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: var(--radius-full, 999px);
+  border-radius: var(--radius-full);
   background: var(--danger);
   color: #fff;
   font-size: 11px;

@@ -305,7 +305,7 @@ html {
     gap: 0.375rem;
     padding: 0 0.75rem;
     border: 0;
-    border-radius: var(--radius-full, 999px);
+    border-radius: var(--radius-full);
     background: none;
     color: var(--text-3);
     font-size: 12px;
