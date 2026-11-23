@@ -52,6 +52,23 @@ export function canPayBuyBackCash(
   if (!isBuyBackCashMethod(method)) {
     return { ok: false, error: 'Choose cash, M-Pesa, or bank transfer' }
   }
+  if (!(Math.round(Number(bb?.total) || 0) > 0)) {
+    return { ok: false, error: 'Nothing to pay on a KSh 0 buy-back — use Receive at no cost' }
+  }
+  return { ok: true }
+}
+
+/**
+ * A device the customer gave for nothing (BBK total KSh 0): there is no
+ * payout bill and no store credit — it is settled as received at no cost,
+ * then Add to stock follows as for any paid buy-back.
+ */
+export function canReceiveFreeBuyBack(bb: BuyBackSettleLike | null | undefined): { ok: boolean; error?: string } {
+  const settle = canSettleApprovedBuyBack(bb)
+  if (!settle.ok) return settle
+  if (Math.round(Number(bb?.total) || 0) > 0) {
+    return { ok: false, error: 'This buy-back has an amount to pay — use Pay or Add as credit' }
+  }
   return { ok: true }
 }
 

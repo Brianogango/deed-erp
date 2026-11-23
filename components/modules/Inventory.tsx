@@ -26,11 +26,13 @@ import { CATALOG_LAYOUTS, CONDITION_OPTIONS, CATALOG_SHOW_OPTIONS, CATALOG_SORT_
 import { buildProductSku, normKey } from '@/lib/inventory/product-form-helpers'
 import ProductFormModal, { type ProductFormStart } from '@/components/inventory/ProductFormModal'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
+import SoldWithoutTraceModal from '@/components/inventory/SoldWithoutTraceModal'
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
 import VendorStockPanel from '@/components/inventory/VendorStockPanel'
 import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
+import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProductModal'
 import { useCan } from '@/hooks/useCan'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
@@ -260,6 +262,8 @@ function InventoryContent() {
   // Refurbishment send-to state (warehouse safety modal)
   // Machines on their way to Refurbishment (one, or several picked in With Issues).
   const [refurbUnits, setRefurbUnits] = useState<Array<(typeof serials)[number]>>([])
+  // A With Issues machine being given its model and specs.
+  const [modelUnit, setModelUnit] = useState<(typeof serials)[number] | null>(null)
   const [issueSel, setIssueSel] = useState<Set<string>>(new Set())
   const [showMachineIntake, setShowMachineIntake] = useState(false)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
@@ -552,6 +556,7 @@ function InventoryContent() {
     })), [stockMoves, products])
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
+  const canEditSerial = userCan(currentUser, 'editSerialNumber')
   // A person on a custom role sees only the Inventory parts their role lists.
   const customPermissions = Array.isArray(currentUser?.permissions)
   const tabPart = (value: string) => value === 'product_catalog' ? 'catalog' : value === 'warehouse_view' ? 'warehouse' : value === 'checkouts' ? 'stock_out' : value
@@ -588,6 +593,9 @@ function InventoryContent() {
   }, [tab, canApproveAdj, inventoryDataReady, stockAdjustments.length, fixAdjustmentNumbers, showToast])
   const canUpdatePrice = can('inventory.prices.update')
   const canMergeProducts = canArchiveProduct(currentUser?.role)
+  // Write-offs and returning units marked sold with no sale (inventory.serials.manage).
+  const canManageSerials = userCan(currentUser, 'inventory.serials.manage')
+  const [showSoldNoTrace, setShowSoldNoTrace] = useState(false)
 
   const priceHistoryByProduct = useMemo(() => {
     const map = new Map<string, typeof productPriceHistory>()
@@ -1739,6 +1747,14 @@ function InventoryContent() {
                     onClick: () => requestSendForRefurbishment(s),
                     },
                     {
+                    // The model and specs are often unknown when a machine
+                    // comes in; it is given them here once someone looks.
+                    id: 'set-model',
+                    label: 'Set model & specs…',
+                    hidden: !canEditSerial,
+                    onClick: () => setModelUnit(s),
+                    },
+                    {
                     id: 'print-label',
                     label: 'Print label',
                     onClick: () => { void printLabelsForSerialUnits({ serials: [s], products }) },
@@ -2189,6 +2205,7 @@ function InventoryContent() {
                       { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
                       { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
                       ...(canMergeProducts ? [{ id: 'duplicates', label: 'Find duplicate products', onSelect: () => setShowDuplicates(true) }] : []),
+                      ...(canManageSerials ? [{ id: 'sold-no-trace', label: 'Sold with no sale record', onSelect: () => setShowSoldNoTrace(true) }] : []),
                     ]}
                     rowActions={product => (
                       <div className="flex flex-wrap justify-end gap-1">
@@ -4048,6 +4065,9 @@ function InventoryContent() {
         </Modal>
       )}
 
+      {showSoldNoTrace && (
+        <SoldWithoutTraceModal onClose={() => setShowSoldNoTrace(false)} onToast={showToast} />
+      )}
       {showDuplicates && (
         <ProductDuplicatesPanel
           onClose={() => setShowDuplicates(false)}
@@ -4071,6 +4091,15 @@ function InventoryContent() {
         />
       )}
 
+      {modelUnit && (
+        <MoveSerialProductModal
+          unit={modelUnit}
+          products={products}
+          showToast={showToast}
+          onClose={() => setModelUnit(null)}
+          onMoved={() => setModelUnit(null)}
+        />
+      )}
       {refurbUnits.length > 0 && (() => {
         const n = refurbUnits.length
         const info = (u: (typeof serials)[number]) => u as (typeof serials)[number] & { assetId?: string; intakeIssue?: string }

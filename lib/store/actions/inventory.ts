@@ -17,7 +17,7 @@ import { userCan } from '@/lib/auth/can'
 import { isAssignableTechnician } from '@/lib/repair/assignable-technicians'
 import { refurbPartStockTaken } from '@/lib/refurbishment/refurb-parts'
 import { userIdsWithRoles } from '@/lib/in-app-notifications'
-import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
+import { awaitingIdentification, cameInUnidentified, isStandInProduct } from '@/lib/refurbishment/unidentified'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
 import { recordsNeedingNumbers, adjustmentsMissingValuation, isProvisionalDocRef } from '@/lib/doc-number-repair'
 import type { StockTransfer } from '../purchasing'
@@ -26,7 +26,7 @@ import type { StockReservation } from '@/lib/sales-flow-types'
 import type { StoreDeps } from './deps'
 
 /** inventory actions of the store. `store` reads the provider's current state, setters and helpers. */
-export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHoldover' | 'updateHoldover' | 'initRelease' | 'pickRelease' | 'verifyReleaseItem' | 'completeVerification' | 'completeRelease' | 'voidRelease' | 'addProduct' | 'normalizeInventoryTags' | 'publishProductBulk' | 'updateProduct' | 'updateProductPrice' | 'archiveProduct' | 'unarchiveProduct' | 'deleteProduct' | 'importOpeningStock' | 'intakeProductSerials' | 'getProductSerials' | 'getAvailableSerials' | 'updateSerial' | 'releaseSerialToStock' | 'createRefurbishmentJob' | 'assignRefurbishmentJob' | 'updateRefurbishmentJob' | 'addRefurbishmentPart' | 'updateRefurbishmentPart' | 'removeRefurbishmentPart' | 'requestPartFromInventory' | 'allocateRefurbPart' | 'notifyTechPartAvailable' | 'markRefurbishmentReady' | 'transferToSell' | 'writeOffRefurbishmentJob' | 'restoreRefurbishmentJob' | 'fixRefurbJobNumbers' | 'fixAdjustmentNumbers' | 'intakeTaggedMachines' | 'identifyRefurbUnit' | 'harvestRefurbishmentJob' | 'createTransfer' | 'addTransferLine' | 'validateTransfer' | 'submitTransfer' | 'createAdjustment' | 'approveAdjustment' | 'getStockByLocation' | 'getMonthlyMovements' | 'reserveStock' | 'getReservedQty' | 'getAvailableStock' | 'fulfillReservation' | 'cancelReservation'> {
+export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHoldover' | 'updateHoldover' | 'initRelease' | 'pickRelease' | 'verifyReleaseItem' | 'completeVerification' | 'completeRelease' | 'voidRelease' | 'addProduct' | 'normalizeInventoryTags' | 'publishProductBulk' | 'updateProduct' | 'updateProductPrice' | 'archiveProduct' | 'unarchiveProduct' | 'deleteProduct' | 'importOpeningStock' | 'intakeProductSerials' | 'getProductSerials' | 'getAvailableSerials' | 'updateSerial' | 'releaseSerialToStock' | 'createRefurbishmentJob' | 'assignRefurbishmentJob' | 'updateRefurbishmentJob' | 'addRefurbishmentPart' | 'updateRefurbishmentPart' | 'removeRefurbishmentPart' | 'requestPartFromInventory' | 'allocateRefurbPart' | 'notifyTechPartAvailable' | 'markRefurbishmentReady' | 'transferToSell' | 'writeOffRefurbishmentJob' | 'restoreRefurbishmentJob' | 'fixRefurbJobNumbers' | 'fixAdjustmentNumbers' | 'intakeTaggedMachines' | 'identifyRefurbUnit' | 'harvestRefurbishmentJob' | 'deleteRefurbishmentRecords' | 'createTransfer' | 'addTransferLine' | 'validateTransfer' | 'submitTransfer' | 'createAdjustment' | 'approveAdjustment' | 'getStockByLocation' | 'getMonthlyMovements' | 'reserveStock' | 'getReservedQty' | 'getAvailableStock' | 'fulfillReservation' | 'cancelReservation'> {
   return {
     addHoldover: (h) => {
         store.setHoldovers(prev => [h, ...prev])
@@ -1163,6 +1163,13 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
         if (job.identityPending || awaitingIdentification(store.serialRef.current.find(s => s.id === job.serialId))) {
           store.showToast(`Identify ${job.serialNumber} first: record its real serial and model.`, 'error'); return
         }
+        // Filed under a stand-in ("lenovo tm", "Laptop — unidentified"): it is
+        // matched to its real product line before it can go back on sale.
+        const jobProduct = store.prodRef.current.find(p => p.id === job.productId)
+        const jobUnit = store.serialRef.current.find(s => s.id === job.serialId) as (SerialNumber & { intakeTag?: string; identityPending?: boolean }) | undefined
+        if (isStandInProduct(jobProduct, job.productName, { cameInUnidentified: cameInUnidentified(job, jobUnit) })) {
+          store.showToast(`${job.productName} is a stand-in: match ${job.serialNumber} to its product line first (More → Change product).`, 'error'); return
+        }
         // A machine is not ready while parts are still on their way, or were
         // taken for it and never fitted (mark them used, or remove them).
         const waiting = job.partsNeeded.filter(p => p.status === 'requested' || p.status === 'ordered')
@@ -1420,6 +1427,55 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           store.showToast('Could not record the serial. Check your connection and try again.', 'error')
           return false
         }
+      },
+
+    deleteRefurbishmentRecords: async ({ jobIds, serialIds, mode, reason }) => {
+        type Res = {
+          error?: string; reference?: string
+          removedJobs?: Array<{ id: string; ref: string }>
+          deletedUnits?: Array<{ id: string; serial: string }>
+          refused?: Array<{ label: string; why: string }>
+          partsToReturn?: Array<{ jobId: string; partId: string }>
+        }
+        let data: Res | null = null
+        try {
+          const res = await fetch('/api/inventory/refurb-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobIds, serialIds, mode, reason }),
+          })
+          data = await res.json().catch(() => null) as Res | null
+          if (!res.ok) { store.showToast(data?.error || 'Could not delete', 'error'); return false }
+        } catch {
+          store.showToast('Could not delete. Check your connection and try again.', 'error')
+          return false
+        }
+        const removed = data?.removedJobs ?? []
+        const units = data?.deletedUnits ?? []
+        const refused = data?.refused ?? []
+        // Parts the jobs took from stock and never fitted go back to the warehouse.
+        for (const r of data?.partsToReturn ?? []) {
+          const job = store.refurbishmentJobs.find(j => j.id === r.jobId)
+          const part = job?.partsNeeded.find(p => p.id === r.partId)
+          if (job && part) store.returnRefurbPartToWarehouse(job, part)
+        }
+        // The server already saved this; mirroring it here keeps a later save
+        // from this browser from bringing the rows back.
+        const goneJobs = new Set(removed.map(j => j.id))
+        const goneUnits = new Set(units.map(u => u.id))
+        if (goneJobs.size || goneUnits.size) store.setRefurbishmentJobs(p => p.filter(j => !goneJobs.has(j.id) && !goneUnits.has(j.serialId)))
+        if (goneUnits.size) store.setSerials(p => p.filter(s => !goneUnits.has(s.id)))
+        const returned = data?.partsToReturn?.length ?? 0
+        const done = [
+          removed.length ? `${removed.length} job${removed.length === 1 ? '' : 's'}` : '',
+          units.length ? `${units.length} machine${units.length === 1 ? '' : 's'}` : '',
+        ].filter(Boolean).join(' and ')
+        store.showToast([
+          done ? `${done} deleted (${data?.reference})` : 'Nothing deleted',
+          returned ? `${returned} unused part${returned === 1 ? '' : 's'} back in stock` : '',
+          refused.length ? `${refused.length} kept: ${refused.slice(0, 2).map(r => `${r.label} — ${r.why}`).join('; ')}${refused.length > 2 ? '…' : ''}` : '',
+        ].filter(Boolean).join(' · '), refused.length ? (done ? 'info' : 'error') : 'success')
+        return removed.length + units.length > 0
       },
 
     harvestRefurbishmentJob: async (jobId, reason, parts) => {

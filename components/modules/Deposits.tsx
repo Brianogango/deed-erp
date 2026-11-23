@@ -146,11 +146,11 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 
   return (
     <Portal>
-      <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+      <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-[var(--app-h)] items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
         <div
           className="ui-enter ui-enter-modal deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
-          style={{ maxHeight: 'calc(100dvh - 32px)' }}
+          style={{ maxHeight: 'calc(var(--app-h) - 32px)' }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -352,7 +352,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
 
   return (
     <Portal>
-      <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+      <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-[var(--app-h)] items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
         <div className="ui-enter ui-enter-confirm deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
@@ -797,7 +797,7 @@ function DepositsContent() {
 
       <div className="deposit-notice px-3 sm:px-4 pt-2">
         <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
-          Use this module for layby / reservation deposits (liability 3100). For Odoo-style down payments on a confirmed Sale Order, create a down-payment invoice from Sales instead — those reduce AR on the final invoice.
+          For laybys and reservations (held in account 3100). For a down payment on a confirmed sale order, raise a down-payment invoice from Sales instead; it comes off the final invoice.
         </p>
       </div>
 

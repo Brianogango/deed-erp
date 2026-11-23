@@ -1,0 +1,51 @@
+/* ── Account → Face ID & fingerprint (components/auth/PasskeySettings.tsx) ── */
+.passkey-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+.passkey-settings__list { margin: 0; padding: 0; list-style: none; }
+.passkey-settings__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-lt);
+}
+.passkey-settings__list li:last-child { border-bottom: 0; }
+.passkey-settings__list b { display: block; color: var(--text-1); font-size: 13px; }
+.passkey-settings__list small { color: var(--text-3); font-size: 11px; }
+.passkey-settings__list button {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.passkey-settings__empty { margin: 0; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.passkey-settings__add { display: flex; flex-direction: column; gap: 0.625rem; }
+.passkey-settings__add label > span { display: block; margin-bottom: 0.25rem; color: var(--text-2); font-size: 12px; font-weight: 600; }
+.passkey-settings__add label > input { width: 100%; }
+.passkey-settings__add > div { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.passkey-settings__go,
+.passkey-settings__cancel {
+  min-height: 40px;
+  padding: 0 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.passkey-settings__go { border: 0; background: var(--primary); color: #fff; }
+.passkey-settings__cancel { border: 1px solid var(--border-lt); background: none; color: var(--text-2); }
+.passkey-settings button:disabled { opacity: 0.6; cursor: default; }

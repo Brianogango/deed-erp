@@ -32,4 +32,17 @@ describe('refurb next step', () => {
     expect(refurbFlowProgress(job({ issuesFound: 'x' }))).toBe(3)
     expect(refurbFlowProgress(job({ status: 'ready' }))).toBe(4)
   })
+
+  it('asks for the real product line before ready when the machine is under a stand-in', () => {
+    const done = job({ issuesFound: 'x', partsNeeded: [{ status: 'used' }] })
+    expect(refurbNextStep(done, tech, { standIn: true, productName: 'lenovo tm' })).toMatchObject({ key: 'match_product', mine: true })
+    expect(refurbNextStep(done, tech, { standIn: true }).detail).toMatch(/stand-in/)
+    expect(refurbNextStep(done, tech, { standIn: false }).key).toBe('mark_ready')
+  })
+
+  it('an identified machine whose product has no price goes to Mark ready, with a reminder to price it', () => {
+    const next = refurbNextStep(job({ issuesFound: 'Keyboard' }), { id: 't1', isLead: false, canAssign: false }, { standIn: false, noPrice: true })
+    expect(next.key).toBe('mark_ready')
+    expect(next.detail).toMatch(/no selling price/)
+  })
 })

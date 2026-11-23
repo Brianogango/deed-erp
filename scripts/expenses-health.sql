@@ -15,7 +15,8 @@ SELECT r.payload->>'id' AS id, r.payload->>'ref' AS ref, r.payload->>'status' AS
        left(coalesce(r.payload->>'expenseDate', ''), 10) AS expense_date,
        left(coalesce(r.payload->>'submittedDate', r.payload->>'createdAt', ''), 10) AS submitted,
        left(coalesce(r.payload->>'reviewedDate', ''), 10) AS reviewed,
-       left(coalesce(r.payload->>'paidDate', r.payload->>'reimbursementDate', ''), 10) AS paid
+       left(coalesce(r.payload->>'paidDate', r.payload->>'reimbursementDate', ''), 10) AS paid,
+       r.payload->>'paymentBatchRef' AS batch
 FROM erp_state_records r WHERE r.key = 'deed_expenses';
 
 \echo '1. Claims by status'
@@ -39,9 +40,12 @@ ORDER BY ex.reviewed;
 
 \echo ''
 \echo '4. Paid / reimbursed claims with no payment journal of their own (the money left, the books do not show it)'
+\echo '   Fix from the app: Expenses → Review → ⋮ → Check the books (or POST /api/expenses/repair).'
 SELECT ex.ref, ex.submitted_by, ex.amount, ex.status, ex.method, ex.paid
 FROM ex
 WHERE ex.status IN ('paid', 'reimbursed')
+  -- Paid together with other claims (EXPB/NNNN): one journal for the payment.
+  AND NOT (ex.batch IS NOT NULL AND EXISTS (SELECT 1 FROM journal_entries jb WHERE jb.ref = 'JRN/' || ex.batch AND NOT jb.is_reversed))
   AND NOT EXISTS (SELECT 1 FROM journal_entries je
                   WHERE je.ref LIKE (CASE ex.status WHEN 'paid' THEN 'JRN/EXPPAY/%' ELSE 'JRN/RIM/%' END) AND NOT je.is_reversed
                     AND (coalesce(je.blob_id, '') LIKE ex.id || '%' OR coalesce(je.source_id, '') LIKE ex.id || '%'
@@ -63,4 +67,5 @@ WHERE status = 'submitted' AND submitted <> '' AND submitted::date < current_dat
 SELECT je.ref, je.entry_date, je.total_debit, je.is_reversed FROM journal_entries je
 WHERE je.source_type = 'expense'
   AND NOT EXISTS (SELECT 1 FROM ex WHERE coalesce(je.blob_id, je.source_id, '') LIKE ex.id || '%')
+  AND NOT EXISTS (SELECT 1 FROM ex WHERE ex.batch IS NOT NULL AND je.ref = 'JRN/' || ex.batch)
 ORDER BY je.entry_date;

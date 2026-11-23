@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { AuthToast } from '@/components/auth/AuthFeedback'
 import OtpField from '@/components/auth/OtpField'
 import { safeReturnTo } from '@/lib/auth/return-to'
+import { isPasskeyCancel, passkeyLabel, passkeysSupported, signInWithPasskey } from '@/lib/auth/passkey-client'
 
 type LoginPhase = 'credentials' | 'enroll' | 'verify'
 
@@ -21,6 +22,9 @@ export default function Login() {
   const [manualKey, setManualKey] = useState('')
 
   const logoutReason = searchParams.get('reason')
+  // Face ID / fingerprint: shown only where the browser can do it.
+  const [passkeyName, setPasskeyName] = useState<string | null>(null)
+  useEffect(() => { if (passkeysSupported()) setPasskeyName(passkeyLabel()) }, [])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -86,6 +90,22 @@ export default function Login() {
         msg: error instanceof Error ? error.message : 'Authentication service is unavailable',
         type: 'error',
       })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const handlePasskey = async () => {
+    if (pending) return
+    setPending(true)
+    try {
+      const data = await signInWithPasskey()
+      setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
+      window.location.href = resolveDestination(data.defaultModule)
+    } catch (error) {
+      if (!isPasskeyCancel(error)) {
+        setToast({ msg: error instanceof Error ? error.message : 'Could not sign in with ' + (passkeyName ?? 'passkey'), type: 'error' })
+      }
     } finally {
       setPending(false)
     }
@@ -253,6 +273,7 @@ export default function Login() {
           )}
 
           {phase === 'credentials' ? (
+            <>
             <form className="space-y-4" onSubmit={handleSubmit} noValidate>
               {/* Username */}
               <div>
@@ -350,6 +371,26 @@ export default function Login() {
                 )}
               </button>
             </form>
+            {passkeyName && (
+              <div className="mt-4">
+                <div className="mb-4 flex items-center gap-3 text-[11px] font-medium text-slate-400" aria-hidden="true">
+                  <span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handlePasskey()}
+                  disabled={pending}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-3.5 text-[13px] font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
+                    <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" />
+                    <path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 15.5c1.4 1 3.6 1 5 0" />
+                  </svg>
+                  Sign in with {passkeyName}
+                </button>
+              </div>
+            )}
+            </>
 
 
           ) : (

@@ -64,17 +64,38 @@ function categoryLabel(category: string | null | undefined): string {
 const gb = (n: number | null | undefined) => (n && n > 0 ? (n >= 1024 && n % 1024 === 0 ? `${n / 1024}TB` : `${n}GB`) : '')
 
 /** "8th i5 8GB 256GB" — empty when nothing is known. */
-export function compactLabelSpecs(specsText: string | null | undefined, config?: MachineLabelInput['currentConfig']): string {
-  const parsed = parseSpecsString(String(specsText ?? '').replace(/\b(RAM|DDR\d*|Gen)\b\s+(?=\d)/gi, '$1, '))
-  const gen = String(config?.processorGeneration || parsed.processorGeneration || '').match(/\d+(?:st|nd|rd|th)/i)?.[0]?.toLowerCase() ?? ''
+export function compactLabelSpecs(
+  specsText: string | null | undefined,
+  config?: MachineLabelInput['currentConfig'],
+  /** The product's name ("HP 820 G3 - i5 6th Gen - 8GB RAM 256GB SSD"): a last source for the drive. */
+  productName?: string | null,
+): string {
+  const tidy = (t: string | null | undefined) => String(t ?? '').replace(/\b(RAM|DDR\d*|Gen)\b\s+(?=\d)/gi, '$1, ')
+  const parsed = parseSpecsString(tidy(specsText))
+  const fromName = parseSpecsString(tidy(productName))
+  // The unit's own specs come first: they are what was last recorded for
+  // this machine (a bench job writes them too; Edit serial or Set model &
+  // specs changes only them). The reconfiguration record came first before,
+  // so a machine changed to 8GB still printed its old 16GB.
+  const gen = String(parsed.processorGeneration || config?.processorGeneration || fromName.processorGeneration || '').match(/\d+(?:st|nd|rd|th)/i)?.[0]?.toLowerCase() ?? ''
   // A bare "i5" is not a processor to the parser; the text itself still says it.
-  const cpuRaw = String(config?.processor || parsed.processor || specsText || '')
+  const cpuRaw = String(parsed.processor || specsText || config?.processor || fromName.processor || '')
   const cpu = cpuRaw.match(/\bi[3579]\b/i)?.[0]?.toLowerCase()
     ?? cpuRaw.match(/Ryzen\s*\d/i)?.[0]
     ?? cpuRaw.match(/\bM\d\b/)?.[0]
     ?? ''
-  const ram = gb(Number(config?.totalRamGb) || Number(parsed.totalRamGb) || 0)
-  const storage = gb(Number(config?.primaryStorageGb) || Number(parsed.primaryStorageGb) || 0)
+  const ramGb = Number(parsed.totalRamGb) || Number(config?.totalRamGb) || Number(fromName.totalRamGb) || 0
+  // The drive: the unit's specs, then the saved configuration, then the
+  // product's name. A drive the same size as the RAM is the old parser's
+  // mistake ("8GB RAM 256GB SSD" saved as an 8GB drive — the label read
+  // "8GB 8GB"), so it is skipped; with no believable size the label leaves
+  // the drive out rather than print the RAM twice.
+  const believable = (n: number) => n > 0 && !(n === ramGb && n <= 64)
+  const storageGb = [parsed.primaryStorageGb, config?.primaryStorageGb, fromName.primaryStorageGb]
+    .map(n => Number(n) || 0)
+    .find(believable) ?? 0
+  const ram = gb(ramGb)
+  const storage = gb(storageGb)
   return [gen, cpu, ram, storage].filter(Boolean).join(' ')
 }
 
@@ -94,7 +115,7 @@ export function buildMachineLabelView(input: MachineLabelInput): MachineLabelVie
     category: categoryLabel(input.category),
     condition: variant === 'new' ? 'BRAND NEW' : variant === 'refurbished' ? 'REFURBISHED' : 'WITH ISSUES · INTERNAL',
     model: catalogBaseName(input.productName) || input.productName || 'Device',
-    specs: internal ? '' : compactLabelSpecs(input.specsText, input.currentConfig),
+    specs: internal ? '' : compactLabelSpecs(input.specsText, input.currentConfig, input.productName),
     serial: internal || serial === code ? '' : serial,
     code,
     dateIn: internal ? dateIn(input.receivedDate) : '',

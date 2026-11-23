@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
       rows[index] = row
     }
 
-    await saveStoreKeys({ deed_products: JSON.stringify(products), deed_serials: JSON.stringify(serials), deed_bulkStock: JSON.stringify(bulk), deed_stockMoves: JSON.stringify(moves), deed_stockCheckouts: JSON.stringify(rows) })
+    await saveStoreKeys({ deed_products: JSON.stringify(products), deed_serials: JSON.stringify(serials), deed_bulkStock: JSON.stringify(bulk), deed_stockMoves: JSON.stringify(moves), deed_stockCheckouts: JSON.stringify(rows) }, { bulkStockBase: state.deed_bulkStock })
     await writeFinancialAudit({ userId: access.session.user.id, action: `stock_checkout_${action}`, entityType: 'stock_checkout', entityId: row.id, newValues: row }).catch(() => {})
     await notifyStockCheckout(action, row, access.session.user.id)
     return NextResponse.json({ ok: true, checkout: row })

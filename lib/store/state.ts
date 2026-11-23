@@ -4,7 +4,7 @@ import { type Product, type ProductPriceHistory, type SerialNumber, type Refurbi
 import { type Invoice, type Payment, type CustomerCredit, type JournalEntry, type Account, type BankAccount, type BankRecon, type BankStatementLine, type Deposit, type CreateDepositInput, type DepositPayment, type InvoiceType, type RefundPayment, type RefundPaymentMethod } from './finance'
 import { type Delivery, type Rider, type DeliveryJob, type RiderWeeklyPay, type DeliveryJobStatus } from './delivery'
 import { type PurchaseOrder, type Receipt, type StockTransfer, type PurchaseReturn, type POLine } from './purchasing'
-import { type RepairOrder, type Warranty, type OutsourceVendor, type OutsourceJob, type OutsourcePayment } from './repairs'
+import { type RepairOrder, type Warranty, type OutsourceVendor, type OutsourceJob, type OutsourcePayment, type OutsourceStatement } from './repairs'
 import { type Contract, type PayrollRun, type Payslip, type SalaryAdvance, type EmployeeAssetAssignment, type HRSOP, type PerformanceTarget, type RefSOP, type HRDocument } from './hr'
 import { type KilimallReturnInput } from '@/lib/kilimall/kilimall-return'
 import { type DocumentPaymentDetailsMap, type DocumentPaymentDetails } from '@/lib/document-payment-details'
@@ -24,6 +24,13 @@ import { type ReturnOrder, type ReturnOrderLine, type RMAResolution, type BuyBac
 /** The full store state and the per-area views each screen context exposes. */
 
 // Monthly inventory snapshot
+
+export type ExpenseActionBody =
+  | { action: 'review'; ids: string[]; approved: boolean; notes?: string }
+  | { action: 'pay'; ids: string[]; method: string; bankAccountId?: string; reference?: string; date: string; notes?: string }
+  | { action: 'edit'; id: string; patch: Record<string, unknown> }
+  | { action: 'withdraw'; id: string; reason?: string }
+  | { action: 'resubmit'; id: string; patch?: Record<string, unknown>; note?: string }
 
 export interface AppState {
   activeModule: ModuleId; sidebarOpen: boolean
@@ -218,6 +225,12 @@ export interface AppState {
   reviewExpense: (id: string, approved: boolean, notes?: string) => void
   payExpense: (id: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string, notes?: string) => void
   reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
+  /**
+   * Everything after submission goes through the server, which changes the
+   * claim and posts its journal together: approve / reject (one or many),
+   * pay (one or many in one payment), edit, withdraw, send again.
+   */
+  expenseAction: (body: ExpenseActionBody) => Promise<{ ok: boolean; error?: string; batchRef?: string; count?: number }>
 
   // Deposits
   deposits: Deposit[]
@@ -248,10 +261,30 @@ export interface AppState {
   outsourceVendors: OutsourceVendor[]
   outsourceJobs: OutsourceJob[]
   outsourcePayments: OutsourcePayment[]
+  /** Weekly vendor statements: a week of returned jobs, confirmed into one bill. */
+  outsourceStatements: OutsourceStatement[]
   addOutsourceVendor: (v: Omit<OutsourceVendor, 'id' | 'createdAt'>) => OutsourceVendor
   updateOutsourceVendor: (id: string, p: Partial<OutsourceVendor>) => void
   addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob | null
-  returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => void
+  returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => boolean
+  /** Called back or sent by mistake: closes the job, frees the repair, brings a stock machine home. */
+  cancelOutsourceJob: (id: string, reason: string) => boolean
+  /** Change an open job (vendor, service, quote, promised date, notes). */
+  updateOutsourceJob: (id: string, p: Partial<Pick<OutsourceJob, 'vendorId' | 'vendorName' | 'serviceType' | 'issueDescription' | 'quotedCost' | 'expectedReturnDate' | 'notes' | 'accessories' | 'sentDate'>>) => boolean
+  /** Remove a vendor no job has used; otherwise it can only be made inactive. */
+  deleteOutsourceVendor: (id: string) => boolean
+  /** Add the vendor's work, at a price for the customer, to the linked repair's quote. */
+  chargeOutsourceToRepair: (jobId: string, amount: number) => boolean
+  /** Tell the sender and the technical lead about jobs past their promised date (once per promise). */
+  remindLateOutsourceJobs: () => void
+  /** Prepare last week's (and any earlier) statements for weekly-billed vendors. */
+  prepareOutsourceStatements: () => void
+  /** Take a disputed job off a pending statement; it is not billed until released. */
+  holdOutsourceStatementJob: (statementId: string, jobId: string, reason: string) => boolean
+  /** Put a held job back: it joins its week's statement next time statements are prepared. */
+  releaseOutsourceJobHold: (jobId: string) => boolean
+  /** Finance: turn a pending statement into one draft vendor bill. Returns the bill ref. */
+  confirmOutsourceStatement: (statementId: string) => string | null
   recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName' | 'postedToAccounts' | 'billRefs'>) => Promise<OutsourcePayment | null>
   /** Create the draft vendor bill for a returned job that has a cost but no bill yet. */
   createOutsourceJobBill: (jobId: string) => void
@@ -464,7 +497,7 @@ export interface AppState {
   // Refurbishment
   createRefurbishmentJob: (serialId: string, issueDescription: string, opts?: { silent?: boolean }) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
-  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate'>>) => void
+  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate' | 'productId' | 'productName'>>) => void
   /** `request`: ask stores for it straight away (taken from stock, or the lead is alerted). */
   addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>, opts?: { request?: boolean }) => void
   updateRefurbishmentPart: (jobId: string, partId: string, patch: Partial<RefurbPart>) => void
@@ -488,6 +521,8 @@ export interface AppState {
   identifyRefurbUnit: (jobId: string, input: { serial: string; productId?: string; specs?: string }) => Promise<boolean>
   /** Not repairable: strip it; kept parts go to stock carrying part of its cost. */
   harvestRefurbishmentJob: (jobId: string, reason: string, parts: Array<{ productId: string; qty: number; unitValue: number }>) => Promise<boolean>
+  /** Director: permanently delete jobs (and, with job_and_unit, their machines). Cannot be undone. */
+  deleteRefurbishmentRecords: (input: { jobIds: string[]; serialIds: string[]; mode: 'job_and_unit' | 'job_only'; reason: string }) => Promise<boolean>
 
   // HR users & auth
   login: (username: string, password: string) => Promise<boolean>
@@ -690,6 +725,7 @@ export interface AppState {
   payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void | Promise<void>
   /** After approve: add the buy-back amount as store credit (3102) instead of paying cash. Marks the BBK paid so stocking can follow. */
   creditBuyBack: (id: string) => void | Promise<void>
+  receiveFreeBuyBack: (id: string) => void
   /** Intake serials/qty after either pay or add-as-credit (`status === 'paid'`). */
   stockBuyBack: (id: string) => void
   deleteBuyBack: (id: string) => void
@@ -875,6 +911,7 @@ export type RepairStoreState = Pick<AppState,
   | 'setModule'
   | 'initRelease'
   | 'addOutsourceJob'
+  | 'remindLateOutsourceJobs'
 >
 
 export type ShellStoreState = Pick<AppState,
@@ -965,6 +1002,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'outboundReleases'
   | 'outsourceJobs'
   | 'outsourcePayments'
+  | 'outsourceStatements'
   | 'outsourceVendors'
   | 'payrollRuns'
   | 'posOrders'
@@ -1020,10 +1058,20 @@ export type FinanceStoreState = Pick<AppState,
   | 'payExpense'
   | 'payPayrollRun'
   | 'reimburseExpense'
+  | 'expenseAction'
   | 'removePOLine'
   | 'resetInvoiceToDraft'
   | 'restoreCancelledInvoice'
   | 'returnOutsourceJob'
+  | 'cancelOutsourceJob'
+  | 'updateOutsourceJob'
+  | 'deleteOutsourceVendor'
+  | 'chargeOutsourceToRepair'
+  | 'remindLateOutsourceJobs'
+  | 'prepareOutsourceStatements'
+  | 'holdOutsourceStatementJob'
+  | 'releaseOutsourceJobHold'
+  | 'confirmOutsourceStatement'
   | 'revertPOToDraft'
   | 'reviewExpense'
   | 'saveBankRecon'
@@ -1153,6 +1201,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'createExchange'
   | 'createReturnOrder'
   | 'creditBuyBack'
+  | 'receiveFreeBuyBack'
   | 'deleteBuyBack'
   | 'deleteDonation'
   | 'payBuyBack'
@@ -1211,4 +1260,5 @@ export type OperationsStoreState = Pick<AppState,
   | 'fixRefurbJobNumbers'
   | 'identifyRefurbUnit'
   | 'harvestRefurbishmentJob'
+  | 'deleteRefurbishmentRecords'
 >

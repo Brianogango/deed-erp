@@ -2,7 +2,8 @@ import 'server-only'
 
 import prisma from '@/lib/prisma'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import type { Prisma } from '@prisma/client'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import { applyDeliveryAverage, applyReceiptAverage, round2 } from '@/lib/inventory/valuation-math'
@@ -677,6 +678,8 @@ export async function listWorkOrders(filters?: { status?: string; q?: string }) 
       product: { select: { id: true, name: true, sku: true } },
       proposedSnapshot: { select: { displayName: true, totalRamGb: true, primaryStorageGb: true } },
       currentSnapshot: { select: { displayName: true, totalRamGb: true, primaryStorageGb: true } },
+      // For "parts to test" on the list screen.
+      removalLines: { select: { actualRemovedAt: true, qaStatus: true } },
     },
     take: 200,
   })
@@ -1139,7 +1142,18 @@ export async function applyBulkStockPlanToPrisma(
     | { kind: 'return_bulk_to_testing'; to: string }
     | { kind: 'consume_bulk'; from: string }
   ),
-  ctx: { unitCost: number; workOrderId?: string; userId?: string; blobId?: string },
+  ctx: {
+    unitCost: number
+    workOrderId?: string
+    userId?: string
+    blobId?: string
+    /**
+     * Runs inside the same transaction as the stock change: the job's own
+     * "this part moved" record commits with the move or not at all, so a job
+     * resumed after a failure never moves the same part twice.
+     */
+    inTx?: (tx: Prisma.TransactionClient, stockMovementId: string) => Promise<void>
+  },
 ): Promise<string> {
   return prisma.$transaction(async tx => {
     const location = plan.kind === 'return_bulk_to_testing' ? plan.to : plan.from
@@ -1182,6 +1196,7 @@ export async function applyBulkStockPlanToPrisma(
         createdById: ctx.userId || null,
       },
     })
+    if (ctx.inTx) await ctx.inTx(tx, move.id)
     return move.id
   })
 }
@@ -1189,9 +1204,19 @@ export async function applyBulkStockPlanToPrisma(
 async function applyStockPlan(
   plan: ReturnType<typeof planComponentRemoval> | ReturnType<typeof planComponentInstall>,
   unitCost: number,
-  ctx: { workOrderId?: string; userId?: string } = {},
+  ctx: { workOrderId?: string; userId?: string; inTx?: (tx: Prisma.TransactionClient, stockMovementId: string) => Promise<void> } = {},
 ) {
-  const state = await loadAppState(['deed_bulkStock', 'deed_serials', 'deed_stockMoves', 'deed_products'])
+  // The serials / stock blobs are read, changed and written back: under the
+  // same lock as every other stock screen, so two saves cannot undo each other.
+  return withAppStateKeyLock('deed_serials', () => applyStockPlanLocked(plan, unitCost, ctx))
+}
+
+async function applyStockPlanLocked(
+  plan: ReturnType<typeof planComponentRemoval> | ReturnType<typeof planComponentInstall>,
+  unitCost: number,
+  ctx: { workOrderId?: string; userId?: string; inTx?: (tx: Prisma.TransactionClient, stockMovementId: string) => Promise<void> },
+) {
+  const state = await loadAppStateForWrite(['deed_bulkStock', 'deed_serials', 'deed_stockMoves', 'deed_products'])
   let bulkStock = Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as any[])] : []
   let serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
   let stockMoves = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as any[])] : []
@@ -1203,7 +1228,7 @@ async function applyStockPlan(
     // Relational write first — it is now the source of truth and enforces
     // the availability check for consume_bulk below; the blob write that
     // follows is a display-cache mirror, not the record of what happened.
-    await applyBulkStockPlanToPrisma(plan, { unitCost, workOrderId: ctx.workOrderId, userId: ctx.userId, blobId: moveId })
+    await applyBulkStockPlanToPrisma(plan, { unitCost, workOrderId: ctx.workOrderId, userId: ctx.userId, blobId: moveId, inTx: ctx.inTx })
     const idx = bulkStock.findIndex(b => b.productId === plan.productId && b.location === plan.to)
     if (idx >= 0) bulkStock[idx] = { ...bulkStock[idx], qty: (Number(bulkStock[idx].qty) || 0) + plan.qty }
     else bulkStock.push({ productId: plan.productId, location: plan.to, qty: plan.qty })
@@ -1224,7 +1249,7 @@ async function applyStockPlan(
   } else if (plan.kind === 'consume_bulk') {
     // Throws 'Insufficient stock at <location>' if the relational bulk
     // stock level can't cover it — checked against the DB, not the blob.
-    await applyBulkStockPlanToPrisma(plan, { unitCost, workOrderId: ctx.workOrderId, userId: ctx.userId, blobId: moveId })
+    await applyBulkStockPlanToPrisma(plan, { unitCost, workOrderId: ctx.workOrderId, userId: ctx.userId, blobId: moveId, inTx: ctx.inTx })
     const idx = bulkStock.findIndex(b => b.productId === plan.productId && b.location === plan.from)
     const available = idx >= 0 ? Number(bulkStock[idx].qty) || 0 : 0
     bulkStock[idx >= 0 ? idx : bulkStock.length] = idx >= 0
@@ -1302,7 +1327,7 @@ async function applyStockPlan(
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_serials: JSON.stringify(serials),
     deed_stockMoves: JSON.stringify(stockMoves),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
   return moveId
 }
 

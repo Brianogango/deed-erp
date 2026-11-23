@@ -71,8 +71,12 @@ describe('repair-retain-convert helpers', () => {
     expect('existing' in miss && miss.existing).toBeNull()
     expect('serialText' in miss && miss.serialText).toBe('NEW-999')
 
-    const err = matchRepairDeviceSerial(serials, 'p1', { serialNumber: '' })
-    expect('error' in err).toBe(true)
+    // No serial on the repair: an intake tag, identified later in With Issues.
+    const tagged = matchRepairDeviceSerial(serials, 'p1', { serialNumber: '', ref: 'REP-230595' })
+    expect(tagged).toEqual({ existing: null, serialText: 'UNK-REP-230595', tagged: true })
+    // The same repair again finds the unit it already tagged.
+    const again = matchRepairDeviceSerial([...serials, { id: 's2', productId: 'p1', serial: 'UNK-REP-230595' }], 'p1', { serialNumber: '', ref: 'REP-230595' })
+    expect('existing' in again && again.existing?.id).toBe('s2')
   })
 
   it('only allows convert when retained and not already linked', () => {

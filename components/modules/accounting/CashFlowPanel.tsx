@@ -84,6 +84,7 @@ export default function CashFlowPanel() {
       ) : (
       <DataTable
         tableId="finance-cash-flow"
+        mobileLayout="lines"
         hideSearch
         perPage={80}
         emptyMessage={loading ? 'Loading…' : 'No cash movements in this period'}

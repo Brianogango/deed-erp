@@ -612,7 +612,9 @@ function KilimallContent() {
     if (useSubstitution && !substituteProductId) {
       showToast('Select the product to ship as a substitute', 'error'); return
     }
-    const serial = serials.find(s => s.serial === dispatchSerial.trim() || s.id === dispatchSerial.trim())
+    const typedSerial = dispatchSerial.trim()
+    // Serials are matched whatever their capitals: "5cg123" finds "5CG123".
+    const serial = serials.find(s => s.serial.toLowerCase() === typedSerial.toLowerCase() || s.id === typedSerial)
     if (!serial) { showToast('Serial not found in inventory', 'error'); return }
     if (dispatching) return
     setDispatching(true)
@@ -715,7 +717,7 @@ function KilimallContent() {
         count={totalOrders}
         color="var(--warning)"
         primaryAction={
-          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewOrder(true)}>
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => { setNewOrder(p => ({ ...p, orderDate: p.orderDate || todayKey, qty: p.qty || '1' })); setShowNewOrder(true) }}>
             New order
           </PrimaryActionButton>
         }
@@ -1344,117 +1346,147 @@ function KilimallContent() {
 
       {/* New Order */}
       {showNewOrder && (
-        <Modal title="New Kilimall Order" onClose={() => setShowNewOrder(false)} width={520}>
-          <div className="kilimall-modal-content kilimall-modal-content--order">
-          <Field label="Kilimall Order ID" required>
-            <Input value={newOrder.kilimallRef} onChange={v => setNewOrder(p => ({ ...p, kilimallRef: v }))} placeholder="e.g. KLM-20240419-001" />
-          </Field>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Order Date" required>
-              <Input value={newOrder.orderDate} onChange={v => setNewOrder(p => ({ ...p, orderDate: v }))} type="date" />
-            </Field>
-            <Field label="Customer Name" hint="Optional">
-              <Input value={newOrder.customerName} onChange={v => setNewOrder(p => ({ ...p, customerName: v }))} placeholder="Kilimall buyer name" />
-            </Field>
-          </div>
-          <Field label="Product" required>
-            <div className="relative">
-              <input className="form-input w-full" value={newOrder.productName}
-                onChange={e => {
-                  const v = e.target.value
-                  const normalized = v.trim().toLowerCase()
-                  const match = products.find(product => product.name.trim().toLowerCase() === normalized)
-                  setNewOrder(previous => ({
-                    ...previous,
-                    productName: v,
-                    productId: match?.id ?? '',
-                    unitPrice: match ? String(match.salePrice ?? 0) : '',
-                  }))
-                }}
-                placeholder="Search product…" list="ko-products" />
-              <datalist id="ko-products">
-                {products.filter(p => p.canBeSold && p.isActive).map(p => <option key={p.id} value={p.name} />)}
-              </datalist>
-            </div>
-          </Field>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Quantity" required>
-              <Input value={newOrder.qty} onChange={v => setNewOrder(p => ({ ...p, qty: v }))} type="number" />
-            </Field>
-            <Field label="Unit Price (KES)" required>
-              <Input value={newOrder.unitPrice} onChange={v => setNewOrder(p => ({ ...p, unitPrice: v }))} type="number" />
-            </Field>
-          </div>
-          <Field label="Notes" hint="Optional">
-            <Textarea value={newOrder.notes} onChange={v => setNewOrder(p => ({ ...p, notes: v }))} rows={2} />
-          </Field>
-          {newOrder.unitPrice && newOrder.qty && (
-            <div className="text-right text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>
-              Total: {fmtKes(Number(newOrder.qty) * Number(newOrder.unitPrice))}
-            </div>
+        <Modal
+          title="New Kilimall order"
+          width={520}
+          variant="enterprise"
+          onClose={() => setShowNewOrder(false)}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setShowNewOrder(false)}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={handleCreateOrder}>Create order</button>
+            </>
           )}
-          <div className="flex gap-2 justify-end">
-            <button className="btn-outline" onClick={() => setShowNewOrder(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleCreateOrder}>Create Order</button>
-          </div>
+        >
+          <div className="kilimall-order-form">
+            <Field label="Kilimall order ID" required>
+              <Input value={newOrder.kilimallRef} onChange={v => setNewOrder(p => ({ ...p, kilimallRef: v }))} placeholder="e.g. 611065555441587" />
+            </Field>
+            <div className="kilimall-order-form__pair">
+              <Field label="Order date" required>
+                <Input value={newOrder.orderDate} onChange={v => setNewOrder(p => ({ ...p, orderDate: v }))} type="date" />
+              </Field>
+              <Field label="Customer">
+                <Input value={newOrder.customerName} onChange={v => setNewOrder(p => ({ ...p, customerName: v }))} placeholder="Optional" />
+              </Field>
+            </div>
+            <SearchPicker
+              label="Product *"
+              placeholder="Search product, SKU or barcode…"
+              items={sellableProducts}
+              onSelect={pr => setNewOrder(previous => ({
+                ...previous,
+                productId: pr.id,
+                productName: pr.name,
+                unitPrice: previous.productId === pr.id && previous.unitPrice ? previous.unitPrice : String(pr.salePrice ?? ''),
+              }))}
+              formatSelected={pr => pr.name}
+              selectedLabel={newOrder.productId ? newOrder.productName : undefined}
+              searchText={pr => [pr.sku, pr.barcode, pr.category].filter(Boolean).join(' ')}
+              emptyText="No sellable product matches"
+              renderItem={pr => {
+                const available = availableSerialCount.get(pr.id) ?? 0
+                return (
+                  <div className="min-w-0">
+                    <p className="font-bold text-xs truncate">{pr.name}</p>
+                    <p className="text-[11px] text-[var(--text-4)] truncate">
+                      {[pr.sku, fmtKes(pr.salePrice)].filter(Boolean).join(' · ')}
+                      {' · '}
+                      <span style={{ color: available > 0 ? 'var(--success)' : 'var(--text-4)' }}>
+                        {available > 0 ? `${available} in stock` : 'none in stock'}
+                      </span>
+                    </p>
+                  </div>
+                )
+              }}
+            />
+            <div className="kilimall-order-form__pair">
+              <Field label="Quantity" required>
+                <Input value={newOrder.qty} onChange={v => setNewOrder(p => ({ ...p, qty: v }))} type="number" />
+              </Field>
+              <Field label="Unit price (KES)" required>
+                <Input value={newOrder.unitPrice} onChange={v => setNewOrder(p => ({ ...p, unitPrice: v }))} type="number" />
+              </Field>
+            </div>
+            <Field label="Notes">
+              <Textarea value={newOrder.notes} onChange={v => setNewOrder(p => ({ ...p, notes: v }))} rows={2} placeholder="Optional" />
+            </Field>
+            {Number(newOrder.qty) > 0 && Number(newOrder.unitPrice) > 0 && (
+              <p className="kilimall-order-form__total">
+                <span>Total</span>
+                <strong>{fmtKes(Number(newOrder.qty) * Number(newOrder.unitPrice))}</strong>
+              </p>
+            )}
           </div>
         </Modal>
       )}
 
       {/* Order detail */}
       {viewOrder && (
-        <Modal title={viewOrder.ref} subtitle={`Kilimall Ref: ${viewOrder.kilimallRef}`} onClose={() => setDetailId(null)} width={500}>
-          <div className="kilimall-modal-content kilimall-modal-content--detail">
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            {[
-              ['Ordered product', viewOrder.productName],
-              ['Shipped product', viewOrder.fulfilledProductName && viewOrder.fulfilledProductId !== viewOrder.productId
-                ? viewOrder.fulfilledProductName
-                : (viewOrder.serialNumber ? viewOrder.productName : '—')],
-              ['Quantity', String(viewOrder.qty)],
-              ['Unit Price', fmtKes(viewOrder.unitPrice)],
-              ['Total', fmtKes(viewOrder.total)],
-              ['Order Date', fmtDate(viewOrder.orderDate)],
-              ['Customer', viewOrder.customerName || '—'],
-              ['Serial', viewOrder.serialNumber || '—'],
-              ['Settlement', viewOrder.settlementRef || '—'],
-              ...(viewOrder.substitutionReason
-                ? [['Substitution reason', viewOrder.substitutionReason] as const]
-                : []),
-            ].map(([k, v]) => (
-              <div key={k} className="p-2.5 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
-                <p className="text-[10px] text-t3 mb-0.5">{k}</p>
-                <p className="font-medium">{v}</p>
-              </div>
-            ))}
-          </div>
-          {(viewOrder.returns?.length ?? 0) > 0 && (
-            <div className="mt-3 rounded-lg border border-[var(--border-lt)] p-2.5 text-[11px]">
-              <p className="m-0 mb-1 font-semibold text-t2">Returns</p>
-              {viewOrder.returns!.map((r, k) => (
-                <p key={k} className="m-0 text-t3">
-                  {fmtDate(r.date)} · {r.serialNumber || r.productName} · {r.condition} · {r.outcome === 'exchange' ? 'exchange' : 'refund'} — {r.reason}
-                </p>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-[11px] px-2.5 py-1 rounded font-semibold capitalize"
-              style={{ background: STATUS_COLOR[viewOrder.status] + '20', color: STATUS_COLOR[viewOrder.status] }}>
-              {viewOrder.status}
-            </span>
-            {viewOrder.status === 'dispatched' && (
-              <button className="btn-primary text-[11px]" onClick={() => {
-                updateKilimallOrder(viewOrder.id, { status: 'delivered' })
-                showToast('Order marked as delivered')
-              }}>Mark Delivered</button>
-            )}
-            {(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered' || isLegacyReturned(viewOrder)) && (
-              <button className="btn-outline text-[11px]" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+        <Modal
+          title={viewOrder.ref}
+          subtitle={`Kilimall ${viewOrder.kilimallRef}`}
+          width={500}
+          variant="enterprise"
+          onClose={() => setDetailId(null)}
+          footer={(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered' || isLegacyReturned(viewOrder)) ? (
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm kilimall-order-return"
                 onClick={() => { const id = viewOrder.id; setDetailId(null); openReturn(id) }}>Record return</button>
-            )}
-          </div>
-          </div>
+              {viewOrder.status === 'dispatched' && (
+                <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={() => {
+                  updateKilimallOrder(viewOrder.id, { status: 'delivered' })
+                  showToast('Order marked as delivered')
+                }}>Mark delivered</button>
+              )}
+            </>
+          ) : undefined}
+        >
+          {(() => {
+            const substituted = Boolean(viewOrder.fulfilledProductName && viewOrder.fulfilledProductId !== viewOrder.productId)
+            const facts: Array<[string, string, boolean?]> = [
+              ...(substituted ? [['Ordered', viewOrder.productName] as [string, string]] : []),
+              ...(viewOrder.qty > 1 ? [['Quantity', `${viewOrder.qty} × ${fmtKes(viewOrder.unitPrice)}`] as [string, string]] : []),
+              ['Customer', viewOrder.customerName || '—'],
+              ['Order date', fmtDate(viewOrder.orderDate)],
+              ['Serial', viewOrder.serialNumber || 'Not dispatched yet', true],
+              ['Settlement', viewOrder.settlementRef || 'Not settled yet'],
+              ...(viewOrder.substitutionReason ? [['Why substituted', viewOrder.substitutionReason] as [string, string]] : []),
+            ]
+            return (
+              <div className="kilimall-order-detail">
+                <div className="kilimall-order-summary">
+                  <p className="kilimall-order-summary__label">{substituted ? 'Shipped (substitute)' : viewOrder.serialNumber ? 'Shipped' : 'Ordered'}</p>
+                  <p className="kilimall-order-summary__product">{substituted ? viewOrder.fulfilledProductName : viewOrder.productName}</p>
+                  <div className="kilimall-order-summary__row">
+                    <strong>{fmtKes(viewOrder.total)}</strong>
+                    <span className="kilimall-order-status"
+                      style={{ background: STATUS_COLOR[viewOrder.status] + '1f', color: STATUS_COLOR[viewOrder.status] }}>
+                      {viewOrder.status}
+                    </span>
+                  </div>
+                </div>
+                <dl className="kilimall-order-facts">
+                  {facts.map(([k, v, mono]) => (
+                    <div key={k}>
+                      <dt>{k}</dt>
+                      <dd className={mono && viewOrder.serialNumber ? 'is-mono' : ''}>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {(viewOrder.returns?.length ?? 0) > 0 && (
+                  <div className="kilimall-order-returns">
+                    <p>Returns</p>
+                    {viewOrder.returns!.map((r, k) => (
+                      <p key={k}>
+                        {fmtDate(r.date)} · {r.serialNumber || r.productName} · {r.condition} · {r.outcome === 'exchange' ? 'exchange' : 'refund'} — {r.reason}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </Modal>
       )}
 

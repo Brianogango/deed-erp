@@ -1,9 +1,13 @@
 'use client'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
 import { isOpenForOutsourcePicker, outsourcePickBlocker, repairOutsourceReadiness } from '@/lib/repair-outsource'
-import { formatDaysOut, isOutsourceOverdue, outsourceDaysOut, OUTSOURCE_OVERDUE_DAYS } from '@/lib/repair/outsource-visibility'
+import { formatDaysOut, isOutsourceOverdue, outsourceDaysOut, outsourceDaysLate } from '@/lib/repair/outsource-visibility'
+import { defaultExpectedReturnDate, findStockSerialForOutsource, outsourceHandoverSlipHtml, statusAfterUnfixedReturn, suggestedCustomerCharge, vendorScorecard, weekOf, OUTSOURCE_DEFAULT_MARKUP_PCT } from '@/lib/repair/outsource-jobs'
+import { LOCATIONS } from '@/lib/store/helpers'
+import { OutsourcePhotos } from '@/components/outsource/OutsourcePhotos'
 import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker, Modal } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
@@ -22,7 +26,20 @@ const STATUS_META: Record<OutsourceJob['status'], { label: string; badgeStatus: 
   sent:                { label: 'Out for repair', badgeStatus: 'sent' },
   returned_resolved:   { label: 'Returned – fixed', badgeStatus: 'done' },
   returned_unresolved: { label: 'Returned – not fixed', badgeStatus: 'failed' },
+  cancelled:           { label: 'Cancelled', badgeStatus: 'cancelled' },
 }
+
+/** "3 days late" / "due in 2 days" / "due today" for a job still out. */
+function dueLabel(job: OutsourceJob): { text: string; late: boolean } | null {
+  const late = outsourceDaysLate(job)
+  if (late === null) return null
+  if (late > 0) return { text: `${late === 1 ? '1 day' : `${late} days`} late`, late: true }
+  if (late === 0) return { text: 'due today', late: false }
+  return { text: `due in ${-late === 1 ? '1 day' : `${-late} days`}`, late: false }
+}
+
+/** A bill's number as people read it: a draft has no number yet. */
+const billLabel = (ref?: string | null) => (!ref || /^DRAFT\//i.test(ref) ? 'Draft bill' : `Bill ${ref}`)
 
 function OutsourceStatusBadge({ status }: { status: OutsourceJob['status'] }) {
   const m = STATUS_META[status]
@@ -32,6 +49,34 @@ function OutsourceStatusBadge({ status }: { status: OutsourceJob['status'] }) {
 function fmtBalance(billed: number, paid: number) {
   const bal = billed - paid
   return { bal, color: bal <= 0 ? 'var(--success-text)' : '#991B1B' }
+}
+
+
+/** A vendor's record: what came back fixed, how fast, how close to the quote, and what is owed. */
+function VendorScore({ score, billed, paid, bal, balColor }: {
+  score: ReturnType<typeof vendorScorecard>
+  billed: number
+  paid: number
+  bal: number
+  balColor: string
+}) {
+  const tone = (pct: number | null, good: number, ok: number) =>
+    pct === null ? undefined : pct >= good ? 'is-good' : pct >= ok ? 'is-ok' : 'is-bad'
+  return (
+    <dl className="outsource-score">
+      <div><dt>Jobs</dt><dd>{score.jobs}{score.out > 0 && <small>{score.out} out{score.overdueNow > 0 ? `, ${score.overdueNow} late` : ''}</small>}</dd></div>
+      <div><dt>Fixed</dt><dd className={tone(score.fixRate, 80, 50)}>{score.fixRate === null ? '—' : `${score.fixRate}%`}{score.returned > 0 && <small>{score.fixed} of {score.returned}</small>}</dd></div>
+      <div className="is-extra"><dt>Avg days</dt><dd>{score.avgDaysOut === null ? '—' : score.avgDaysOut}</dd></div>
+      <div><dt>On time</dt><dd className={tone(score.onTimeRate, 80, 50)}>{score.onTimeRate === null ? '—' : `${score.onTimeRate}%`}</dd></div>
+      <div className="is-extra"><dt>vs quote</dt><dd className={score.avgCostVsQuotePct === null ? undefined : score.avgCostVsQuotePct > 10 ? 'is-bad' : score.avgCostVsQuotePct > 0 ? 'is-ok' : 'is-good'}>
+        {score.avgCostVsQuotePct === null ? '—' : `${score.avgCostVsQuotePct > 0 ? '+' : ''}${score.avgCostVsQuotePct}%`}
+        {score.overQuote > 0 && <small>{score.overQuote} over</small>}
+      </dd></div>
+      <div className="is-extra"><dt>Billed</dt><dd>{fmtKes(billed)}</dd></div>
+      <div className="is-extra"><dt>Paid</dt><dd className="is-good">{fmtKes(paid)}</dd></div>
+      <div><dt>Owed</dt><dd style={{ color: balColor }}>{fmtKes(bal)}</dd></div>
+    </dl>
+  )
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -57,22 +102,31 @@ function OutsourceContent() {
     outsourceVendors, outsourceJobs, outsourcePayments, invoices,
     addOutsourceVendor, updateOutsourceVendor,
     addOutsourceJob, returnOutsourceJob, recordOutsourcePayment, createOutsourceJobBill,
+    cancelOutsourceJob, updateOutsourceJob, deleteOutsourceVendor, chargeOutsourceToRepair,
+    serials, companySettings, remindLateOutsourceJobs,
+    outsourceStatements, prepareOutsourceStatements, holdOutsourceStatementJob, releaseOutsourceJobHold, confirmOutsourceStatement,
     setModule, showToast,
   } = useFinanceStore()
 
+  // Jobs past the date a vendor promised: remind the sender and the lead once.
+  useEffect(() => { remindLateOutsourceJobs() }, [outsourceJobs, remindLateOutsourceJobs])
+  // Weekly vendors: last week's returned jobs become a statement for Finance.
+  useEffect(() => { prepareOutsourceStatements() }, [outsourceJobs, outsourceVendors, outsourceStatements, prepareOutsourceStatements])
+
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = userCan(currentUser, 'repair.outsource.vendors')
+  const canConfirmStatements = userCan(currentUser, 'postFinancial')
 
   // ── filter state ──
-  const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | null
+  const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | 'statements' | null
   const queryId = searchParams.get('id')
   const queryVendorId = searchParams.get('vendorId')
 
-  const [tab, setLocalTab] = useState<'jobs' | 'vendors'>(queryTab ?? 'jobs')
+  const [tab, setLocalTab] = useState<'jobs' | 'vendors' | 'statements'>(queryTab ?? 'jobs')
   const [selectedVendorId, setLocalSelectedVendorId] = useState<string | null>(queryVendorId ?? null)
   const [activeJobId, setLocalActiveJobId] = useState<string | null>(queryId ?? null)
 
-  const setTab = (newTab: 'jobs' | 'vendors') => {
+  const setTab = (newTab: 'jobs' | 'vendors' | 'statements') => {
     setLocalTab(newTab)
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', newTab)
@@ -106,7 +160,7 @@ function OutsourceContent() {
   }
 
   useEffect(() => {
-    const urlTab = searchParams.get('tab') as 'jobs' | 'vendors' | null
+    const urlTab = searchParams.get('tab') as 'jobs' | 'vendors' | 'statements' | null
     if (urlTab && urlTab !== tab) setLocalTab(urlTab)
 
     const urlVendorId = searchParams.get('vendorId')
@@ -119,7 +173,7 @@ function OutsourceContent() {
   const patchJobsUi = useUrlUiPatch()
   const [jobStatusValue, setJobStatusValue] = useUrlUiState('status', 'all')
   const jobStatusFilter: OutsourceJob['status'] | 'all' =
-    ['sent', 'returned_resolved', 'returned_unresolved'].includes(jobStatusValue)
+    ['sent', 'returned_resolved', 'returned_unresolved', 'cancelled'].includes(jobStatusValue)
       ? jobStatusValue as OutsourceJob['status']
       : 'all'
   const setJobStatusFilter = (value: OutsourceJob['status'] | 'all') => setJobStatusValue(value)
@@ -139,9 +193,18 @@ function OutsourceContent() {
     serviceType: '' as OutsourceServiceType | '',
     issueDescription: '',
     sentDate: '',
+    expectedReturnDate: '',
+    accessories: '',
     quotedCost: '',
     notes: '',
   })
+  /** The promised date follows the sent date and service until someone types one. */
+  const [expectedTouched, setExpectedTouched] = useState(false)
+  const autoExpected = defaultExpectedReturnDate(jobForm.sentDate, jobForm.serviceType)
+  const shownExpected = expectedTouched ? jobForm.expectedReturnDate : autoExpected
+  /** A machine of ours (no repair linked) with this serial: it will be moved to Vendor. */
+  const stockMatch = !jobForm.repairOrderId ? findStockSerialForOutsource(serials, jobForm.serial) : undefined
+  const activeVendors = outsourceVendors.filter(v => v.active !== false)
   const [repairSearch, setRepairSearch] = useState('')
 
   // Vendor search within job modal
@@ -180,7 +243,7 @@ function OutsourceContent() {
     setVendorSearch(query)
     setVendorModalFromJob(true)
     setEditVendorId(null)
-    setVendorForm({ name: query.trim(), phone: '', email: '', address: '', specializations: [], notes: '' })
+    setVendorForm({ name: query.trim(), phone: '', email: '', address: '', specializations: [], notes: '', active: true, billing: 'weekly' })
     setShowVendorModal(true)
   }
 
@@ -192,7 +255,17 @@ function OutsourceContent() {
     returnNotes: '',
     finalCost: '',
     repairNextStep: '' as 'keep' | 'in_repair' | 'unrepairable' | '',
+    chargeCustomer: true,
+    customerCharge: '',
   })
+
+  // ── Edit / cancel / charge ──
+  const [editJobId, setEditJobId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ vendorId: '', serviceType: '' as OutsourceServiceType | '', issueDescription: '', quotedCost: '', expectedReturnDate: '', accessories: '', notes: '' })
+  const [cancelJobId, setCancelJobId] = useState<string | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [chargeJobId, setChargeJobId] = useState<string | null>(null)
+  const [chargeAmount, setChargeAmount] = useState('')
 
   // ── Vendor modal ──
   const [showVendorModal, setShowVendorModal] = useState(false)
@@ -201,6 +274,8 @@ function OutsourceContent() {
     name: '', phone: '', email: '', address: '',
     specializations: [] as OutsourceServiceType[],
     notes: '',
+    active: true,
+    billing: 'weekly' as 'weekly' | 'per_job',
   })
 
   // ── Payment modal ──
@@ -238,6 +313,31 @@ function OutsourceContent() {
   function jobsNeedingBill(vendorId?: string) {
     return outsourceJobs.filter(j => (!vendorId || j.vendorId === vendorId) && (j.finalCost ?? 0) > 0 && !vendorJobBill(j))
   }
+  const vendorBilling = (vendorId: string) => outsourceVendors.find(v => v.id === vendorId)?.billing ?? 'weekly'
+  /** Per-job vendors get a bill per job; weekly ones are billed by statement. */
+  const canBillJobAlone = (job: OutsourceJob) =>
+    vendorBilling(job.vendorId) === 'per_job' && (job.finalCost ?? 0) > 0 && !vendorJobBill(job) && !job.statementId
+    && job.status !== 'sent' && job.status !== 'cancelled'
+  /** Where a returned job's cost stands on the way to a bill. */
+  function billingLabel(job: OutsourceJob): string | null {
+    if (!((job.finalCost ?? 0) > 0) || job.status === 'sent' || job.status === 'cancelled') return null
+    const bill = vendorJobBill(job)
+    if (job.statementRef) {
+      const st = outsourceStatements.find(x => x.id === job.statementId)
+      return st?.status === 'confirmed' ? `On ${job.statementRef} · bill ${st.billRef ?? ''}`.trim() : `On ${job.statementRef} · waiting for Finance`
+    }
+    if (bill) return billLabel(bill.ref)
+    if (job.billingHold) return `Held back: ${job.billingHold.reason}`
+    if (vendorBilling(job.vendorId) === 'weekly') {
+      const week = weekOf(job.returnedDate ?? '')
+      return week ? `On the statement for the week of ${fmtDate(week.weekStart)}` : 'On its week\'s statement'
+    }
+    return 'Not billed yet'
+  }
+  const pendingStatements = outsourceStatements.filter(st => st.status === 'pending')
+  const [openStatementId, setOpenStatementId] = useState<string | null>(null)
+  const [holdJobId, setHoldJobId] = useState<string | null>(null)
+  const [holdReason, setHoldReason] = useState('')
 
   const filteredJobs = outsourceJobs
     .filter(j => jobStatusFilter === 'all' || j.status === jobStatusFilter)
@@ -285,7 +385,8 @@ function OutsourceContent() {
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   function openNewJob() {
-    setJobForm({ vendorId: '', repairOrderId: '', deviceDescription: '', serial: '', serviceType: '', issueDescription: '', sentDate: '', quotedCost: '', notes: '' })
+    setJobForm({ vendorId: '', repairOrderId: '', deviceDescription: '', serial: '', serviceType: '', issueDescription: '', sentDate: new Date().toISOString().slice(0, 10), expectedReturnDate: '', accessories: '', quotedCost: '', notes: '' })
+    setExpectedTouched(false)
     setRepairSearch('')
     setVendorSearch('')
     setShowJobModal(true)
@@ -297,6 +398,7 @@ function OutsourceContent() {
     if (!jobForm.serviceType) { showToast('Select a service type', 'error'); return }
     if (!jobForm.issueDescription.trim()) { showToast('Describe the issue', 'error'); return }
     if (!jobForm.sentDate) { showToast('Select the date sent', 'error'); return }
+    if (shownExpected && shownExpected < jobForm.sentDate) { showToast('The promised return date is before the date sent', 'error'); return }
     if (jobForm.quotedCost.trim() && (!Number.isFinite(Number(jobForm.quotedCost)) || Number(jobForm.quotedCost) < 0)) { showToast('Quoted cost must be a number of 0 or more', 'error'); return }
     if (jobForm.repairOrderId) {
       const linked = repairs.find(r => r.id === jobForm.repairOrderId)
@@ -320,6 +422,8 @@ function OutsourceContent() {
       serviceType: jobForm.serviceType as OutsourceServiceType,
       issueDescription: jobForm.issueDescription.trim(),
       sentDate: jobForm.sentDate,
+      expectedReturnDate: shownExpected || undefined,
+      accessories: jobForm.accessories.trim() || undefined,
       quotedCost: jobForm.quotedCost ? Number(jobForm.quotedCost) : undefined,
       notes: jobForm.notes.trim() || undefined,
     })
@@ -328,7 +432,7 @@ function OutsourceContent() {
 
   function openReturn(jobId: string) {
     setReturnJobId(jobId)
-    setReturnForm({ returnedDate: '', isResolved: null, returnNotes: '', finalCost: '', repairNextStep: '' })
+    setReturnForm({ returnedDate: new Date().toISOString().slice(0, 10), isResolved: null, returnNotes: '', finalCost: '', repairNextStep: '', chargeCustomer: true, customerCharge: '' })
   }
 
   function submitReturn() {
@@ -343,25 +447,119 @@ function OutsourceContent() {
     if (returnForm.finalCost.trim() && (!Number.isFinite(Number(returnForm.finalCost)) || Number(returnForm.finalCost) < 0)) {
       showToast('Final cost must be a number of 0 or more', 'error'); return
     }
-    returnOutsourceJob(returnJobId, {
+    const finalCost = returnForm.finalCost ? Number(returnForm.finalCost) : undefined
+    const customerCharge = Number(returnForm.customerCharge || suggestedCustomerCharge(finalCost ?? 0))
+    const willCharge = returnForm.isResolved === true && hasLinkedRepair && returnForm.chargeCustomer && (finalCost ?? 0) > 0
+    if (willCharge && !(customerCharge > 0)) { showToast('Enter what the customer pays for this work, or untick it', 'error'); return }
+    const ok = returnOutsourceJob(returnJobId, {
       returnedDate: returnForm.returnedDate,
       isResolved: returnForm.isResolved,
       returnNotes: returnForm.returnNotes.trim() || undefined,
-      finalCost: returnForm.finalCost ? Number(returnForm.finalCost) : undefined,
+      finalCost,
       repairNextStep: returnForm.isResolved === false && returnForm.repairNextStep ? returnForm.repairNextStep : undefined,
     })
+    if (ok && willCharge) chargeOutsourceToRepair(returnJobId, customerCharge)
     setReturnJobId(null)
+  }
+
+  function openEditJob(job: OutsourceJob) {
+    setEditJobId(job.id)
+    setEditForm({
+      vendorId: job.vendorId,
+      serviceType: job.serviceType,
+      issueDescription: job.issueDescription,
+      quotedCost: job.quotedCost != null ? String(job.quotedCost) : '',
+      expectedReturnDate: job.expectedReturnDate ?? defaultExpectedReturnDate(job.sentDate, job.serviceType),
+      accessories: job.accessories ?? '',
+      notes: job.notes ?? '',
+    })
+  }
+
+  function submitEditJob() {
+    if (!editJobId) return
+    const job = outsourceJobs.find(j => j.id === editJobId)
+    if (!job) return
+    if (!editForm.vendorId) { showToast('Select a vendor', 'error'); return }
+    if (!editForm.serviceType) { showToast('Select a service type', 'error'); return }
+    if (!editForm.issueDescription.trim()) { showToast('Describe the work to do', 'error'); return }
+    if (editForm.quotedCost.trim() && (!Number.isFinite(Number(editForm.quotedCost)) || Number(editForm.quotedCost) < 0)) { showToast('Quoted cost must be a number of 0 or more', 'error'); return }
+    if (editForm.expectedReturnDate && job.sentDate && editForm.expectedReturnDate < job.sentDate.slice(0, 10)) { showToast('The promised return date is before the date sent', 'error'); return }
+    const ok = updateOutsourceJob(editJobId, {
+      vendorId: editForm.vendorId,
+      serviceType: editForm.serviceType as OutsourceServiceType,
+      issueDescription: editForm.issueDescription.trim(),
+      quotedCost: editForm.quotedCost.trim() ? Number(editForm.quotedCost) : undefined,
+      expectedReturnDate: editForm.expectedReturnDate || undefined,
+      accessories: editForm.accessories.trim() || undefined,
+      notes: editForm.notes.trim() || undefined,
+    })
+    if (ok) setEditJobId(null)
+  }
+
+  function openCancelJob(job: OutsourceJob) {
+    setCancelJobId(job.id)
+    setCancelReason('')
+  }
+
+  function submitCancelJob() {
+    if (!cancelJobId) return
+    if (cancelOutsourceJob(cancelJobId, cancelReason)) setCancelJobId(null)
+  }
+
+  function openCharge(job: OutsourceJob) {
+    setChargeJobId(job.id)
+    setChargeAmount(String(suggestedCustomerCharge(job.finalCost ?? 0) || ''))
+  }
+
+  function submitCharge() {
+    if (!chargeJobId) return
+    if (chargeOutsourceToRepair(chargeJobId, Number(chargeAmount))) setChargeJobId(null)
+  }
+
+  /** The linked repair can still take the vendor's work on its quote. */
+  function canChargeCustomer(job: OutsourceJob) {
+    if (job.status !== 'returned_resolved' || !job.repairOrderId || job.customerChargeAddedAt || !((job.finalCost ?? 0) > 0)) return false
+    const r = repairs.find(x => x.id === job.repairOrderId)
+    return !!r && !!r.quote && !r.invoiceId && !r.billingExempt && !r.underWarranty
+  }
+
+  function printHandoverSlip(job: OutsourceJob) {
+    const vendor = outsourceVendors.find(v => v.id === job.vendorId)
+    const repair = job.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : undefined
+    const html = outsourceHandoverSlipHtml({
+      companyName: companySettings?.name || 'Deed',
+      jobRef: job.ref,
+      vendorName: job.vendorName,
+      vendorPhone: vendor?.phone,
+      deviceDescription: job.deviceDescription,
+      serial: job.serial,
+      serviceLabel: svcLabel(job.serviceType),
+      issueDescription: job.issueDescription,
+      accessories: job.accessories,
+      quotedCost: job.quotedCost,
+      sentDate: job.sentDate,
+      expectedReturnDate: job.expectedReturnDate,
+      sentByName: job.sentByName,
+      repairRef: repair?.ref,
+      fmtKes,
+      fmtDate,
+    })
+    const win = window.open('', '_blank', 'width=760,height=900')
+    if (!win) { showToast('Allow pop-ups to print the handover slip', 'error'); return }
+    win.document.open()
+    win.document.write(html)
+    win.document.close()
   }
 
   function openAddVendor() {
     setEditVendorId(null)
-    setVendorForm({ name: '', phone: '', email: '', address: '', specializations: [], notes: '' })
+    setVendorForm({ name: '', phone: '', email: '', address: '', specializations: [], notes: '', active: true, billing: 'weekly' })
     setShowVendorModal(true)
   }
 
   function openEditVendor(v: OutsourceVendor) {
     setEditVendorId(v.id)
-    setVendorForm({ name: v.name, phone: v.phone, email: v.email ?? '', address: v.address ?? '', specializations: [...v.specializations], notes: v.notes ?? '' })
+    setVendorForm({ name: v.name, phone: v.phone, email: v.email ?? '', address: v.address ?? '', specializations: [...v.specializations], notes: v.notes ?? '', active: v.active !== false, billing: v.billing ?? 'weekly' })
     setShowVendorModal(true)
   }
 
@@ -371,7 +569,8 @@ function OutsourceContent() {
     if (editVendorId) {
       updateOutsourceVendor(editVendorId, { ...vendorForm, email: vendorForm.email || undefined, address: vendorForm.address || undefined, notes: vendorForm.notes || undefined })
     } else {
-      const newVendor = addOutsourceVendor({ ...vendorForm, email: vendorForm.email || undefined, address: vendorForm.address || undefined, notes: vendorForm.notes || undefined })
+      const { active: _active, ...fields } = vendorForm
+      const newVendor = addOutsourceVendor({ ...fields, email: vendorForm.email || undefined, address: vendorForm.address || undefined, notes: vendorForm.notes || undefined })
       if (vendorModalFromJob) {
         setJobForm(f => ({ ...f, vendorId: newVendor.id }))
         setVendorSearch(newVendor.name)
@@ -427,6 +626,7 @@ function OutsourceContent() {
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
       render: job => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>,
+      exportValue: job => job.ref,
     },
     {
       key: 'device', label: 'Device', priority: 1, width: '1.8fr',
@@ -468,21 +668,19 @@ function OutsourceContent() {
     {
       key: 'vendor', label: 'Vendor', priority: 2, width: '140px',
       render: job => <span className="erp-truncate" title={job.vendorName}>{job.vendorName}</span>,
+      exportValue: job => job.vendorName,
     },
     {
       key: 'sent', label: 'Sent', priority: 2, width: '100px',
       render: job => {
         // How long a machine has been away is what tells you to chase it. Jobs
         // sent to Fastech in June were still open in late September unnoticed.
-        const days = job.status === 'sent' ? outsourceDaysOut(job) : null
-        const overdue = isOutsourceOverdue(job)
+        const due = dueLabel(job)
         return (
           <span className="flex flex-col whitespace-nowrap">
             <span>{fmtDate(job.sentDate)}</span>
-            {days !== null && (
-              <span className="text-[10px] font-bold" style={{ color: overdue ? '#dc2626' : '#d97706' }}>
-                {days === 0 ? 'sent today' : `${formatDaysOut(days)} out`}{overdue ? ' · overdue' : ''}
-              </span>
+            {due && (
+              <span className={`outsource-due${due.late ? ' is-late' : ''}`}>{due.text}</span>
             )}
           </span>
         )
@@ -492,6 +690,7 @@ function OutsourceContent() {
     {
       key: 'service', label: 'Service', priority: 3, width: '120px',
       render: job => <span className="whitespace-nowrap">{svcLabel(job.serviceType)}</span>,
+      exportValue: job => svcLabel(job.serviceType),
     },
     {
       key: 'by', label: 'By', priority: 3, width: '90px',
@@ -505,25 +704,51 @@ function OutsourceContent() {
     },
   ]
 
+  function openBills() {
+    setModule('accounting')
+    router.push('/finance?tab=bills')
+  }
+
+  /** The one next step for a row: bring it back in, or open its bill. */
   function jobRowActions(job: OutsourceJob) {
     const bill = job.billId ? invoices.find(i => i.id === job.billId) : null
     return (
       <>
         {job.status === 'sent' && (
-          <button
-            onClick={e => { e.stopPropagation(); openReturn(job.id) }}
-            style={{ fontSize: 11, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            Mark Returned
+          <button type="button" className="outsource-act is-primary" onClick={e => { e.stopPropagation(); openReturn(job.id) }}>
+            Mark returned
           </button>
         )}
         {bill && (
-          <button
-            onClick={e => { e.stopPropagation(); setModule('accounting'); router.push('/finance?tab=bills') }}
-            style={{ fontSize: 11, padding: '5px 10px', borderRadius: 7, border: '1px solid #BFDBFE', background: 'var(--info-bg)', color: 'var(--primary-dark)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            {bill.ref}
+          <button type="button" className="outsource-act" onClick={e => { e.stopPropagation(); openBills() }}>
+            {billLabel(bill.ref)}
           </button>
         )}
       </>
+    )
+  }
+
+  /** Everything that can be done to a job, in its details panel. */
+  function jobDrawerActions(job: OutsourceJob) {
+    const bill = job.billId ? invoices.find(i => i.id === job.billId) : null
+    return (
+      <div className="outsource-drawer-actions">
+        {job.status === 'sent' && (
+          <>
+            <button type="button" className="outsource-act is-primary" onClick={() => openReturn(job.id)}>Mark returned</button>
+            <button type="button" className="outsource-act" onClick={() => openEditJob(job)}>Edit</button>
+            <button type="button" className="outsource-act" onClick={() => printHandoverSlip(job)}>Handover slip</button>
+            <button type="button" className="outsource-act is-danger" onClick={() => openCancelJob(job)}>Cancel job</button>
+          </>
+        )}
+        {canChargeCustomer(job) && (
+          <button type="button" className="outsource-act is-primary" onClick={() => openCharge(job)}>Charge customer</button>
+        )}
+        {canBillJobAlone(job) && (
+          <button type="button" className="outsource-act is-warning" onClick={() => createOutsourceJobBill(job.id)} title="This cost is owed but has no bill, so Finance cannot pay it yet">Create bill</button>
+        )}
+        {bill && <button type="button" className="outsource-act" onClick={openBills}>{billLabel(bill.ref)}</button>}
+      </div>
     )
   }
 
@@ -557,14 +782,11 @@ function OutsourceContent() {
         </div>
         <div className="mt-2.5 flex flex-wrap gap-2 border-t border-border-lt pt-2.5">
           <span className="text-[10px] text-t3">Sent {fmtDate(job.sentDate)}</span>
-          {job.status === 'sent' && outsourceDaysOut(job) !== null && (
-            <span
-              className="text-[10px] font-bold"
-              style={{ color: isOutsourceOverdue(job) ? '#dc2626' : '#d97706' }}
-            >
-              · {outsourceDaysOut(job) === 0 ? 'sent today' : `${formatDaysOut(outsourceDaysOut(job))} out`}{isOutsourceOverdue(job) ? ' · overdue' : ''}
-            </span>
-          )}
+          {(() => {
+            const due = dueLabel(job)
+            return due ? <span className={`outsource-due${due.late ? ' is-late' : ''}`}>· {due.text}</span> : null
+          })()}
+          {job.status === 'cancelled' && <span className="text-[10px] text-t3">· Cancelled</span>}
           {job.returnedDate && <span className="text-[10px] text-t3">· Returned {fmtDate(job.returnedDate)}</span>}
           <span className="ml-auto flex gap-2" onClick={e => e.stopPropagation()}>{jobRowActions(job)}</span>
         </div>
@@ -575,6 +797,7 @@ function OutsourceContent() {
   function jobDrawerTabs(job: OutsourceJob): DrawerTab[] {
     const bill = job.billId ? invoices.find(i => i.id === job.billId) : null
     const linkedRepair = job.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : null
+    const stockSerial = job.stockSerialId ? serials.find(x => x.id === job.stockSerialId) : null
     return [
       {
         id: 'overview',
@@ -590,15 +813,46 @@ function OutsourceContent() {
             <InfoRow label="Service Type" value={svcLabel(job.serviceType)} />
             <InfoRow label="Issue Description" value={job.issueDescription} />
             <InfoRow label="Sent" value={`${fmtDate(job.sentDate)} by ${job.sentByName}`} />
-            {job.returnedDate && <InfoRow label="Returned" value={fmtDate(job.returnedDate)} />}
+            {job.status === 'sent' && (
+              <InfoRow label="Promised back" value={job.expectedReturnDate
+                ? `${fmtDate(job.expectedReturnDate)}${dueLabel(job) ? ` · ${dueLabel(job)!.text}` : ''}`
+                : `${formatDaysOut(outsourceDaysOut(job))} out · no date promised`} />
+            )}
+            {job.accessories && <InfoRow label="Handed over with" value={job.accessories} />}
+            {stockSerial && <InfoRow label="Stock machine" value={`${stockSerial.productName} · now at ${LOCATIONS[stockSerial.location]?.name ?? stockSerial.location}`} />}
+            {job.returnedDate && <InfoRow label="Returned" value={`${fmtDate(job.returnedDate)}${job.returnedByName ? ` · received by ${job.returnedByName}` : ''}`} />}
+            {job.status === 'cancelled' && <InfoRow label="Cancelled" value={`${job.cancelledDate ? fmtDate(job.cancelledDate) : ''}${job.cancelledByName ? ` by ${job.cancelledByName}` : ''}${job.cancelReason ? ` — ${job.cancelReason}` : ''}`} />}
             {job.quotedCost != null && <InfoRow label="Quoted Cost" value={fmtKes(job.quotedCost)} />}
-            {job.finalCost != null && <InfoRow label="Final Cost" value={fmtKes(job.finalCost)} />}
+            {job.finalCost != null && (
+              <InfoRow label="Final Cost" value={`${fmtKes(job.finalCost)}${job.quotedCost && job.finalCost > job.quotedCost ? ` · ${fmtKes(job.finalCost - job.quotedCost)} over the quote` : ''}`} />
+            )}
+            {job.customerChargeAmount != null && linkedRepair && (
+              <InfoRow label="Charged to customer" value={`${fmtKes(job.customerChargeAmount)} on ${linkedRepair.ref}'s quote`} />
+            )}
+            {canChargeCustomer(job) && <InfoRow label="Charged to customer" value="Not yet — use Charge customer" />}
             {job.returnNotes && <InfoRow label="Return Notes" value={job.returnNotes} />}
             {job.notes && <InfoRow label="Notes" value={job.notes} />}
             {bill && <InfoRow label="Vendor Bill" value={bill.ref} mono />}
+            {billingLabel(job) && <InfoRow label="Billing" value={billingLabel(job)} />}
           </div>
         ),
       },
+      {
+        id: 'attachments' as const,
+        label: 'Photos',
+        content: <OutsourcePhotos jobId={job.id} canAdd={job.status !== 'cancelled'} returned={job.status !== 'sent'} />,
+      },
+      ...(job.editLog?.length ? [{
+        id: 'history' as const,
+        label: 'Changes',
+        content: (
+          <ul className="outsource-changes">
+            {job.editLog.slice().reverse().map((entry, i) => (
+              <li key={i}><span>{fmtDate(entry.date)} · {entry.by}</span>{entry.note}</li>
+            ))}
+          </ul>
+        ),
+      }] : []),
     ]
   }
 
@@ -622,6 +876,7 @@ function OutsourceContent() {
         tabs={[
           { id: 'jobs', label: outCount > 0 ? `Jobs (${outCount})` : 'Jobs' },
           { id: 'vendors', label: `Vendors (${outsourceVendors.length})` },
+          { id: 'statements', label: pendingStatements.length > 0 ? `Statements (${pendingStatements.length})` : 'Statements' },
         ]}
         active={tab}
         onChange={id => setTab(id as typeof tab)}
@@ -632,11 +887,12 @@ function OutsourceContent() {
       <div className="mod-body outsource-body p-3 sm:p-4">
         <OperationalSummary
           items={[
-            ...(outCount > 0 ? [{ id: 'out', label: 'out with vendors', value: outCount, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
-            ...(overdueCount > 0 ? [{ id: 'overdue', label: `out over ${OUTSOURCE_OVERDUE_DAYS} days — chase or mark returned`, value: overdueCount, tone: 'danger' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
-            ...(unresolvedCount > 0 ? [{ id: 'unresolved', label: 'returned unresolved', value: unresolvedCount, tone: 'warning' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('returned_unresolved') } }] : []),
+            ...(outCount > 0 ? [{ id: 'out', label: 'out', value: outCount, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
+            ...(overdueCount > 0 ? [{ id: 'overdue', label: 'late', value: overdueCount, tone: 'danger' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
+            ...(unresolvedCount > 0 ? [{ id: 'unresolved', label: 'not fixed', value: unresolvedCount, tone: 'warning' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('returned_unresolved') } }] : []),
             ...(returnedToday > 0 ? [{ id: 'today', label: 'returned today', value: returnedToday }] : []),
-            ...(vendorOutstanding > 0 ? [{ id: 'owed', label: 'owed to vendors', value: fmtKes(vendorOutstanding), onClick: () => setTab('vendors') }] : []),
+            ...(pendingStatements.length > 0 ? [{ id: 'statements', label: pendingStatements.length === 1 ? 'statement to confirm' : 'statements to confirm', value: pendingStatements.length, tone: 'warning' as const, onClick: () => setTab('statements') }] : []),
+            ...(vendorOutstanding > 0 ? [{ id: 'owed', label: 'owed', value: fmtKes(vendorOutstanding), onClick: () => setTab('vendors') }] : []),
           ]}
         />
 
@@ -654,7 +910,7 @@ function OutsourceContent() {
             emptyMessage="No outsource jobs match the filter."
             searchValue={jobSearch}
             onSearchChange={setJobSearch}
-            searchPlaceholder="Search customer name, laptop, serial, phone, vendor or ref…"
+            searchPlaceholder="Search jobs"
             clientSearch
             page={jobPage}
             onPageChange={setJobPage}
@@ -670,6 +926,7 @@ function OutsourceContent() {
                   { value: 'sent', label: 'Out for Repair' },
                   { value: 'returned_resolved', label: 'Returned – Fixed' },
                   { value: 'returned_unresolved', label: 'Not Fixed' },
+                  { value: 'cancelled', label: 'Cancelled' },
                 ],
                 onChange: v => setJobStatusFilter(v as typeof jobStatusFilter),
               },
@@ -701,16 +958,16 @@ function OutsourceContent() {
         {/* ── Vendors tab ── */}
         {tab === 'vendors' && !selectedVendor && (
           <>
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border-lt)]">
+            <div className="outsource-vendor-toolbar">
               <input
                 type="search"
-                className="form-input text-[12px] flex-1 min-w-[200px] max-w-md"
-                placeholder="Search vendor, phone, service, or a laptop / customer they handled…"
+                className="form-input"
+                placeholder="Search vendors"
                 value={vendorListSearch}
                 onChange={e => setVendorListSearch(e.target.value)}
                 aria-label="Search vendors"
               />
-              {isAdmin && <button type="button" className="btn-secondary text-[11px] ml-auto" onClick={openAddVendor}>+ Add Vendor</button>}
+              {isAdmin && <button type="button" className="outsource-act" onClick={openAddVendor}>+ Vendor</button>}
             </div>
             {outsourceVendors.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
@@ -726,18 +983,7 @@ function OutsourceContent() {
                   const billed = vendorBilled(vendor.id)
                   const paid   = vendorPaid(vendor.id)
                   const { bal, color } = fmtBalance(billed, paid)
-                  const vendorJobs = outsourceJobs.filter(j => j.vendorId === vendor.id)
-                  const activeJobs = vendorJobs.filter(j => j.status === 'sent').length
-                  const totalJobs  = vendorJobs.length
-                  const completedJobs = vendorJobs.filter(j => j.isResolved)
-                  const completionRate = totalJobs > 0 ? Math.round((completedJobs.length / totalJobs) * 100) : null
-                  const avgTurnaround = completedJobs.length > 0
-                    ? Math.round(completedJobs.reduce((s, j) => {
-                        const sent = j.sentDate ? new Date(j.sentDate).getTime() : 0
-                        const ret  = j.returnedDate ? new Date(j.returnedDate).getTime() : 0
-                        return s + (sent && ret ? (ret - sent) / 86400000 : 0)
-                      }, 0) / completedJobs.filter(j => j.sentDate && j.returnedDate).length || 0)
-                    : null
+                  const score = vendorScorecard(vendor.id, outsourceJobs)
                   return (
                     <div key={vendor.id} className="outsource-vendor-row flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
                       {/* Avatar */}
@@ -748,7 +994,10 @@ function OutsourceContent() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-t1 text-sm">{vendor.name}</p>
+                        <p className="font-semibold text-t1 text-sm">
+                          {vendor.name}
+                          {vendor.active === false && <span className="outsource-inactive">Inactive</span>}
+                        </p>
                         <p className="text-[11px] text-t3">{vendor.phone}{vendor.email ? ` · ${vendor.email}` : ''}</p>
                         <div className="flex gap-1.5 mt-1 flex-wrap">
                           {vendor.specializations.map(s => (
@@ -759,60 +1008,14 @@ function OutsourceContent() {
                         </div>
                       </div>
 
-                      {/* Stats */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:gap-6 text-left lg:text-right flex-shrink-0 gap-3">
-                        <div>
-                          <p className="text-[10px] text-t3">Jobs</p>
-                          <p className="text-sm font-bold text-t1">{totalJobs}</p>
-                          {activeJobs > 0 && <p className="text-[11px]" style={{ color: 'var(--warning)' }}>{activeJobs} active</p>}
-                        </div>
-                        {completionRate !== null && (
-                          <div>
-                            <p className="text-[10px] text-t3">Completion</p>
-                            <p className="text-sm font-bold" style={{ color: completionRate >= 80 ? 'var(--success)' : completionRate >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{completionRate}%</p>
-                          </div>
-                        )}
-                        {avgTurnaround !== null && !isNaN(avgTurnaround) && avgTurnaround > 0 && (
-                          <div>
-                            <p className="text-[10px] text-t3">Avg Turn</p>
-                            <p className="text-sm font-bold text-t1">{avgTurnaround}d</p>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-[10px] text-t3">Billed</p>
-                          <p className="text-sm font-bold text-t1">{fmtKes(billed)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-t3">Paid</p>
-                          <p className="text-sm font-bold" style={{ color: 'var(--success)' }}>{fmtKes(paid)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-t3">Balance</p>
-                          <p className="text-sm font-bold" style={{ color }}>{fmtKes(bal)}</p>
-                        </div>
-                      </div>
+                      {/* Scorecard */}
+                      <VendorScore score={score} billed={billed} paid={paid} bal={bal} balColor={color} />
 
                       {/* Actions */}
-                      <div className="flex gap-2 flex-wrap flex-shrink-0">
-                        <button
-                          onClick={() => setSelectedVendorId(vendor.id)}
-                          style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-lt)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer' }}>
-                          View Details
-                        </button>
-                        {bal > 0 && (
-                          <button
-                            onClick={() => openPayVendor(vendor.id)}
-                            style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--success)', background: '#ECFDF5', color: 'var(--success-text)', cursor: 'pointer', fontWeight: 600 }}>
-                            Pay
-                          </button>
-                        )}
-                        {isAdmin && (
-                          <button
-                            onClick={() => openEditVendor(vendor)}
-                            style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-lt)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer' }}>
-                            Edit
-                          </button>
-                        )}
+                      <div className="outsource-vendor-actions">
+                        <button type="button" className="outsource-act" onClick={() => setSelectedVendorId(vendor.id)}>View</button>
+                        {bal > 0 && <button type="button" className="outsource-act is-primary" onClick={() => openPayVendor(vendor.id)}>Pay</button>}
+                        {isAdmin && <button type="button" className="outsource-act" onClick={() => openEditVendor(vendor)}>Edit</button>}
                       </div>
                     </div>
                   )
@@ -831,24 +1034,25 @@ function OutsourceContent() {
             <>
               {/* Back + header */}
               <div className="outsource-vendor-detail__header flex flex-wrap items-start sm:items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
-                <button onClick={() => setSelectedVendorId(null)}
-                  style={{ fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                  ← Back
+                <button type="button" className="outsource-act" onClick={() => setSelectedVendorId(null)}>
+                  ‹ Back
                 </button>
-                <div className="flex-1">
-                  <p className="font-bold text-sm text-t1">{selectedVendor.name}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm text-t1">
+                    {selectedVendor.name}
+                    {selectedVendor.active === false && <span className="outsource-inactive">Inactive</span>}
+                  </p>
                   <p className="text-[10px] text-t3">{selectedVendor.phone}{selectedVendor.email ? ` · ${selectedVendor.email}` : ''}{selectedVendor.address ? ` · ${selectedVendor.address}` : ''}</p>
                 </div>
-                <div className="flex flex-wrap gap-4 sm:gap-6 text-left sm:text-right">
-                  <div><p className="text-[10px] text-t3">Billed</p><p className="font-bold text-sm">{fmtKes(billed)}</p></div>
-                  <div><p className="text-[10px] text-t3">Paid</p><p className="font-bold text-sm" style={{ color: 'var(--success)' }}>{fmtKes(paid)}</p></div>
-                  <div><p className="text-[10px] text-t3">Outstanding</p><p className="font-bold text-sm" style={{ color }}>{fmtKes(bal)}</p></div>
-                </div>
                 {bal > 0 && (
-                  <button className="btn-primary text-[11px] px-4 py-2" onClick={() => openPayVendor(selectedVendor.id)}>
-                    Record Payment
+                  <button type="button" className="outsource-act is-primary" onClick={() => openPayVendor(selectedVendor.id)}>
+                    Record payment
                   </button>
                 )}
+                {isAdmin && <button type="button" className="outsource-act" onClick={() => openEditVendor(selectedVendor)}>Edit</button>}
+              </div>
+              <div className="outsource-vendor-detail__score">
+                <VendorScore score={vendorScorecard(selectedVendor.id, outsourceJobs)} billed={billed} paid={paid} bal={bal} balColor={color} />
               </div>
 
               <div className="outsource-vendor-detail grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -862,10 +1066,10 @@ function OutsourceContent() {
                   ) : (
                     <div className="divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
                       {vendorJobs.map(job => (
-                        <div key={job.id} className="px-4 py-3 hover:bg-gray-50">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
+                        <div key={job.id} className="outsource-vendor-job px-4 py-3 hover:bg-gray-50">
+                          <div className="outsource-vendor-job__row flex items-start justify-between gap-2">
+                            <div className="outsource-vendor-job__info flex-1 min-w-0">
+                              <div className="outsource-vendor-job__head flex flex-wrap items-center gap-2 mb-0.5">
                                 <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
                                 <OutsourceStatusBadge status={job.status} />
                               </div>
@@ -878,6 +1082,17 @@ function OutsourceContent() {
                                 })()}
                               </p>
                               <p className="text-[11px] text-t2 mt-0.5 italic">"{job.issueDescription}"</p>
+                              {job.status === 'sent' && dueLabel(job) && (
+                                <p className={`outsource-due${dueLabel(job)!.late ? ' is-late' : ''}`}>{job.expectedReturnDate ? `Promised ${fmtDate(job.expectedReturnDate)} · ` : ''}{dueLabel(job)!.text}</p>
+                              )}
+                              {billingLabel(job) && (
+                                <p className="outsource-billing">
+                                  {billingLabel(job)}
+                                  {job.billingHold && (
+                                    <button type="button" className="outsource-link" onClick={() => releaseOutsourceJobHold(job.id)}>Bill it</button>
+                                  )}
+                                </p>
+                              )}
                               {job.returnedDate && (
                                 <p className="text-[11px] mt-0.5" style={{ color: job.isResolved ? 'var(--success)' : 'var(--danger)' }}>
                                   Returned {fmtDate(job.returnedDate)} · {job.isResolved ? 'Resolved' : 'Not resolved'}
@@ -885,37 +1100,25 @@ function OutsourceContent() {
                                 </p>
                               )}
                             </div>
-                            <div className="text-right flex-shrink-0">
+                            <div className="outsource-vendor-job__side text-right flex-shrink-0">
                               {job.finalCost != null
                                 ? <p className="font-bold text-sm text-t1">{fmtKes(job.finalCost)}</p>
                                 : job.quotedCost != null
                                   ? <p className="text-[11px] text-t3">{fmtKes(job.quotedCost)} est.</p>
                                   : null}
-                              {job.status === 'sent' && (
-                                <button
-                                  onClick={() => openReturn(job.id)}
-                                  style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer', display: 'block' }}>
-                                  Mark Returned
-                                </button>
-                              )}
-                              {job.billId && (() => {
-                                const bill = invoices.find(i => i.id === job.billId)
-                                return bill ? (
-                                  <button
-                                    onClick={() => { setModule('accounting'); router.push('/finance?tab=bills') }}
-                                    style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #BFDBFE', background: 'var(--info-bg)', color: 'var(--primary-dark)', cursor: 'pointer', display: 'block' }}>
-                                    Bill {bill.ref}
-                                  </button>
-                                ) : null
-                              })()}
-                              {(job.finalCost ?? 0) > 0 && !vendorJobBill(job) && job.status !== 'sent' && (
-                                <button
-                                  onClick={() => createOutsourceJobBill(job.id)}
-                                  title="This cost is owed but has no bill, so Finance cannot pay it yet"
-                                  style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #FDE68A', background: 'var(--warning-bg)', color: 'var(--warning-text)', cursor: 'pointer', display: 'block' }}>
-                                  Create bill
-                                </button>
-                              )}
+                              <div className="outsource-job-acts">
+                                {job.status === 'sent' && (
+                                  <button type="button" className="outsource-act is-primary" onClick={() => openReturn(job.id)}>Mark returned</button>
+                                )}
+                                <button type="button" className="outsource-act" onClick={() => setActiveJobId(job.id)}>Details</button>
+                                {job.billId && (() => {
+                                  const bill = invoices.find(i => i.id === job.billId)
+                                  return bill ? <button type="button" className="outsource-act" onClick={openBills}>{billLabel(bill.ref)}</button> : null
+                                })()}
+                                {canBillJobAlone(job) && (
+                                  <button type="button" className="outsource-act is-warning" onClick={() => createOutsourceJobBill(job.id)} title="This cost is owed but has no bill, so Finance cannot pay it yet">Create bill</button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -958,6 +1161,39 @@ function OutsourceContent() {
             </>
           )
         })()}
+        {/* ── Weekly statements ── */}
+        {tab === 'statements' && (
+          <div className="outsource-statements">
+            <p className="outsource-statements__intro">
+              Each Monday the app puts the week's returned jobs of every weekly vendor on one statement.
+              {canConfirmStatements ? ' Check it and confirm it into a bill.' : ' Finance, an Admin Officer or the Director checks it and confirms it into a bill.'}
+            </p>
+            {outsourceStatements.length === 0 ? (
+              <p className="outsource-statements__empty">No statements yet. The first is prepared the Monday after a weekly vendor's job comes back with a cost.</p>
+            ) : (
+              <ul className="outsource-statements__list">
+                {outsourceStatements
+                  .slice()
+                  .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || b.weekStart.localeCompare(a.weekStart))
+                  .map(st => (
+                    <li key={st.id}>
+                      <button type="button" className="outsource-statement-row" onClick={() => setOpenStatementId(st.id)}>
+                        <span className="outsource-statement-row__main">
+                          <span className="outsource-statement-row__ref">{st.ref}</span>
+                          <span className="outsource-statement-row__vendor">{st.vendorName}</span>
+                          <span className="outsource-statement-row__week">{fmtDate(st.weekStart)} – {fmtDate(st.weekEnd)} · {st.lines.length} job{st.lines.length === 1 ? '' : 's'}</span>
+                        </span>
+                        <span className="outsource-statement-row__end">
+                          <span className="outsource-statement-row__total">{fmtKes(st.total)}</span>
+                          <StatusBadge status={st.status === 'pending' ? 'pending' : 'done'} label={st.status === 'pending' ? 'To confirm' : st.billRef ?? 'Confirmed'} />
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Job Details Drawer ────────────────────────────────────────────── */}
@@ -967,7 +1203,7 @@ function OutsourceContent() {
           subtitle={activeJob.deviceDescription}
           tabs={jobDrawerTabs(activeJob)}
           onClose={() => setActiveJobId(null)}
-          actions={jobRowActions(activeJob)}
+          actions={jobDrawerActions(activeJob)}
         />
       )}
 
@@ -1040,7 +1276,7 @@ function OutsourceContent() {
                 labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
                 inputClassName="h-11 text-sm"
                 placeholder="Search by vendor name, phone or specialty…"
-                items={outsourceVendors}
+                items={activeVendors}
                 selectedLabel={jobForm.vendorId ? vendorSearch : undefined}
                 formatSelected={v => v.name}
                 onSelect={v => {
@@ -1084,6 +1320,11 @@ function OutsourceContent() {
               <input id="outsource-serial" className="form-input h-11 w-full text-sm" placeholder="e.g. A1B2C3"
                 value={jobForm.serial}
                 onChange={e => setJobForm(f => ({ ...f, serial: e.target.value }))} />
+              {stockMatch && (
+                <p className="mt-1.5 text-xs" style={{ color: 'var(--info-text)' }}>
+                  Our stock: {stockMatch.productName} in {LOCATIONS[stockMatch.location]?.name ?? stockMatch.location}. It moves to Vendor while it is out, and back when it returns.
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="outsource-service-type" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Service Type *</label>
@@ -1103,11 +1344,27 @@ function OutsourceContent() {
               onChange={e => setJobForm(f => ({ ...f, issueDescription: e.target.value }))} />
           </div>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div>
+            <label htmlFor="outsource-accessories" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Handed over with</label>
+            <input id="outsource-accessories" className="form-input h-11 w-full text-sm" placeholder="e.g. Charger, battery — leave empty for the device only"
+              value={jobForm.accessories}
+              onChange={e => setJobForm(f => ({ ...f, accessories: e.target.value }))} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             <div>
               <label htmlFor="outsource-date-sent" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Date Sent *</label>
               <input id="outsource-date-sent" type="date" className="form-input h-11 w-full text-sm" value={jobForm.sentDate}
                 onChange={e => setJobForm(f => ({ ...f, sentDate: e.target.value }))} />
+            </div>
+            <div>
+              <label htmlFor="outsource-expected" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Promised back by</label>
+              <input id="outsource-expected" type="date" className="form-input h-11 w-full text-sm" value={shownExpected}
+                min={jobForm.sentDate || undefined}
+                onChange={e => { setExpectedTouched(true); setJobForm(f => ({ ...f, expectedReturnDate: e.target.value })) }} />
+              <p className="mt-1 text-xs text-slate-500">
+                {expectedTouched ? 'As agreed with the vendor' : jobForm.serviceType ? `Usual time for ${svcLabel(jobForm.serviceType as OutsourceServiceType)} — change it to what the vendor promised` : 'Set from the service type'}
+              </p>
             </div>
             <div>
               <label htmlFor="outsource-quoted-cost" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Quoted Cost (KSh)</label>
@@ -1150,6 +1407,9 @@ function OutsourceContent() {
               </>
             )}
           >
+            <p className="text-xs text-slate-500">
+              Received by <strong>{currentUser?.name ?? 'you'}</strong>{job.expectedReturnDate ? ` · promised ${fmtDate(job.expectedReturnDate)}` : ''}
+            </p>
             <div>
               <label htmlFor="outsource-return-date" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Return Date *</label>
               <input id="outsource-return-date" type="date" className="form-input h-11 w-full text-sm" value={returnForm.returnedDate}
@@ -1192,7 +1452,7 @@ function OutsourceContent() {
                   </legend>
                   <div className="mt-2 flex flex-col gap-2">
                     {([
-                      { v: 'keep', label: 'Keep current status — decide later', sub: `Stay as "${linkedRepair.status.replace(/_/g, ' ')}"` },
+                      { v: 'keep', label: 'Put it back where it was — decide later', sub: `Back to "${statusAfterUnfixedReturn('keep', job.previousRepairStatus).replace(/_/g, ' ')}", as before it went out` },
                       { v: 'in_repair', label: 'Resume in-house repair', sub: 'Move back to In Repair so tech can continue' },
                       { v: 'unrepairable', label: 'Mark as unrepairable', sub: 'Device cannot be fixed — inform the customer' },
                     ] as { v: 'keep' | 'in_repair' | 'unrepairable'; label: string; sub: string }[]).map(opt => {
@@ -1229,7 +1489,12 @@ function OutsourceContent() {
                     value={returnForm.finalCost}
                     onChange={e => setReturnForm(f => ({ ...f, finalCost: e.target.value }))} />
                 </div>
-                {job.quotedCost && <p className="mt-1 text-xs text-slate-500">Quoted: {fmtKes(job.quotedCost)}</p>}
+                {job.quotedCost ? (
+                  <p className="mt-1 text-xs" style={{ color: Number(returnForm.finalCost) > job.quotedCost ? 'var(--danger-text)' : 'var(--text-3)' }}>
+                    Quoted: {fmtKes(job.quotedCost)}
+                    {Number(returnForm.finalCost) > job.quotedCost ? ` — ${fmtKes(Number(returnForm.finalCost) - job.quotedCost)} over the quote` : ''}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label htmlFor="outsource-return-notes" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Return Notes</label>
@@ -1239,21 +1504,283 @@ function OutsourceContent() {
                   onChange={e => setReturnForm(f => ({ ...f, returnNotes: e.target.value }))} />
               </div>
             </div>
+
+            {returnForm.isResolved === true && job.repairOrderId && Number(returnForm.finalCost) > 0 && (() => {
+              const linkedRepair = repairs.find(r => r.id === job.repairOrderId)
+              if (!linkedRepair) return null
+              const exempt = linkedRepair.billingExempt || linkedRepair.underWarranty
+              const suggested = suggestedCustomerCharge(Number(returnForm.finalCost))
+              return (
+                <fieldset className="outsource-charge">
+                  <legend>Charge the customer for this work</legend>
+                  {exempt ? (
+                    <p>{linkedRepair.ref} is not charged to the customer (warranty or no-charge), so nothing is added.</p>
+                  ) : !linkedRepair.quote ? (
+                    <p>{linkedRepair.ref} has no quote yet — add the specialist work when you quote it.</p>
+                  ) : linkedRepair.invoiceId ? (
+                    <p>{linkedRepair.ref} is already invoiced — add the charge on the invoice in Finance.</p>
+                  ) : (
+                    <>
+                      <label className="outsource-charge__tick">
+                        <input type="checkbox" checked={returnForm.chargeCustomer} onChange={e => setReturnForm(f => ({ ...f, chargeCustomer: e.target.checked }))} />
+                        Add it to {linkedRepair.ref}'s quote
+                      </label>
+                      {returnForm.chargeCustomer && (
+                        <div className="outsource-charge__amount">
+                          <span>KSh</span>
+                          <input type="number" inputMode="decimal" aria-label="Customer price for the outsourced work" className="form-input h-11 w-full text-sm"
+                            placeholder={String(suggested)}
+                            value={returnForm.customerCharge}
+                            onChange={e => setReturnForm(f => ({ ...f, customerCharge: e.target.value }))} />
+                          <small>Vendor cost {fmtKes(Number(returnForm.finalCost))} + {OUTSOURCE_DEFAULT_MARKUP_PCT}% = {fmtKes(suggested)}. Change it if you agreed another price.</small>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </fieldset>
+              )
+            })()}
+
+            <OutsourcePhotos jobId={job.id} canAdd returned />
+          </Modal>
+        )
+      })()}
+
+      {/* ── A weekly statement ────────────────────────────────────────────── */}
+      {openStatementId && (() => {
+        const st = outsourceStatements.find(x => x.id === openStatementId)
+        if (!st) return null
+        const pending = st.status === 'pending'
+        return (
+          <Modal
+            title={`${st.ref} · ${st.vendorName}`}
+            subtitle={`Jobs returned ${fmtDate(st.weekStart)} – ${fmtDate(st.weekEnd)}`}
+            width={720}
+            variant="enterprise"
+            accent="#2563EB"
+            icon={<Fa icon={faBuilding} />}
+            onClose={() => setOpenStatementId(null)}
+            footer={(
+              <>
+                <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setOpenStatementId(null)}>Close</button>
+                {pending && canConfirmStatements && (
+                  <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={() => { if (confirmOutsourceStatement(st.id)) setOpenStatementId(null) }}>
+                    Confirm — create bill
+                  </button>
+                )}
+                {!pending && st.billRef && (
+                  <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={openBills}>Open bill {st.billRef}</button>
+                )}
+              </>
+            )}
+          >
+            <ul className="outsource-statement-lines">
+              {st.lines.map(line => (
+                <li key={line.jobId}>
+                  <span className="outsource-statement-lines__main">
+                    <button type="button" className="outsource-link" onClick={() => { setOpenStatementId(null); setActiveJobId(line.jobId) }}>{line.jobRef}</button>
+                    <span>{line.description}</span>
+                  </span>
+                  <span className="outsource-statement-lines__amount">{fmtKes(line.amount)}</span>
+                  {pending && (
+                    <button type="button" className="outsource-act" onClick={() => { setHoldJobId(line.jobId); setHoldReason('') }}>Hold</button>
+                  )}
+                </li>
+              ))}
+              <li className="is-total">
+                <span className="outsource-statement-lines__main">Total</span>
+                <span className="outsource-statement-lines__amount">{fmtKes(st.total)}</span>
+                {pending && <span className="outsource-statement-lines__spacer" />}
+              </li>
+            </ul>
+            <p className="text-xs text-slate-500">
+              {pending
+                ? `Confirming creates one draft bill, one line per job, coded to 6301 Solutions and Expert Repair Services' Costs. Hold a disputed job to leave it off; it can be billed later.${canConfirmStatements ? '' : ' Finance, an Admin Officer or the Director confirms it.'}`
+                : `Confirmed${st.confirmedByName ? ` by ${st.confirmedByName}` : ''}${st.confirmedAt ? ` on ${fmtDate(st.confirmedAt)}` : ''}. Corrections are made with a supplier credit note in Finance.`}
+            </p>
+
+            {holdJobId && (
+              <div className="outsource-charge">
+                <label htmlFor="outsource-hold-reason" className="outsource-charge__tick">
+                  Hold {st.lines.find(l => l.jobId === holdJobId)?.jobRef} back — why?
+                </label>
+                <textarea id="outsource-hold-reason" className="form-input mt-2 min-h-[64px] w-full resize-y py-2 text-sm" rows={2}
+                  placeholder="e.g. Vendor charged more than agreed; checking with them"
+                  value={holdReason} onChange={e => setHoldReason(e.target.value)} />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" className="outsource-act" onClick={() => setHoldJobId(null)}>Keep it on</button>
+                  <button type="button" className="outsource-act is-danger" onClick={() => {
+                    if (holdOutsourceStatementJob(st.id, holdJobId, holdReason)) {
+                      setHoldJobId(null)
+                      if (st.lines.length <= 1) setOpenStatementId(null)
+                    }
+                  }}>Hold back</button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        )
+      })()}
+
+      {/* ── Edit open job ─────────────────────────────────────────────────── */}
+      {editJobId && (() => {
+        const job = outsourceJobs.find(j => j.id === editJobId)
+        if (!job) return null
+        const vendorChoices = outsourceVendors.filter(v => v.active !== false || v.id === job.vendorId)
+        return (
+          <Modal
+            title={`Change ${job.ref}`}
+            subtitle={job.deviceDescription}
+            width={720}
+            variant="enterprise"
+            accent="#2563EB"
+            icon={<Fa icon={faScrewdriverWrench} />}
+            onClose={() => setEditJobId(null)}
+            footer={(
+              <>
+                <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setEditJobId(null)}>Cancel</button>
+                <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={submitEditJob}>Save changes</button>
+              </>
+            )}
+          >
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label htmlFor="outsource-edit-vendor" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Vendor *</label>
+                <select id="outsource-edit-vendor" className="form-input h-11 w-full text-sm" value={editForm.vendorId}
+                  onChange={e => setEditForm(f => ({ ...f, vendorId: e.target.value }))}>
+                  {vendorChoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="outsource-edit-service" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Service Type *</label>
+                <select id="outsource-edit-service" className="form-input h-11 w-full text-sm" value={editForm.serviceType}
+                  onChange={e => setEditForm(f => ({ ...f, serviceType: e.target.value as OutsourceServiceType }))}>
+                  {OUTSOURCE_SERVICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="outsource-edit-issue" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Issue / What to do *</label>
+              <textarea id="outsource-edit-issue" className="form-input min-h-[76px] w-full resize-y py-3 text-sm" rows={2}
+                value={editForm.issueDescription} onChange={e => setEditForm(f => ({ ...f, issueDescription: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label htmlFor="outsource-edit-quote" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Quoted Cost (KSh)</label>
+                <input id="outsource-edit-quote" type="number" inputMode="decimal" className="form-input h-11 w-full text-sm"
+                  value={editForm.quotedCost} onChange={e => setEditForm(f => ({ ...f, quotedCost: e.target.value }))} />
+              </div>
+              <div>
+                <label htmlFor="outsource-edit-expected" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Promised back by</label>
+                <input id="outsource-edit-expected" type="date" className="form-input h-11 w-full text-sm" min={job.sentDate?.slice(0, 10)}
+                  value={editForm.expectedReturnDate} onChange={e => setEditForm(f => ({ ...f, expectedReturnDate: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="outsource-edit-accessories" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Handed over with</label>
+              <input id="outsource-edit-accessories" className="form-input h-11 w-full text-sm"
+                value={editForm.accessories} onChange={e => setEditForm(f => ({ ...f, accessories: e.target.value }))} />
+            </div>
+            <div>
+              <label htmlFor="outsource-edit-notes" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Notes</label>
+              <textarea id="outsource-edit-notes" className="form-input min-h-[64px] w-full resize-y py-3 text-sm" rows={2}
+                value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <p className="text-xs text-slate-500">Each change is kept on the job, with who made it.</p>
+          </Modal>
+        )
+      })()}
+
+      {/* ── Cancel open job ───────────────────────────────────────────────── */}
+      {cancelJobId && (() => {
+        const job = outsourceJobs.find(j => j.id === cancelJobId)
+        if (!job) return null
+        const linked = job.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : null
+        return (
+          <Modal
+            title={`Cancel ${job.ref}`}
+            subtitle={`${job.deviceDescription} · ${job.vendorName}`}
+            width={560}
+            variant="enterprise"
+            accent="#DC2626"
+            icon={<Fa icon={faScrewdriverWrench} />}
+            onClose={() => setCancelJobId(null)}
+            footer={(
+              <>
+                <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setCancelJobId(null)}>Keep the job</button>
+                <button type="button" className="btn-danger min-h-11 px-5 text-sm" onClick={submitCancelJob}>Cancel job</button>
+              </>
+            )}
+          >
+            <p className="text-sm text-slate-600">
+              Use this when the machine never went, or was called back before any work. No bill is raised.
+              {linked ? ` ${linked.ref} goes back to "${String(job.previousRepairStatus ?? linked.status).replace(/_/g, ' ')}" in the workshop.` : ''}
+              {job.stockSerialId ? ' The stock machine moves back to where it was.' : ''}
+              {' '}If the vendor did work, use Mark returned instead.
+            </p>
+            <div>
+              <label htmlFor="outsource-cancel-reason" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Why *</label>
+              <textarea id="outsource-cancel-reason" className="form-input min-h-[76px] w-full resize-y py-3 text-sm" rows={2}
+                placeholder="e.g. Sent to the wrong vendor; customer collected the machine"
+                value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+            </div>
+          </Modal>
+        )
+      })()}
+
+      {/* ── Charge the customer for outsourced work ───────────────────────── */}
+      {chargeJobId && (() => {
+        const job = outsourceJobs.find(j => j.id === chargeJobId)
+        const linked = job?.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : null
+        if (!job || !linked) return null
+        return (
+          <Modal
+            title="Charge the customer"
+            subtitle={`${job.ref} · ${linked.ref} · ${linked.customerName}`}
+            width={520}
+            variant="enterprise"
+            accent="#16A34A"
+            icon={<Fa icon={faCircleCheck} />}
+            onClose={() => setChargeJobId(null)}
+            footer={(
+              <>
+                <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setChargeJobId(null)}>Cancel</button>
+                <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={submitCharge}>Add to quote</button>
+              </>
+            )}
+          >
+            <p className="text-sm text-slate-600">
+              The vendor charged {fmtKes(job.finalCost ?? 0)}. This adds a line for the {svcLabel(job.serviceType).toLowerCase()} to {linked.ref}'s quote, so it is on the customer's invoice.
+            </p>
+            <div>
+              <label htmlFor="outsource-charge-amount" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Customer pays (KSh) *</label>
+              <input id="outsource-charge-amount" type="number" inputMode="decimal" className="form-input h-11 w-full text-sm"
+                value={chargeAmount} onChange={e => setChargeAmount(e.target.value)} />
+              <p className="mt-1 text-xs text-slate-500">Suggested: cost + {OUTSOURCE_DEFAULT_MARKUP_PCT}% = {fmtKes(suggestedCustomerCharge(job.finalCost ?? 0))}</p>
+            </div>
           </Modal>
         )
       })()}
 
       {/* ── Add / Edit Vendor Modal ───────────────────────────────────────── */}
       {showVendorModal && (
-        <div className="modal-overlay" style={{ zIndex: 9050 }} onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>
-          <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-t1">{editVendorId ? 'Edit Vendor' : 'Add Vendor'}</h3>
-                {vendorModalFromJob && <p className="text-[10px] text-t3 mt-0.5">← Will return to Send for Repair after saving</p>}
-              </div>
-              <button onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
+        <Modal
+          title={editVendorId ? 'Edit vendor' : 'Add vendor'}
+          subtitle={vendorModalFromJob ? 'Returns to Send for repair after saving' : undefined}
+          width={480}
+          variant="enterprise"
+          icon={<Fa icon={faBuilding} />}
+          onClose={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={submitVendor}>
+                {editVendorId ? 'Save changes' : vendorModalFromJob ? 'Save & select' : 'Add vendor'}
+              </button>
+            </>
+          )}
+        >
+          <div className="outsource-vendor-form">
 
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1280,19 +1807,25 @@ function OutsourceContent() {
               </div>
 
               <div>
+                <label htmlFor="outsource-vendor-billing" className="text-[11px] font-semibold text-t2 block mb-1">Billing</label>
+                <select id="outsource-vendor-billing" className="form-input w-full text-[12px]" value={vendorForm.billing}
+                  onChange={e => setVendorForm(f => ({ ...f, billing: e.target.value as 'weekly' | 'per_job' }))}>
+                  <option value="weekly">Weekly</option>
+                  <option value="per_job">Per job</option>
+                </select>
+                <p className="outsource-vendor-hint">{vendorForm.billing === 'weekly'
+                  ? 'One statement and one bill for the week the machines come back.'
+                  : 'A bill for each job when the machine comes back.'}</p>
+              </div>
+
+              <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-2">Specialisations</label>
                 <div className="flex flex-wrap gap-1.5">
                   {OUTSOURCE_SERVICE_TYPES.map(s => {
                     const active = vendorForm.specializations.includes(s.value)
                     return (
-                      <button key={s.value} onClick={() => toggleSpec(s.value)}
-                        style={{
-                          fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
-                          background:  active ? 'var(--navy)' : 'var(--bg-surface)',
-                          color:       active ? '#fff'    : 'var(--text-4)',
-                          borderColor: active ? 'var(--navy)' : 'var(--border-lt)',
-                          fontWeight:  active ? 600 : 400,
-                        }}>
+                      <button key={s.value} type="button" onClick={() => toggleSpec(s.value)}
+                        className={`serial-chip${active ? ' is-active' : ''}`} aria-pressed={active}>
                         {s.label}
                       </button>
                     )
@@ -1307,14 +1840,25 @@ function OutsourceContent() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={submitVendor}>
-                {editVendorId ? 'Save Changes' : vendorModalFromJob ? 'Save & Select Vendor' : 'Add Vendor'}
-              </button>
-            </div>
+            {editVendorId && (
+              <div className="outsource-vendor-status">
+                <label>
+                  <input type="checkbox" checked={vendorForm.active} onChange={e => setVendorForm(f => ({ ...f, active: e.target.checked }))} />
+                  Active — offered when sending a machine out
+                </label>
+                {outsourceJobs.some(j => j.vendorId === editVendorId)
+                  ? <p>Vendors with jobs on record stay for their history; untick Active to stop using one.</p>
+                  : (
+                    <button type="button" className="outsource-act is-danger" onClick={() => {
+                      if (!window.confirm(`Remove ${vendorForm.name}? It has no jobs.`)) return
+                      if (deleteOutsourceVendor(editVendorId)) { setShowVendorModal(false); setEditVendorId(null) }
+                    }}>Remove vendor</button>
+                  )}
+              </div>
+            )}
+
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Record Payment Modal ──────────────────────────────────────────── */}
@@ -1358,7 +1902,7 @@ function OutsourceContent() {
                 <p className="text-[11px] mb-3 rounded-lg px-3 py-2" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
                   Payments go through Finance against the vendor's bills.
                   {draftBills.length > 0 && <> {draftBills.map(b => b.ref).join(', ')} {draftBills.length === 1 ? 'is a draft' : 'are drafts'} — Finance confirms {draftBills.length === 1 ? 'it' : 'them'} before payment.</>}
-                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'has' : 'have'} no bill yet — use “Create bill” on the job.</>}
+                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'is' : 'are'} not billed yet — {vendorBilling(payVendorId) === 'weekly' ? 'they go on the weekly statement, which is confirmed into a bill' : 'use “Create bill” on the job'}.</>}
                 </p>
               )}
 
@@ -1380,7 +1924,7 @@ function OutsourceContent() {
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
                 <select aria-label="Payment bank account" className="form-input w-full text-[12px]" value={payBankAccountId} onChange={e => setPayBankAccountId(e.target.value)}>
                   <option value="">— Select Bank Account —</option>
-                  {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{bankChoiceLabel(a)}</option>)}
                 </select>
               </div>
               <div>

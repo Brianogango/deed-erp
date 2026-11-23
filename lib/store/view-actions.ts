@@ -41,7 +41,7 @@ const REPAIR_ACTIONS = [
     'moveRepairToPreviousProgress', 'requestProcurement', 'correctPartsCount', 'raisePartsPurchaseOrder',
     'markUnrepairable', 'declineQuote', 'returnToCustomer', 'leaveDeviceWithDeed', 'convertRetainedRepairToDonation',
     'convertRetainedRepairToBuyBack', 'createTradeInFromRepair', 'fileWarrantyClaim', 'showToast',
-    'appendRepairHistory', 'setModule', 'initRelease', 'addOutsourceJob',
+    'appendRepairHistory', 'setModule', 'initRelease', 'addOutsourceJob', 'remindLateOutsourceJobs',
 ] as const
 
 const SHELL_ACTIONS = [
@@ -65,8 +65,8 @@ const FINANCE_ACTIONS = [
     'createPurchaseReturn', 'createReceiptFromPO', 'deleteInvoice', 'deletePO', 'deleteStatementLine',
     'getCustomerCreditBalance', 'initRelease', 'logReturnPickup', 'matchStatementLine', 'postInvoice',
     'recordOutsourcePayment', 'createOutsourceJobBill', 'registerPayment', 'reverseInvoicePayment',
-    'setInvoicePaymentBlocked', 'payExpense', 'payPayrollRun', 'reimburseExpense', 'removePOLine',
-    'resetInvoiceToDraft', 'restoreCancelledInvoice', 'returnOutsourceJob', 'revertPOToDraft', 'reviewExpense', 'saveBankRecon',
+    'setInvoicePaymentBlocked', 'payExpense', 'payPayrollRun', 'reimburseExpense', 'expenseAction', 'removePOLine',
+    'resetInvoiceToDraft', 'restoreCancelledInvoice', 'returnOutsourceJob', 'cancelOutsourceJob', 'updateOutsourceJob', 'deleteOutsourceVendor', 'chargeOutsourceToRepair', 'remindLateOutsourceJobs', 'prepareOutsourceStatements', 'holdOutsourceStatementJob', 'releaseOutsourceJobHold', 'confirmOutsourceStatement', 'revertPOToDraft', 'reviewExpense', 'saveBankRecon',
     'scheduleInvoiceDelivery', 'sendPO', 'setModule', 'showToast', 'submitExpense', 'unmatchStatementLine',
     'updateAccount', 'updateInvoice', 'moveInvoiceLine', 'addInvoiceSection', 'updateOutsourceVendor', 'updatePO',
     'updatePOLine', 'validateReceipt', 'getDocumentPaymentDetails', 'setDocumentPaymentDetails', 'addBankAccount',
@@ -94,7 +94,7 @@ const COMMERCE_ACTIONS = [
 
 const AFTER_SALES_ACTIONS = [
     'addContact', 'approveBuyBack', 'approveExchange', 'approveReturn', 'cancelExchange', 'completeExchange',
-    'confirmDonation', 'createBuyBack', 'creditBuyBack', 'createDonation', 'createExchange', 'createReturnOrder',
+    'confirmDonation', 'createBuyBack', 'creditBuyBack', 'receiveFreeBuyBack', 'createDonation', 'createExchange', 'createReturnOrder',
     'deleteBuyBack', 'deleteDonation', 'payBuyBack', 'processReturn', 'receiveReturn', 'registerCustomerReturnSerial',
     'rejectReturn', 'cancelWarranty', 'releaseSerialToStock', 'showToast', 'stockBuyBack',
 ] as const
@@ -106,7 +106,7 @@ const OPERATIONS_ACTIONS = [
     'pickRelease', 'removeRefurbishmentPart', 'requestPartFromInventory', 'showToast', 'transferToSell',
     'updateHoldover', 'updateRefurbishmentJob', 'updateRefurbishmentPart', 'updateRepair', 'updateSerial',
     'verifyReleaseItem', 'voidRelease', 'writeOffRefurbishmentJob', 'restoreRefurbishmentJob', 'fixRefurbJobNumbers',
-    'fixAdjustmentNumbers', 'intakeTaggedMachines', 'identifyRefurbUnit', 'harvestRefurbishmentJob',
+    'fixAdjustmentNumbers', 'intakeTaggedMachines', 'identifyRefurbUnit', 'harvestRefurbishmentJob', 'deleteRefurbishmentRecords',
 ] as const
 
 /** The per-area action bundles the provider hands to the narrow store contexts. */

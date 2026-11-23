@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
 import { allocateCheque, chequeLinkedRefs, chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
@@ -184,25 +185,46 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
     },
   ]
 
+  // On a phone the four tiles and two labelled filter rows filled the screen
+  // before the first cheque: tiles sit two by two with the count and amount on
+  // one line, the hint shows from tablet width up.
   const tile = (label: string, list: Cheque[], hint: string, tone = '') => (
-    <div className={`min-w-[150px] flex-1 rounded-lg border px-3 py-2 ${tone}`} style={{ borderColor: 'var(--border-lt)' }}>
-      <p className="mb-0.5 text-[10px] text-t3">{label}</p>
-      <p className="text-base font-semibold text-t1">{list.length}</p>
-      <p className="font-mono text-[11px] text-t2">{fmtKes(summary.sum(list))}</p>
-      <p className="mt-0.5 text-[10px] text-t3">{hint}</p>
+    <div className={`min-w-0 rounded-lg border px-2.5 py-1.5 sm:min-w-[150px] sm:flex-1 sm:px-3 sm:py-2 ${tone}`} style={{ borderColor: 'var(--border-lt)' }}>
+      <p className="truncate text-[10px] text-t3 sm:mb-0.5">{label}</p>
+      <p className="flex flex-wrap items-baseline gap-x-2 sm:block">
+        <span className="text-sm font-semibold text-t1 sm:block sm:text-base">{list.length}</span>
+        <span className="font-mono text-[11px] text-t2 sm:block">{fmtKes(summary.sum(list))}</span>
+      </p>
+      <p className="mt-0.5 hidden text-[10px] text-t3 sm:block">{hint}</p>
     </div>
   )
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="flex flex-wrap gap-3 border-b px-4 py-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
+      <div className="grid grid-cols-2 gap-2 border-b px-3 py-2 sm:flex sm:flex-wrap sm:gap-3 sm:px-4 sm:py-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
         {tile('Ready for banking', summary.ready, 'Received, date has come', summary.ready.length ? 'bg-amber-50' : '')}
         {tile('Due tomorrow', summary.tomorrow, 'Received and given')}
         {tile('Held, not yet banked', summary.held, 'Received cheques waiting')}
         {tile('We owe on cheques', summary.owed, 'Given, not yet cleared')}
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 border-b px-4 py-2.5" style={{ borderColor: 'var(--border-lt)' }}>
+      {/* Phone: both filters as dropdowns beside Add cheque, one row. */}
+      <div className="flex items-center gap-2 border-b px-3 py-2 sm:hidden" style={{ borderColor: 'var(--border-lt)' }}>
+        <select aria-label="Type" className="form-input min-w-0 flex-1 py-1.5 text-[12px]" value={direction} onChange={e => setDirection(e.target.value as typeof direction)}>
+          <option value="all">All types</option>
+          <option value="received">Received</option>
+          <option value="given">Given</option>
+        </select>
+        <select aria-label="Show" className="form-input min-w-0 flex-1 py-1.5 text-[12px]" value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}>
+          <option value="open">Waiting</option>
+          <option value="deposited">At the bank</option>
+          <option value="closed">Closed</option>
+          <option value="all">All</option>
+        </select>
+        <button type="button" className="btn-primary shrink-0 px-3 py-1.5 text-[12px]" onClick={() => setAdding(true)}>Add</button>
+      </div>
+
+      <div className="hidden flex-wrap items-end gap-3 border-b px-4 py-2.5 sm:flex" style={{ borderColor: 'var(--border-lt)' }}>
         <div className="inventory-view-group" role="group" aria-label="Type">
           <span className="inventory-view-label">Type</span>
           <div className="inventory-view-segmented">
@@ -561,21 +583,23 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
 
         {linkedDocs.length > 0 && (
           <div className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--border-lt)' }}>
-            <table className="w-full" data-no-responsive>
-              <tbody>
-                {allocation.map(({ doc, amount }) => (
-                  <tr key={doc.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-lt)' }}>
-                    <td className="py-1.5 pr-2 font-mono text-t1">{doc.ref}</td>
-                    <td className="py-1.5 pr-2 text-t3">{doc.partnerName}</td>
-                    <td className="py-1.5 pr-2 text-right text-t3 whitespace-nowrap">{fmtKes(docBalance(doc))} owing</td>
-                    <td className="py-1.5 pr-2 text-right font-semibold whitespace-nowrap">{amount > 0 ? `pays ${fmtKes(amount)}` : 'not covered'}</td>
-                    <td className="py-1.5 text-right">
-                      <button type="button" className="text-[11px] text-red-600 underline" onClick={() => removeDoc(doc.id)} aria-label={`Remove ${doc.ref}`}>Remove</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* Stacked, not a five-column table: on a phone the columns ran
+                off the right edge and the Remove link was cut in half. */}
+            <ul className="flex flex-col">
+              {allocation.map(({ doc, amount }) => (
+                <li key={doc.id} className="flex flex-col gap-0.5 border-b py-1.5 last:border-0" style={{ borderColor: 'var(--border-lt)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-mono font-semibold text-t1">{doc.ref}</span>
+                    <button type="button" className="shrink-0 text-[11px] text-red-600 underline" onClick={() => removeDoc(doc.id)} aria-label={`Remove ${doc.ref}`}>Remove</button>
+                  </div>
+                  {doc.partnerName && <span className="min-w-0 truncate text-t3">{doc.partnerName}</span>}
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span className="text-t3">{fmtKes(docBalance(doc))} owing</span>
+                    <span className="font-semibold text-t1">{amount > 0 ? `pays ${fmtKes(amount)}` : 'not covered'}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
             {linkedDocs.length > 1 && (
               <p className="mt-1.5 text-t3">
                 Total owing {fmtKes(linkedTotal)}
@@ -605,7 +629,7 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
                 }}
               >
                 <option value="">{form.direction === 'received' ? 'Bank account it will be banked into…' : 'Bank account it is drawn on…'}</option>
-                {activeBanks.map(b => <option key={b.id} value={b.id}>{b.bankName || b.name}</option>)}
+                {activeBanks.map(b => <option key={b.id} value={b.id}>{bankChoiceLabel(b)}</option>)}
               </select>
             )}
             {canWithhold && (

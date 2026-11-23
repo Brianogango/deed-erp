@@ -2,8 +2,9 @@
 import { rememberRecentRecord } from '@/lib/recent-records'
 import { RecordPager } from '@/components/erp/RecordPager'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
+import MergeContactModal from '@/components/contacts/MergeContactModal'
 import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
-import { PAY_BY_LABELS } from '@/lib/contacts/payment-details'
+import { PAY_BY_LABELS, hasPaymentDetails } from '@/lib/contacts/payment-details'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
@@ -172,6 +173,9 @@ function ContactsInner() {
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const canSeeCredit = userCan(currentUser, 'sales.credit_applications')
+  // Duplicate contacts: a Director merges one into the other (sales.contacts.merge).
+  const canMerge = userCan(currentUser, 'sales.contacts.merge')
+  const [mergeFrom, setMergeFrom] = useState<Contact | null>(null)
   const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
   const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
     ? tabValue as FilterTab
@@ -268,7 +272,7 @@ function ContactsInner() {
       || c.phone.includes(q)
       || (c.mobile ?? '').includes(q)
       || (c.vatNumber ?? '').toLowerCase().includes(q)
-      || (c.idNumber ?? '').includes(q)
+      || (c.idNumber ?? '').toLowerCase().includes(q)
       || (c.city ?? '').toLowerCase().includes(q)
     const matchTab =
       tab === 'all'         ? true :
@@ -492,6 +496,15 @@ function ContactsInner() {
             Restore
           </button>
         ) : (
+          <>
+          {canMerge && (
+            <button
+              className="contacts-row-action"
+              title="Merge this duplicate into another contact"
+              onClick={e => { e.stopPropagation(); setMergeFrom(c) }}>
+              Merge
+            </button>
+          )}
           <button
             className="contacts-row-action"
             onClick={async e => {
@@ -505,6 +518,7 @@ function ContactsInner() {
             }}>
             Archive
           </button>
+          </>
         )}
       </div>
     )
@@ -539,16 +553,15 @@ function ContactsInner() {
             {c.isVendor && <span className="contacts-badge contacts-badge--vendor">Vendor</span>}
           </div>
         </div>
-        <div className="contacts-mobile-card__channels">
-          <span className={!c.phone && !c.mobile ? 'is-muted' : ''}>{c.phone || c.mobile || 'No phone'}</span>
-          <span className={!c.email ? 'is-muted' : ''}>{c.email || 'No email'}</span>
-        </div>
-        <div className="contacts-mobile-card__footer">
-          <span>{[c.city, c.country].filter(Boolean).join(', ') || 'Location not set'}</span>
-          <span className={(creditByCustomer.get(c.id) ?? 0) > 0 ? 'contacts-money--positive' : ''}>
-            {(creditByCustomer.get(c.id) ?? 0) > 0 ? `${fmtKes(creditByCustomer.get(c.id))} credit` : activity}
-          </span>
-        </div>
+        {/* One line of what is known — phone, place, activity — instead of
+            a row each with "No email" / "Location not set" placeholders. */}
+        <p className="contacts-mobile-card__line">
+          {[
+            c.phone || c.mobile,
+            c.city || c.country,
+            (creditByCustomer.get(c.id) ?? 0) > 0 ? `${fmtKes(creditByCustomer.get(c.id))} credit` : activity,
+          ].filter(Boolean).join(' · ')}
+        </p>
       </article>
     )
   }
@@ -674,6 +687,9 @@ function ContactsInner() {
                 <button className="btn-outline" onClick={() => { openEdit(vc); setViewContact(null) }}>
                   <Fa icon={faPen} className="mr-1" /> Edit
                 </button>
+                {canMerge && !vc.isArchived && (
+                  <button className="btn-outline" onClick={() => setMergeFrom(vc)} title="Merge this duplicate into another contact">Merge</button>
+                )}
               </div>
             </div>
 
@@ -804,28 +820,33 @@ function ContactsInner() {
                 <section className="contacts-panel contacts-panel--credit">
                   <h4>Credit & payment</h4>
                   <div className="contacts-credit-summary">
-                    <div><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
+                    <div className="contacts-credit-summary__dup"><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
                     <div><span>Payment terms</span><strong>{vc.paymentTermsDays === 0 ? 'Due immediately' : `${vc.paymentTermsDays ?? 0} days`}</strong></div>
                     <div><span>Credit limit</span><strong>{vc.creditLimit ? fmtKes(vc.creditLimit) : '—'}</strong></div>
                     {vc.type === 'company' && <div><span>Credit standing</span><strong>{CREDIT_STANDING_LABELS[vc.creditStatus ?? 'none'] ?? vc.creditStatus}{vc.creditReviewDue ? ` · review ${fmtDate(vc.creditReviewDue)}` : ''}</strong></div>}
-                    <div><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
+                    <div className="contacts-credit-summary__dup"><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
                   </div>
                   <p className="contacts-help-copy">Credit can be applied to posted unpaid invoices from Finance.</p>
                 </section>
 
+                {/* Only what is filled in: a block of dashes said nothing.
+                    hasPaymentDetails covers M-Pesa too, so a supplier paid by
+                    Paybill alone still gets the panel. */}
+                {(hasPaymentDetails(vc) || Boolean(vc.vendorRating) || (vc.isCustomer && Number(vc.loyaltyPoints) > 0)) && (
                 <section className="contacts-panel contacts-panel--banking">
-                  <h4>Payment details</h4>
+                  <h4>{hasPaymentDetails(vc) ? 'Payment details' : 'Other details'}</h4>
                   <div className="contacts-info-list">
-                    {vc.isVendor && <InfoRow label="Pay by" value={PAY_BY_LABELS[vc.payBy ?? ''] ?? 'Not set'} />}
-                    <InfoRow label="Bank" value={vc.bankName || '—'} />
-                    <InfoRow label="Account" value={vc.bankAccount || '—'} mono />
-                    <InfoRow label="Branch" value={vc.bankBranch || '—'} />
-                    {Boolean(vc.mpesaPaybill) && <InfoRow label="M-Pesa" value={vc.mpesaPaybill!} mono />}
-                    {Boolean(vc.mpesaAccount) && <InfoRow label="M-Pesa account" value={vc.mpesaAccount!} mono />}
+                    {vc.isVendor && hasPaymentDetails(vc) && <InfoRow label="Pay by" value={PAY_BY_LABELS[vc.payBy ?? ''] ?? 'Not set'} />}
+                    {vc.bankName && <InfoRow label="Bank" value={vc.bankName} />}
+                    {vc.bankAccount && <InfoRow label="Account" value={vc.bankAccount} mono />}
+                    {vc.bankBranch && <InfoRow label="Branch" value={vc.bankBranch} />}
+                    {vc.mpesaPaybill && <InfoRow label="M-Pesa" value={vc.mpesaPaybill} mono />}
+                    {vc.mpesaAccount && <InfoRow label="M-Pesa account" value={vc.mpesaAccount} mono />}
                     {Boolean(vc.vendorRating) && <InfoRow label="Vendor rating" value={`${vc.vendorRating} / 5`} />}
-                    {vc.isCustomer && <InfoRow label="Loyalty points" value={vc.loyaltyPoints ?? 0} />}
+                    {vc.isCustomer && Number(vc.loyaltyPoints) > 0 && <InfoRow label="Loyalty points" value={vc.loyaltyPoints} />}
                   </div>
                 </section>
+                )}
 
                 <section className="contacts-panel contacts-panel--credits">
                   <h4>Customer credits</h4>
@@ -836,10 +857,10 @@ function ContactsInner() {
                         <tbody>
                           {clientCredits.map(credit => (
                             <tr key={String(credit.id || credit.ref)}>
-                              <td className="font-mono">{credit.ref}</td>
-                              <td>{customerCreditSourceLabel(credit)}</td>
-                              <td className="font-mono">{fmtKes(credit.balance)}</td>
-                              <td><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
+                              <td className="font-mono" data-col="ref">{credit.ref}</td>
+                              <td data-col="sub">{customerCreditSourceLabel(credit)}</td>
+                              <td className="font-mono" data-col="amount" data-label="Remaining">{fmtKes(credit.balance)}</td>
+                              <td data-col="status"><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
                             </tr>
                           ))}
                         </tbody>
@@ -859,12 +880,12 @@ function ContactsInner() {
                             const doc = invoiceDocState(invoice.status)
                             const payment = invoicePaymentStatus(invoice)
                             return <tr key={invoice.id}>
-                              <td className="font-mono">{displayDocRef(invoice.ref)}</td>
-                              <td>{fmtDate(invoice.date)}</td>
-                              <td className="font-mono">{fmtKes(invoice.total)}</td>
-                              <td className="font-mono">{fmtKes(invoice.amountPaid)}</td>
-                              <td className="font-mono">{fmtKes(invoiceResidual(invoice))}</td>
-                              <td><Badge status={doc === 'posted' ? payment : doc} label={doc === 'posted' ? PAYMENT_STATUS_LABELS[payment] : undefined} size="xs" /></td>
+                              <td className="font-mono" data-col="ref">{displayDocRef(invoice.ref)}</td>
+                              <td data-col="sub">{fmtDate(invoice.date)}</td>
+                              <td className="font-mono" data-col="amount" data-label="Amount">{fmtKes(invoice.total)}</td>
+                              <td className="font-mono" data-col="paid">{fmtKes(invoice.amountPaid)}</td>
+                              <td className="font-mono" data-col="amount" data-label="Outstanding">{fmtKes(invoiceResidual(invoice))}</td>
+                              <td data-col="status"><Badge status={doc === 'posted' ? payment : doc} label={doc === 'posted' ? PAYMENT_STATUS_LABELS[payment] : undefined} size="xs" /></td>
                             </tr>
                           })}
                         </tbody>
@@ -1176,6 +1197,9 @@ function ContactsInner() {
           </div>
           </div>
         </Modal>
+      )}
+      {mergeFrom && (
+        <MergeContactModal duplicate={mergeFrom} contacts={contacts} onClose={() => setMergeFrom(null)} showToast={showToast} />
       )}
     </ModuleChrome>
   )

@@ -35,3 +35,6 @@ playwright-report/
 # Uploaded repair files (QC/diagnosis reports) — served from disk, not in git
 .uploads/
 backups/
+
+# Graphify knowledge-graph output (local, per machine)
+graphify-out/

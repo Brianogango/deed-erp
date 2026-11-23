@@ -103,7 +103,7 @@ export default function MyDocuments() {
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-3">
 
       {/* Category cards */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="docs-chips flex items-center gap-2 flex-wrap">
         <button onClick={() => setCatFilter('all')}
           className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
           style={{ background: catFilter === 'all' ? 'var(--navy)' : 'var(--bg-muted)', color: catFilter === 'all' ? '#fff' : 'var(--text-4)' }}>
@@ -119,17 +119,17 @@ export default function MyDocuments() {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
+      <div className="card overflow-hidden docs-card">
+        <div className="docs-card__head px-4 py-2.5 border-b border-[var(--border-lt)] flex items-center justify-between gap-3 bg-[var(--bg-surface)]">
           <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider">Procedures</p>
-          <input aria-label="Search procedures" className="form-input text-[11px] py-1.5" style={{ width: 220 }}
+          <input aria-label="Search procedures" className="form-input text-[11px] py-1.5"
             placeholder="Search procedures…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         
         {visible.length === 0 ? (
           <div className="py-14 text-center text-t3 text-sm">
-            <div style={{ fontSize: 36 }} className="mb-2">📋</div>
-            {sops.length === 0 ? 'No SOPs yet. Click "+ Add SOP" to get started.' : 'No procedures match your search.'}
+            <Fa icon={faFileLines} className="docs-empty__icon" aria-hidden="true" />
+            <p className="m-0">{sops.length === 0 ? 'No procedures yet. Tap Add SOP to write the first one.' : 'No procedures match your search.'}</p>
           </div>
         ) : (
           <div className="w-full">

@@ -1,0 +1,1857 @@
+/*
+ * Phone fit — loaded last (app/layout.tsx) so it settles layouts that earlier
+ * sheets fight over. Every rule is for phones only and changes layout, never
+ * behaviour.
+ */
+
+/* iPhone Safari enlarges text it judges too small inside wide blocks. It did
+   so on sales and repair screens: lines stopped wrapping, cards widened past
+   the screen, labels pressed against the left edge and totals were cut off.
+   Text keeps the size the styles give it. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (max-width: 767px) {
+  /* ── Sales: order / quotation lines as compact cards ─────────────────── */
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-end !important;
+    gap: 0.4rem 1rem !important;
+    grid-template-columns: none !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 0.8rem 0.9rem !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col] {
+    display: none !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col='product'] {
+    display: block !important;
+    flex: 1 1 100% !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
+    color: var(--navy) !important;
+  }
+
+  /* The description only when it says more than the product name. */
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col='description']:not([data-same]) {
+    display: -webkit-box !important;
+    flex: 1 1 100% !important;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden !important;
+    font-size: 0.75rem !important;
+    line-height: 1.35 !important;
+    color: var(--text-3) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td:is([data-col='qty'], [data-col='price'], [data-col='tax'], [data-col='delivered'], [data-col='invoiced']),
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col='discount']:not([data-zero]) {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    width: auto !important;
+    gap: 0.1rem !important;
+    font-size: 0.8125rem !important;
+    font-weight: 600 !important;
+    color: var(--text-1) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td:is([data-col='qty'], [data-col='price'], [data-col='tax'], [data-col='discount'], [data-col='delivered'], [data-col='invoiced'])::before {
+    display: block !important;
+    position: static !important;
+    font-size: 0.625rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    color: var(--text-3) !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='qty']::before { content: 'Qty' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='price']::before { content: 'Unit price' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='tax']::before { content: 'Tax' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='discount']::before { content: 'Disc' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='delivered']::before { content: 'Delivered' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='invoiced']::before { content: 'Invoiced' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='qty']::after { content: none !important; }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col='amount'] {
+    display: block !important;
+    width: auto !important;
+    margin-left: auto !important;
+    font-size: 0.8125rem !important;
+    font-weight: 800 !important;
+    text-align: right !important;
+    white-space: nowrap !important;
+    color: var(--navy) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col='actions']:has(button) {
+    display: flex !important;
+    flex: 1 1 100% !important;
+    gap: 0.4rem !important;
+    padding-top: 0.5rem !important;
+    border-top: 1px solid var(--border-lt) !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td[data-col='actions'] > * {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 0.4rem !important;
+    width: auto !important;
+  }
+
+  /* While a line is edited its inputs get room. */
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:not(:has(td[colspan])) > td:has(input, select) {
+    flex: 1 1 40% !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td :is(input, select) {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-totals,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-totals * {
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Sales: header, journey row, form fields, footer ─────────────────── */
+  .sales-pilot.sales-doc .sales-workbench section.sales-doc-smart-row.sales-doc-smart-row--journey {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    overflow: visible !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench section.sales-doc-smart-row.sales-doc-smart-row--journey > .sales-doc-smart-button {
+    flex: none !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench section.sales-doc-smart-row.sales-doc-smart-row--journey > .sales-doc-smart-button strong {
+    display: block !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* "Same document — renamed from QUO/… to SO/…" repeats what the Reference
+     field says a little lower; on a phone it was one more card to scroll past. */
+  .sales-pilot.sales-doc .sales-workbench .sales-same-document-banner {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-meta-panel .sp-field,
+  .sales-pilot.sales-doc .sales-order-meta-panel .sp-field > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-actions {
+    flex-wrap: wrap !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-actions > * {
+    flex: 1 1 8rem !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Footer buttons: the short labels ("Confirm", "Send") where four buttons
+   share a phone's width — the long ones were cut to "Confirm qu…". */
+@media (max-width: 520px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock .sales-action-label--full {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock .sales-action-label--compact {
+    display: inline !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Repair: summary figures ─────────────────────────────────────────── */
+  /* Technician across the top, then the total and the age side by side
+     (the total sat alone at half width beside an empty cell). */
+  .repair-detail .repair-detail__summary {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .repair-detail .repair-detail__summary > div {
+    min-width: 0 !important;
+    grid-column: auto !important;
+  }
+  .repair-detail .repair-detail__summary > div:first-child {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Data tables: a toolbar holding nothing but the menu ─────────────── */
+  .dt-toolbar-row-mobile .dt-toolbar-mobile-actions.is-menu-only {
+    display: flex !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+  .dt-toolbar-row-mobile .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+}
+
+
+@media (max-width: 767px) {
+  /* ── Sales lists: quotation / sales order cards ──────────────────────── */
+  /* Reference and status on one line, customer and total on the next. Each
+     card was three bands split by rules for three pieces of information, so a
+     phone showed barely three records. */
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      'ref status'
+      'customer total' !important;
+    align-items: center !important;
+    gap: 0.3rem 0.75rem !important;
+    padding: 0.7rem 0.85rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td {
+    display: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td:is([data-col='ref'], [data-col='status'], [data-col='customer'], [data-col='total']) {
+    display: block !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td[data-col='ref'] { grid-area: ref !important; }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td[data-col='status'] { grid-area: status !important; justify-self: end !important; }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td[data-col='customer'] {
+    grid-area: customer !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 0.75rem !important;
+    color: var(--text-2) !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td[data-col='total'] {
+    grid-area: total !important;
+    justify-self: end !important;
+    white-space: nowrap !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] table.sp-list-table tbody tr:not(:has(td[colspan])) > td::before {
+    content: none !important;
+  }
+}
+
+/* ── Phone tab bar (components/layout/MobileTabBar.tsx) ─────────────────── */
+.mobile-tab-bar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  :root {
+    /* Tab row plus the iPhone home-indicator strip below it. */
+    --mobile-tab-h: calc(3.625rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Installed on an iPhone home screen, a full-height shell (h-dvh) came out
+     taller than the window, so the tab bar's labels sat below the screen.
+     Pinned to the window's edges, the shell is exactly the window. */
+  .app-shell-root {
+    position: fixed;
+    inset: 0;
+    height: auto !important;
+  }
+
+  /* Five equal tabs, a label under every icon (Apple and Material both
+     keep labels), and a pill behind the open tab's icon. */
+  .mobile-tab-bar {
+    box-sizing: border-box;
+    height: var(--mobile-tab-h);
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    align-items: start;
+    flex: 0 0 auto;
+    padding: 0.375rem 0.25rem calc(0.25rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-lt);
+    background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    backdrop-filter: saturate(1.4) blur(12px);
+  }
+
+  .mobile-tab-bar__tab {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-3);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.1;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-tab-bar__pill {
+    display: inline-flex;
+    width: 3.5rem;
+    height: 1.875rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+    transition: background-color 160ms ease-out;
+  }
+
+  .mobile-tab-bar__tab > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-tab-bar__icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .mobile-tab-bar__tab.is-active {
+    color: var(--primary);
+  }
+  .mobile-tab-bar__tab.is-active .mobile-tab-bar__pill {
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+  }
+  .mobile-tab-bar__tab:active .mobile-tab-bar__pill {
+    background: var(--bg-surface);
+  }
+
+  /* The tab bar is on every screen; a screen's own bottom actions sit just
+     above it instead of hiding it. */
+  body:has(.mobile-tab-bar) .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock {
+    bottom: var(--mobile-tab-h) !important;
+    padding-bottom: 0.75rem !important;
+  }
+  body:has(.mobile-tab-bar) .erp-mobile-action-bar {
+    bottom: calc(var(--mobile-tab-h) + 8px) !important;
+    padding-bottom: 7px !important;
+  }
+
+  /* The assistant button floats above the tab bar (and any action bar). */
+  body:has(.mobile-tab-bar) .dia-floating-launcher {
+    bottom: calc(var(--mobile-tab-h) + 0.75rem) !important;
+  }
+  body:has(.mobile-tab-bar):has(.sales-proto-actions--dock, .erp-mobile-action-bar) .dia-floating-launcher {
+    bottom: calc(var(--mobile-tab-h) + 4.75rem) !important;
+  }
+}
+
+/* ── Module headers, tabs, list toolbars: less chrome above the data ────── */
+/* On a phone the first record started two thirds of the way down the screen
+   (Repairs) or below it (Delivery): a repeated module title, a full-height
+   action band, roomy tab rows, stacked status boxes and a search row plus a
+   separate Filters/More row all came first. */
+@media (max-width: 767px) {
+  /* The top bar already names the module and the active tab names the
+     section, so the page header keeps only its buttons. A header with no
+     buttons has nothing left to show. */
+  .mod-page > .mod-header .mod-header__identity,
+  .repair-module-header > .mod-header .mod-header__identity {
+    display: none !important;
+  }
+  .mod-page > .mod-header:not(:has(.section-actions)),
+  .repair-module-header > .mod-header:not(:has(.section-actions)) {
+    display: none !important;
+  }
+  .mod-page > .mod-header,
+  .repair-module-header > .mod-header {
+    min-height: 0 !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+  .mod-page > .mod-header .section-actions,
+  .repair-module-header > .mod-header .section-actions {
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+  }
+  .mod-page > .mod-header .section-actions > :first-child {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+  .mod-page > .mod-header .section-actions :is(button, a) {
+    min-height: 2.5rem !important;
+  }
+
+  /* Tab rows: the same tabs, half the height. */
+  .mod-tabs .mod-tab {
+    min-height: 2.5rem !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+  }
+  .mod-tabs {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Status counts as a compact grid of label + number, not one box per row. */
+  .repair-metric-strip,
+  .delivery-kpi-strip {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(6.25rem, 1fr)) !important;
+    gap: 0.375rem !important;
+  }
+  /* Delivery's four counts fit one row. */
+  .delivery-kpi-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+  .repair-metric-strip > .repair-metric,
+  .delivery-kpi-strip > .delivery-kpi-card {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0.4rem 0.55rem !important;
+    border: 1px solid var(--border-lt) !important;
+    border-radius: var(--radius-sm, 0.5rem) !important;
+  }
+  .delivery-kpi-strip > .delivery-kpi-card > span {
+    display: none !important;
+  }
+  .delivery-kpi-strip > .delivery-kpi-card strong,
+  .repair-metric-strip > .repair-metric strong {
+    font-size: 0.8125rem !important;
+    line-height: 1.2 !important;
+  }
+  .delivery-kpi-strip > .delivery-kpi-card small,
+  .repair-metric-strip > .repair-metric span {
+    font-size: 0.6875rem !important;
+    line-height: 1.2 !important;
+  }
+
+  /* List toolbar: search, Filters and More on one row; the two buttons are
+     icons (their names stay for screen readers, the count badge stays). */
+  .dt-toolbar-row.dt-toolbar-row-mobile {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-search {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    gap: 0.375rem !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn {
+    position: relative !important;
+    flex: 0 0 auto !important;
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn > span:not(.dt-toolbar-badge) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn .dt-toolbar-badge {
+    position: absolute !important;
+    top: -0.3rem !important;
+    right: -0.3rem !important;
+  }
+  /* A menu-only toolbar (no search) keeps its "More" label. */
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn {
+    width: auto !important;
+    padding: 0 0.75rem !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn > span:not(.dt-toolbar-badge) {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    clip: auto !important;
+  }
+  /* One quiet row: a white search field and two plain icons beside it —
+     no grey well, no boxed buttons. */
+  .dt-toolbar-row-mobile > .dt-toolbar-search,
+  .dt-toolbar-row-mobile > .dt-toolbar-search input {
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: var(--radius-md) !important;
+    background: var(--bg-card) !important;
+    box-shadow: none !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-search input {
+    border: 1px solid var(--border-lt) !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions {
+    gap: 0 !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn:not(.is-menu-only *) {
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-2) !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn:active {
+    background: var(--bg-surface) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Drawn breadcrumbs ("FINANCE / CUSTOMER DOCUMENTS") above a header that no
+     longer shows its title. */
+  .mod-page > .mod-header::before {
+    display: none !important;
+  }
+  /* The header's main button spans the row, so it has room for its words —
+     an icon-only "+" told no one what it creates. */
+  .mod-page > .mod-header .section-actions > :first-child > span.hidden {
+    display: inline !important;
+  }
+
+  /* Sales lists: the top bar says Sales and the tabs say Quotations / Sales
+     orders; the eyebrow, title, count and workflow tagline repeated them. */
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header .sales-proto-header-copy {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header {
+    display: block !important;
+    min-height: 0 !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header .sales-proto-actions {
+    width: 100% !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header .sales-proto-actions .sp-btn {
+    width: 100% !important;
+    min-height: 2.5rem !important;
+  }
+
+  /* Delivery filters: Status and Type side by side, labels inside the
+     choices, the List / Calendar switch slimmer. */
+  .delivery-toolbar .delivery-filter-group {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.4rem !important;
+  }
+  .delivery-toolbar .delivery-filter {
+    min-width: 0 !important;
+    gap: 0.15rem !important;
+  }
+  .delivery-toolbar .delivery-filter .form-input {
+    min-height: 2.5rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Sales record: one compact summary card ──────────────────────────── */
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.6rem !important;
+    padding: 0.75rem 0.9rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary > * {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary dl.sales-record-summary__facts {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__facts > div {
+    grid-column: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__facts dt {
+    font-size: 0.625rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__facts dd {
+    overflow: hidden !important;
+    font-size: 0.75rem !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  /* A confirmed order's delivery / invoice / payment state is in the journey
+     row just below, which can be tapped; here it only repeated it. */
+  .sales-pilot.sales-doc .sales-record-view[data-document-kind='sales-order'] .sales-record-summary dl.sales-record-summary__facts {
+    display: none !important;
+  }
+  /* Next action as one line: the button for it is in the bar at the bottom. */
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    align-items: baseline !important;
+    gap: 0.35rem !important;
+    padding-top: 0.55rem !important;
+    border-top: 1px solid var(--border-lt) !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > span {
+    font-size: 0.6875rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > span::after {
+    content: ':';
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary .sales-record-summary__next > :is(span, strong) {
+    display: inline !important;
+    margin: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > strong {
+    font-size: 0.8125rem !important;
+    line-height: 1.3 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > small {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Invoice record ──────────────────────────────────────────────────── */
+  /* The header grid put the action buttons in its first row, above the
+     invoice number. Details first, then the buttons. */
+  .finance-invoice-detail .invoice-detail__header {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    order: 2 !important;
+    grid-row: auto !important;
+    gap: 0.5rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions > * {
+    flex: 1 1 auto !important;
+  }
+
+  /* Line items as compact cards: description, then Qty / Unit price / Tax
+     with the amount on the right (seven label rows per line before). */
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-end !important;
+    gap: 0.4rem 1rem !important;
+    padding: 0.75rem 0.85rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td {
+    display: none !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='description'] {
+    display: block !important;
+    flex: 1 1 100% !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    overflow-wrap: anywhere !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td:is([data-col='qty'], [data-col='price'], [data-col='tax']),
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='discount']:not([data-zero]) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.1rem !important;
+    font-size: 0.8125rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td:is([data-col='qty'], [data-col='price'], [data-col='tax'], [data-col='discount'])::before {
+    display: block !important;
+    position: static !important;
+    font-size: 0.625rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    color: var(--text-3) !important;
+  }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='qty']::before { content: 'Qty' !important; }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='price']::before { content: 'Unit price' !important; }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='tax']::before { content: 'Tax' !important; }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='discount']::before { content: 'Disc' !important; }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='amount'] {
+    display: block !important;
+    margin-left: auto !important;
+    font-size: 0.8125rem !important;
+    font-weight: 800 !important;
+    text-align: right !important;
+    white-space: nowrap !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='amount']::before {
+    content: none !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='actions'] {
+    display: flex !important;
+    flex: 1 1 100% !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='description']::before {
+    content: none !important;
+    display: none !important;
+  }
+}
+
+/* ── Contacts: phone cards ─────────────────────────────────────────────── */
+.contacts-mobile-card__line {
+  margin: 0.4rem 0 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  /* ── Header bands with nothing in them (Trade-in, Refurbishment) ───────── */
+  .mod-page > .mod-header:not(:has(.section-actions > *)) {
+    display: none !important;
+  }
+
+  /* ── Counters line (Expenses, Purchases): wrapping chips ──────────────── */
+  /* Inline text with "·" between items wrapped onto a second line that began
+     with a stray dot, with a tall gap between the lines. */
+  .erp-ops-summary {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.375rem !important;
+    margin: 0 !important;
+    padding: 0.5rem 0.75rem !important;
+    list-style: none !important;
+  }
+  .erp-ops-summary .erp-ops-summary-sep {
+    display: none !important;
+  }
+  .erp-ops-summary .erp-ops-summary-item {
+    margin: 0 !important;
+  }
+  .erp-ops-summary :is(.erp-ops-summary-btn, .erp-ops-summary-plain) {
+    display: inline-flex !important;
+    min-height: 2rem !important;
+    align-items: baseline !important;
+    gap: 0.3rem !important;
+    padding: 0.3rem 0.6rem !important;
+    border: 1px solid var(--border-lt) !important;
+    border-radius: var(--radius-sm, 0.5rem) !important;
+    background: var(--bg-card) !important;
+    font-size: 0.75rem !important;
+    line-height: 1.3 !important;
+    text-align: left !important;
+  }
+
+  /* ── Summary tiles (After-Sales, Trade-in, Reconfiguration) ───────────── */
+  /* Four counts in one row of small tiles instead of a 2×2 block of large
+     ones; the hint under each number is dropped. */
+  :is(.reconfig-summary, .aftersales-summary, .tradein-summary) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+  :is(.reconfig-summary > button, .aftersales-summary__item, .tradein-summary__item) {
+    display: flex !important;
+    min-height: 0 !important;
+    flex-direction: column !important;
+    gap: 0.15rem !important;
+    padding: 0.45rem 0.5rem !important;
+    border-bottom: 0 !important;
+  }
+  :is(.reconfig-summary > button, .aftersales-summary__item, .tradein-summary__item) > span {
+    font-size: 0.625rem !important;
+    line-height: 1.2 !important;
+  }
+  :is(.reconfig-summary > button, .aftersales-summary__item, .tradein-summary__item) > strong {
+    font-size: 0.8125rem !important;
+    line-height: 1.2 !important;
+  }
+  :is(.reconfig-summary > button, .aftersales-summary__item, .tradein-summary__item) > small {
+    display: none !important;
+  }
+  /* On the Trade-in tab its own counts replace After-Sales' (warranties). */
+  .aftersales-body:has(.tradein-summary) > .aftersales-summary {
+    display: none !important;
+  }
+
+  /* ── Record cards: details inline, buttons their own size ──────────────── */
+  .record-card .record-card-meta {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.2rem 1rem !important;
+    margin-top: 0.4rem !important;
+    padding-top: 0.4rem !important;
+  }
+  .record-card .record-card-meta > div {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 0.3rem !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+  }
+  .record-card .record-card-meta > div > div:first-child {
+    font-size: 0.6875rem !important;
+  }
+  .record-card .record-card-actions {
+    justify-content: flex-end !important;
+    margin-top: 0.5rem !important;
+    padding-top: 0.5rem !important;
+  }
+  .record-card .record-card-actions :is(button, a) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-height: 2.25rem !important;
+  }
+}
+
+/* ── Settings → Users: two-line cards ──────────────────────────────────── */
+.settings-user-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+.settings-user-card__summary .settings-user-card__state {
+  padding: 0;
+}
+.settings-user-card__summary .settings-user-card__modules {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-user-card__summary .settings-user-card__edit {
+  margin-left: auto;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 0.5rem);
+  background: var(--bg-card);
+  color: var(--navy);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.settings-user-card__summary .settings-user-card__edit:disabled {
+  opacity: 0.45;
+}
+.settings-user-card .settings-user-card__header {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 0;
+}
+
+@media (max-width: 767px) {
+  /* Settings: the active tab already names the section. */
+  .settings-section-heading {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Row-action wrappers inside a card (e.g. Reimburse) were stretched into
+     full-width grids. */
+  .record-card .record-card-actions > :is(div, span) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    margin-left: auto !important;
+    gap: 0.4rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Refurbishment job: the three facts cards closer together and tighter. */
+  .refurb-info-grid {
+    gap: 0.5rem !important;
+  }
+  .refurb-info-grid > .card {
+    padding: 0.75rem 0.85rem !important;
+  }
+  .refurb-info-grid > .card > * + * {
+    margin-top: 0.3rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Sales forms (new quotation, quotation / order details) ────────────── */
+  /* Labels above fields on every phone (two columns stayed on until 380px):
+     on a 430px iPhone the side column left the fields ~260px, Safari's date
+     fields would not shrink into that, and the whole form scrolled sideways —
+     labels against the left edge, fields cut off on the right. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field.sp-field {
+    grid-template-columns: minmax(0, 1fr) !important;
+    row-gap: 0.3rem !important;
+    min-width: 0 !important;
+    padding: 0.55rem 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sp-field > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sp-field :is(input, select, textarea) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  /* iPhone date fields keep a fixed minimum width of their own unless their
+     native look is dropped; they then size like any other field. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field input[type='date'] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    display: block !important;
+    min-height: 2.75rem !important;
+    text-align: left !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sp-field input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+  }
+  .sales-pilot.sales-doc .sales-order-meta-panel--new .sales-valid-until > input {
+    flex: 1 1 100% !important;
+  }
+  /* "Shown once you pick a customer" was a row of its own before anything
+     was chosen. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field:has(.sales-new-contact--empty) {
+    display: none !important;
+  }
+  /* Nothing in the form may widen the page. */
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-panel {
+    max-width: 100% !important;
+    overflow-x: clip !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Stacked, the form's two columns are one list: no divider band between. */
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-column--commercial {
+    padding-top: 0 !important;
+    border-top: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-grid {
+    gap: 0 !important;
+  }
+  /* Read-only values are text, not boxes to type in. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field input[readonly] {
+    min-height: 0 !important;
+    height: auto !important;
+    padding-block: 0.1rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-column--customer {
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom: 0 !important;
+  }
+}
+
+/* ── Sales record: secondary details folded on phones ─────────────────────
+   Email, reference, dates, currency, salesperson and agent are kept, but
+   behind "More details" so the customer, terms and lines come first. */
+.sales-meta-toggle {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-panel:not(.is-expanded) :is(.sp-field--secondary, .sales-secondary-group) {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-meta-toggle {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--border-lt);
+    background: none;
+    color: var(--navy);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* Lines: the table is a stack of cards, never wider than the screen.
+     Safari sized the table from its widest column and pushed product names
+     and totals past the right edge. */
+  .sales-pilot.sales-doc .sales-order-lines-panel {
+    max-width: 100% !important;
+    overflow-x: clip !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel table.sp-line-table,
+  .sales-pilot.sales-doc .sales-order-lines-panel table.sp-line-table > tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel table.sp-line-table > thead {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel :is(.sp-table-wrap, .overflow-x-auto) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  .sales-pilot.sales-doc :is(.sales-order-totals, .sp-totals) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Invoice: bookkeeping rows (journal, company, currency, payment count)
+     are for desktop; the payments tab and the PDF still show them. */
+  .invoice-detail__dl .invoice-detail__dl-secondary {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* The salesperson is under "More details"; the summary keeps the dates. */
+  .sales-record-summary__facts .sales-record-summary__fact--secondary {
+    display: none !important;
+  }
+}
+
+/* ── Point of Sale on phones: products as rows ───────────────────────────
+   Two big cards a row showed four products a screen, mostly a grey box icon.
+   A row is a small picture, the name, then price and stock: ten or more fit. */
+@media (max-width: 767px) {
+  .pos-products-pane .pos-terminal-title {
+    display: none;
+  }
+  .pos-products-pane .pos-product-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.4rem !important;
+  }
+  .pos-products-pane .pos-product-card {
+    display: grid !important;
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.7rem;
+    min-height: 0 !important;
+    padding: 0.5rem 0.7rem !important;
+    text-align: left;
+  }
+  .pos-products-pane .pos-product-card.is-mobile-page-hidden {
+    display: none !important;
+  }
+  .pos-products-pane .pos-product-media {
+    width: 2.75rem;
+    height: 2.75rem !important;
+    margin: 0 !important;
+    border-radius: var(--radius-sm);
+  }
+  .pos-products-pane .pos-product-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .pos-products-pane .pos-product-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-auto-flow: row dense;
+    align-items: baseline;
+    gap: 0.15rem 0.6rem;
+    min-width: 0;
+  }
+  .pos-products-pane .pos-product-name {
+    grid-column: 1 / -1;
+    min-height: 0 !important;
+    margin: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .pos-products-pane .pos-product-serial {
+    grid-column: 1 / -1;
+    margin: 0 !important;
+  }
+  .pos-products-pane .pos-product-price {
+    grid-column: 2;
+    margin: 0 !important;
+    font-size: 13px !important;
+    text-align: right;
+  }
+  .pos-products-pane .pos-product-meta {
+    grid-column: 1;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0.4rem !important;
+    margin: 0 !important;
+    font-size: 12px;
+  }
+  .pos-products-pane .pos-serial-label {
+    font-size: 11px;
+  }
+}
+
+/* A product with no selling price cannot be sold at the till. */
+.pos-product-card.is-unpriced .pos-product-price {
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+/* ── Invoice on phones: a short header ────────────────────────────────────
+   The job trail wrapped onto three rows, the customer's country had a line
+   of its own, and Record receipt and More actions were two full-width
+   buttons on separate rows. */
+@media (max-width: 767px) {
+  /* One scrolling line; the invoice's own step is already the title. */
+  .job-trail {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.4rem 0.6rem !important;
+  }
+  .job-trail::-webkit-scrollbar {
+    display: none;
+  }
+  .job-trail__step {
+    flex: none;
+  }
+  .finance-invoice-detail .job-trail__step.is-own {
+    display: none !important;
+  }
+  .finance-invoice-detail .job-trail__step.is-own:first-child + .job-trail__step > span[aria-hidden='true'] {
+    display: none;
+  }
+
+  .finance-invoice-detail .invoice-detail__country--place {
+    display: none !important;
+  }
+
+  /* The action first and wide, More beside it. */
+  .finance-invoice-detail .invoice-detail__header-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 0.5rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions > * {
+    min-width: 0;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions:not(:has(> :nth-child(2))) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-invoice-detail .invoice-detail__header-actions :is(button, a),
+  .finance-invoice-detail .invoice-detail__header-actions .erp-action-btn.erp-action-btn {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 2.75rem !important;
+    padding: 0.5rem 0.9rem !important;
+    font-size: 13px !important;
+    justify-content: center;
+  }
+
+  /* With a job trail, Sales order and History repeat it and the tabs below. */
+  .finance-invoice-detail .invoice-detail__chrome:has(.job-trail) .invoice-detail__smart-row {
+    display: none !important;
+  }
+
+  /* "Fully settled" repeats the Paid chip. */
+  .finance-invoice-detail .invoice-detail__notice.is-settled {
+    display: none !important;
+  }
+
+  /* Cards took the full width and their side margins on top of it. */
+  .finance-invoice-detail .invoice-detail__body > *,
+  .finance-invoice-detail .invoice-detail__body > .invoice-detail__card[aria-label] {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  /* Line items stay inside the screen. */
+  .finance-invoice-detail :is(.invoice-detail__card, .invoice-detail__table-wrap) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: clip !important;
+  }
+  .finance-invoice-detail table.invoice-detail__table,
+  .finance-invoice-detail table.invoice-detail__table > tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .finance-invoice-detail table.invoice-detail__table > thead {
+    display: none !important;
+  }
+}
+
+/* ── Contact panel, Financial tab, on phones ──────────────────────────────
+   Store credit and open balance are in the summary above; the tables ran
+   off the right edge. Each row becomes a short card. */
+@media (max-width: 767px) {
+  .contacts-credit-summary .contacts-credit-summary__dup {
+    display: none !important;
+  }
+  .contacts-panel .contacts-table-scroll {
+    overflow: visible !important;
+  }
+  table.contacts-compact-table,
+  table.contacts-compact-table > tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  table.contacts-compact-table > thead {
+    display: none !important;
+  }
+  table.contacts-compact-table > tbody > tr {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.15rem 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border-lt);
+  }
+  table.contacts-compact-table > tbody > tr > td {
+    display: block !important;
+    padding: 0 !important;
+    border: 0 !important;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  table.contacts-compact-table td[data-col='ref'] {
+    grid-column: 1;
+    grid-row: 1;
+    font-weight: 600;
+  }
+  table.contacts-compact-table td[data-col='status'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  table.contacts-compact-table td[data-col='sub'] {
+    grid-column: 1 / -1;
+    color: var(--text-3);
+    font-size: 12px;
+  }
+  table.contacts-compact-table td[data-col='paid'] {
+    display: none !important;
+  }
+  table.contacts-compact-table td[data-col='amount'] {
+    grid-column: 1 / -1;
+    display: flex !important;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  table.contacts-compact-table td[data-col='amount']::before {
+    content: attr(data-label);
+    color: var(--text-3);
+    font-family: inherit;
+  }
+}
+
+/* ── Record payment / receipt form on phones ─────────────────────────────
+   The date box ran past the right edge, dropdowns showed iOS's arrows next
+   to their own, and Confirm sat in a corner. */
+@media (max-width: 767px) {
+  .pay-form input[type='date'] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+  }
+  .pay-form select {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .pay-form input[type='number'] {
+    font-weight: 600; /* size: the 16px no-zoom floor in globals.css */
+  }
+  .pay-form .pay-form__methods > button {
+    flex: 1 1 calc(33% - 0.5rem);
+  }
+  .pay-form .pay-form__actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .pay-form .pay-form__actions > :is(button, a) {
+    min-height: 2.75rem;
+  }
+  .pay-form .pay-form__actions > .btn-primary {
+    width: 100%;
+  }
+  /* M-Pesa prompt, when offered, gets a row of its own. */
+  .pay-form .pay-form__actions > .btn-outline:not(:first-child) {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+}
+
+/* ── Product serials list on phones ──────────────────────────────────────
+   The status filters ran to three rows and two notices sat above the list;
+   the cards now carry status and location, so the "sold are with customers"
+   note says nothing the list does not. Filters scroll in one row. */
+@media (max-width: 767px) {
+  .serial-drawer__chips {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .serial-drawer__chips::-webkit-scrollbar {
+    display: none;
+  }
+  .serial-drawer__chips > button {
+    flex: none;
+  }
+  .serial-drawer__notice--sold {
+    display: none !important;
+  }
+}
+
+/* ── Lists with no search and no filters on phones ──────────────────────
+   The toolbar held only "⋮ More" on a row of its own, ruled off above the
+   list (every Finance report). It is now a small ⋯ at the top right. */
+@media (max-width: 767px) {
+  .dt-toolbar:has(.dt-toolbar-mobile-actions.is-menu-only) {
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 0 0.25rem !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .dt-toolbar-mobile-actions.is-menu-only {
+    display: flex !important;
+    justify-content: flex-end !important;
+  }
+  .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn {
+    flex: none !important;
+    width: 2.25rem !important;
+    min-width: 0 !important;
+    height: 2.25rem !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+  .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn > span {
+    display: none !important;
+  }
+}
+
+/* ── Finance reports on phones ──────────────────────────────────────────
+   Four layers of navigation sat above every report: workspace tabs, a
+   one-tab "Financial reports" row (gone), Management reports tabs and a
+   Compliance fold. One report picker replaces the last two; the technical
+   "Report data status" note stays on larger screens. */
+.finance-report-picker {
+  display: none;
+}
+@media (max-width: 767px) {
+  .finance-report-picker {
+    display: block;
+  }
+  .finance-report-picker select {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 2.25rem 0 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-1);
+    font-weight: 600;
+  }
+  .finance-report-tabs,
+  .finance-report-status {
+    display: none !important;
+  }
+  /* Today · This week · This month · This year · Custom on one line. */
+  .finance-period-presets {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .finance-period-presets::-webkit-scrollbar {
+    display: none;
+  }
+  .finance-period-presets > button {
+    flex: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Chart of accounts: type filters in one scrolling row ("Expense" wrapped
+     to a line of its own), no second New (the header has New account), and
+     the help note — what a row does is plain from the row. */
+  .coa-type-chips {
+    flex-wrap: nowrap !important;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .coa-type-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .coa-type-chips > button {
+    flex: none;
+    min-height: 2rem;
+    font-size: 12px !important;
+  }
+  .coa-inline-new,
+  .coa-help {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Statement lines keep a margin from the panel edges (amounts touched it). */
+  .dt-lines .dt-line {
+    padding-inline: 0.875rem;
+  }
+
+  /* Accounting entries: filters as a tidy two-column grid; the technical
+     note on where journals are read from stays on larger screens. */
+  .journal-filters {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.5rem !important;
+  }
+  .journal-filters > :is(input, select, button) {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.5rem;
+    margin: 0 !important;
+  }
+  .journal-filters__date {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .journal-filters__ref,
+  .journal-filters__new,
+  .journal-filters > span {
+    grid-column: 1 / -1;
+  }
+  .journal-sot-note {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* P&L From / To: native date boxes ran past the screen and showed blank. */
+  /* From and To share a row; the source picker takes the next. */
+  label:has(> input[aria-label='P&L date from']),
+  label:has(> input[aria-label='P&L date to']) {
+    flex: 1 1 9rem;
+    min-width: 0;
+  }
+  select[aria-label='P&L source'] {
+    flex: 1 1 100%;
+  }
+  input[aria-label='P&L date from'],
+  input[aria-label='P&L date to'] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  /* The P&L controls row was as wide as its widest child, not the card. */
+  div:has(> .finance-period-presets) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  div:has(> div > .finance-period-presets) {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* ── Pay / reimburse expense on phones ───────────────────────────────────
+   The form fills the screen and its only way out was a small × that
+   scrolled away with the form. The header stays pinned with a Back. */
+.expenses-modal-back {
+  display: none;
+}
+@media (max-width: 767px) {
+  .expenses-workspace .expenses-reimburse-header {
+    position: sticky;
+    top: -0.9rem;
+    z-index: 3;
+    gap: 0.75rem;
+    justify-content: flex-start !important;
+    margin: -0.9rem -0.85rem 1rem !important;
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--border-lt);
+    background: var(--bg-card);
+  }
+  .expenses-workspace .expenses-reimburse-header .expenses-modal-back {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--navy);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .expenses-workspace .expenses-reimburse-header .expenses-modal-close {
+    display: none;
+  }
+}
+
+
+/* Sales list on a phone: search, the date choice and ⋮ on one quiet row,
+   like every other list (it was a search bar over a big bold "Any date"
+   box and a "More" button). */
+@media (max-width: 767px) {
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    padding: 0.625rem 0.75rem !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-search {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: var(--radius-md) !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar select {
+    flex: 0 0 auto !important;
+    width: 7.5rem !important;
+    padding: 0 1.75rem 0 0.625rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: var(--radius-md) !important;
+    font-weight: 400 !important;
+    color: var(--text-2) !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative {
+    flex: none !important;
+    width: auto !important;
+    margin-left: 0 !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative > .sp-btn {
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    padding: 0 !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative > .sp-btn > span {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+  }
+
+  /* iPhone date boxes: an empty one is blank and has a fixed width that
+     pushed the second box past the card. Fill the cell, show the format. */
+  input[type='date'] {
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type='date']::-webkit-date-and-time-value {
+    min-height: 1.5em;
+    text-align: left;
+  }
+}
+
+/* Sales "More": a word and a chevron on a wide screen, ⋮ on a phone list. */
+.sp-more-dots { display: none; }
+@media (max-width: 767px) {
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar .sp-more-dots { display: inline-block; }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar .sp-more-chevron { display: none; }
+}
+@media (max-width: 767px) {
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar select[aria-label='Filter by status'] {
+    display: none !important;
+  }
+  html body .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-search {
+    min-width: 0 !important;
+  }
+}
+
+/* A page header with nothing to press (the title is already in the top bar)
+   left an empty white strip above the tabs. */
+@media (max-width: 767px) {
+  .mod-page > .mod-header:not(:has(button, a, input, select)) {
+    display: none !important;
+  }
+}
+
+/* ── Job trail (Repair → Quote → Sale order → Invoice → Payment) ──────────
+   On a phone the steps were squeezed into narrow columns until their text
+   broke letter by letter. Now: the steps are one row you swipe, each on one
+   line, and the next action is a full-width line underneath. */
+.job-trail__steps {
+  display: contents;
+}
+@media (max-width: 767px) {
+  .job-trail,
+  html body .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    overflow: visible !important;
+    padding: 0.5rem 0.625rem !important;
+  }
+  .job-trail__steps {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .job-trail__steps::-webkit-scrollbar {
+    display: none;
+  }
+  .job-trail__steps > .job-trail__step {
+    flex: none !important;
+    min-width: auto !important;
+    scroll-snap-align: start;
+  }
+  .job-trail__steps a {
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    max-width: none !important;
+  }
+  .job-trail > a:last-child {
+    width: 100% !important;
+    margin-left: 0 !important;
+    justify-content: center !important;
+    min-height: 2.5rem;
+    font-size: 12px !important;
+  }
+}
+
+/* Repair record tabs: one row you swipe (a 4-column grid wrapped the seven
+   tabs onto two rows of big boxes). */
+@media (max-width: 767px) {
+  html body .repair-detail__tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0.25rem !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.375rem 0.5rem !important;
+  }
+  html body .repair-detail__tabs::-webkit-scrollbar {
+    display: none;
+  }
+  html body .repair-detail__tabs > .repair-detail__tab {
+    flex: none !important;
+    width: auto !important;
+    min-height: 2.5rem !important;
+    padding: 0 0.875rem !important;
+    border-radius: var(--radius-sm) !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ── Kilimall ──────────────────────────────────────────────────────────── */
+.kilimall-order-detail { display: flex; flex-direction: column; gap: 0.75rem; }
+.kilimall-order-summary {
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.kilimall-order-summary__label { margin: 0; color: var(--text-3); font-size: 11px; }
+.kilimall-order-summary__product { margin: 0.125rem 0 0.5rem; color: var(--text-1); font-size: 13px; font-weight: 600; line-height: 1.35; }
+.kilimall-order-summary__row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.kilimall-order-summary__row strong { color: var(--text-1); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kilimall-order-status {
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.kilimall-order-facts { margin: 0; }
+.kilimall-order-facts > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: 12px;
+}
+.kilimall-order-facts > div:last-child { border-bottom: 0; }
+.kilimall-order-facts dt { color: var(--text-3); }
+.kilimall-order-facts dd { margin: 0; color: var(--text-1); font-weight: 500; overflow-wrap: anywhere; }
+.kilimall-order-facts dd.is-mono { font-family: var(--font-mono, ui-monospace, monospace); }
+.kilimall-order-returns {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.kilimall-order-returns p { margin: 0; }
+.kilimall-order-returns p:first-child { margin-bottom: 0.25rem; color: var(--text-2); font-weight: 600; }
+.btn-outline.kilimall-order-return { border-color: var(--danger); color: var(--danger); }
+.kilimall-serial-check__list {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.kilimall-serial-check__list li {
+  display: flex;
+  flex-direction: column;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--border-lt);
+}
+.kilimall-serial-check__list li:last-child { border-bottom: 0; }
+.kilimall-serial-check__list b { font-family: var(--font-mono, ui-monospace, monospace); color: var(--text-1); }
+.kilimall-serial-check__list span { color: var(--text-3); font-size: 11px; }
+
+@media (max-width: 767px) {
+  /* Four counts on one row: number over a short label. */
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.375rem;
+    padding: 0.625rem 0.75rem 0;
+  }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+    min-width: 0;
+    min-height: 0;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius-sm);
+  }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) > strong {
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  html body .kpi-summary-strip { padding: 0; margin: 0 0 0.75rem; }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) > i {
+    display: none;
+  }
+  html body :is(.kilimall-kpi-strip, .holdover-kpi-strip, .deposit-kpi-strip, .kpi-summary-strip) > :is(.kilimall-kpi, .holdover-kpi, .deposit-kpi, .kpi-summary-card) > span {
+    font-size: 0.625rem;
+    line-height: 1.2;
+  }
+  /* Same width as the cards below it. */
+  .mod-body > .card.kilimall-serial-check.kilimall-serial-check {
+    margin: 0;
+    max-width: none;
+  }
+  html body .kilimall-serial-check > div:first-child { flex-wrap: nowrap; align-items: flex-start; }
+  html body .kilimall-serial-check > div:first-child > button { flex-shrink: 0; min-height: 36px; }
+}
+
+/* Kilimall: new order form */
+.kilimall-order-form { display: flex; flex-direction: column; gap: 0.875rem; }
+.kilimall-order-form > *,
+.kilimall-order-form__pair > * { margin: 0 !important; }
+.kilimall-order-form__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.kilimall-order-form__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.kilimall-order-form__total strong { color: var(--text-1); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* My Documents */
+.docs-card__head input { width: 220px; }
+.docs-empty__icon { display: block; width: 28px; height: 28px; margin: 0 auto 0.5rem; color: var(--text-4); }
+@media (max-width: 767px) {
+  /* Category chips: one row you can swipe, not two wrapped rows. */
+  .docs-chips.docs-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -0.75rem;
+    padding-inline: 0.75rem;
+  }
+  .docs-chips::-webkit-scrollbar { display: none; }
+  .docs-chips > button { flex-shrink: 0; min-height: 32px; white-space: nowrap; }
+  .mod-body > .card.docs-card.docs-card { max-width: none; }
+  .docs-card__head > p { display: none; }
+  .docs-card__head input { flex: 1; width: auto; min-width: 0; }
+}

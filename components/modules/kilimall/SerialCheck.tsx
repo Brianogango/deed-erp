@@ -45,7 +45,7 @@ export function KilimallSerialCheck({ showToast, onDone }: { showToast: (msg: st
   const missing = (items ?? []).filter(i => i.action === 'serial_missing')
 
   return (
-    <div className="card px-4 py-3 mb-4">
+    <div className="card px-4 py-3 mb-4 kilimall-serial-check">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-[12px] font-semibold">Dispatched serials</p>
@@ -62,10 +62,11 @@ export function KilimallSerialCheck({ showToast, onDone }: { showToast: (msg: st
               {fixable.length > 0 && (
                 <>
                   <p className="text-[12px] mb-2">{fixable.length} dispatched serial{fixable.length === 1 ? ' is' : 's are'} not marked sold:</p>
-                  <ul className="text-[11px] mb-3 space-y-1">
+                  <ul className="kilimall-serial-check__list">
                     {fixable.map(i => (
                       <li key={`${i.dispatchRef}-${i.serialNumber}`}>
-                        <span className="font-mono">{i.serialNumber}</span> · {i.productName} · {i.orderRef || i.dispatchRef} · now {i.found}
+                        <b>{i.serialNumber}</b>
+                        <span>{i.orderRef || i.dispatchRef} · {i.productName} · now {i.found}</span>
                       </li>
                     ))}
                   </ul>

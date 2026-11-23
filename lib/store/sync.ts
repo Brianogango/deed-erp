@@ -1,3 +1,4 @@
+import { diffBulkStock } from '@/lib/inventory/bulk-stock-delta'
 import { useState, useEffect, useRef } from 'react'
 import { hasSaleOrderDraftEdits } from '@/lib/sale-order-draft-edits'
 import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
@@ -228,8 +229,19 @@ export async function flushKeysIndividually(entries: Record<string, string>) {
 export function buildSyncBody(entries: Record<string, string>): { body: Record<string, unknown>; deltaKeys: string[] } {
   const body: Record<string, unknown> = {}
   const delta: Record<string, CollectionDelta> = {}
+  const deltaKeysExtra: string[] = []
   for (const [key, value] of Object.entries(entries)) {
     const baseline = serverBaselineFor(key)
+    // Quantity stock: this browser's changes as "add N" per product and
+    // location. A whole list set every quantity to what this tab last saw,
+    // wiping stock received or sold elsewhere meanwhile.
+    if (key === 'deed_bulkStock' && baseline) {
+      try {
+        body._bulkStockDelta = diffBulkStock(JSON.parse(baseline), JSON.parse(value))
+        deltaKeysExtra.push(key)
+        continue
+      } catch { /* fall through: sent whole */ }
+    }
     const d = baseline
       ? computeCollectionDelta(baseline, value)
       : (deltaDisabledFor(key) ? null : upsertOnlyDelta(value))
@@ -238,7 +250,7 @@ export function buildSyncBody(entries: Record<string, string>): { body: Record<s
   }
   const deltaKeys = Object.keys(delta)
   if (deltaKeys.length) body._delta = delta
-  return { body, deltaKeys }
+  return { body, deltaKeys: [...deltaKeys, ...deltaKeysExtra] }
 }
 
 export async function flushServerSync() {

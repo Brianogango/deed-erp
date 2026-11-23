@@ -201,7 +201,7 @@ export async function intakeTaggedUnits(params: {
     deed_serials: JSON.stringify(serials),
     deed_bulkStock: JSON.stringify(bulk),
     deed_stockMoves: JSON.stringify(moves),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
 
   for (const [i, s] of created.entries()) {
     if (!(costs[i] > 0)) continue
@@ -341,7 +341,7 @@ export async function harvestUnit(params: {
     return { productId: p.productId, productName: products[idx].name || 'Part', qty: p.qty, unitValue: values[i] }
   })
   await bumpPrismaOnHand(deltas)
-  await saveStoreKeys({ deed_products: JSON.stringify(products), deed_bulkStock: JSON.stringify(bulk), deed_stockMoves: JSON.stringify(moves) })
+  await saveStoreKeys({ deed_products: JSON.stringify(products), deed_bulkStock: JSON.stringify(bulk), deed_stockMoves: JSON.stringify(moves) }, { bulkStockBase: state.deed_bulkStock })
 
   for (const p of parts) {
     if (!(p.unitValue > 0)) continue

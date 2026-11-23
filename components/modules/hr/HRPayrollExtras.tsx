@@ -1,4 +1,5 @@
 'use client'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
@@ -189,7 +190,7 @@ export function StaffLoansPanel() {
               <Field label="Monthly repayment (KSh)" required><Input type="number" value={form.monthlyDeduction} onChange={v => setForm(f => ({ ...f, monthlyDeduction: v }))} /></Field>
             </div>
             <Field label="Date given" required><Input type="date" value={form.issueDate} onChange={v => setForm(f => ({ ...f, issueDate: v }))} /></Field>
-            <Field label="Paid from"><Select value={form.bankAccountId} onChange={v => setForm(f => ({ ...f, bankAccountId: v }))} options={[{ value: '', label: 'Do not post a journal (accountant records the payout)' }, ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: a.name }))]} /></Field>
+            <Field label="Paid from"><Select value={form.bankAccountId} onChange={v => setForm(f => ({ ...f, bankAccountId: v }))} options={[{ value: '', label: 'Do not post a journal (accountant records the payout)' }, ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: bankChoiceLabel(a) }))]} /></Field>
             <Field label="Reason"><Input value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} /></Field>
             <p className="text-[11px]" style={{ color: 'var(--text-3)' }}>Choosing an account posts the payout to the ledger (employee loans against that account). Repayments through payroll then clear it. The first repayment is taken from the next payroll run created after the date given.</p>
           </div>

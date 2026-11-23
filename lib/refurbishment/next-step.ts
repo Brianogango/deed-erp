@@ -15,7 +15,7 @@ type JobLike = {
 }
 
 export type RefurbNextStep = {
-  key: 'assign' | 'start' | 'record_issues' | 'request_parts' | 'wait_parts' | 'fit_parts' | 'identify' | 'mark_ready' | 'retest' | 'none'
+  key: 'assign' | 'start' | 'record_issues' | 'request_parts' | 'wait_parts' | 'fit_parts' | 'identify' | 'match_product' | 'mark_ready' | 'retest' | 'none'
   title: string
   detail: string
   /** The viewer can act on it now. */
@@ -36,7 +36,12 @@ export function refurbFlowProgress(job: JobLike): number {
   return open.length ? 2 : 3
 }
 
-export function refurbNextStep(job: JobLike, viewer: { id?: string; isLead: boolean; canAssign: boolean }): RefurbNextStep {
+export function refurbNextStep(
+  job: JobLike,
+  viewer: { id?: string; isLead: boolean; canAssign: boolean },
+  /** The job's product is a stand-in (lib/refurbishment/unidentified.ts isStandInProduct). */
+  opts: { standIn?: boolean; productName?: string; noPrice?: boolean } = {},
+): RefurbNextStep {
   const isTech = !!viewer.id && job.assignedTechnicianId === viewer.id
   const actor = isTech || viewer.isLead
   if (job.status === 'written_off' || job.status === 'transferred') return { key: 'none', title: '', detail: '', mine: false }
@@ -73,5 +78,20 @@ export function refurbNextStep(job: JobLike, viewer: { id?: string; isLead: bool
   if (job.identityPending) {
     return { key: 'identify', title: 'Identify the machine', detail: 'Record the real serial and model before it can be marked ready.', mine: actor }
   }
-  return { key: 'mark_ready', title: 'Mark ready', detail: 'Repairs done and parts fitted: mark it ready for retest.', mine: actor }
+  if (opts.standIn) {
+    return {
+      key: 'match_product',
+      title: 'Match it to its product line',
+      detail: `${opts.productName ? `"${opts.productName}"` : 'Its product'} is a stand-in. Now that it works, choose the product line with the same model and specs — or create the product if there is none.`,
+      mine: actor,
+    }
+  }
+  return {
+    key: 'mark_ready',
+    title: 'Mark ready',
+    detail: opts.noPrice
+      ? 'Repairs done and parts fitted: mark it ready for retest. Its product has no selling price yet — set one in Inventory before it is sold.'
+      : 'Repairs done and parts fitted: mark it ready for retest.',
+    mine: actor,
+  }
 }

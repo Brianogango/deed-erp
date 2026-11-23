@@ -326,7 +326,7 @@ export type VendorJournalOpts = {
 
 export type ExpensePaymentMethod = 'reimbursement' | 'petty_cash' | 'mpesa_company' | 'company_card'
 
-export type ExpenseStatus = 'submitted' | 'approved' | 'rejected' | 'paid' | 'reimbursed'
+export type ExpenseStatus = 'submitted' | 'approved' | 'rejected' | 'paid' | 'reimbursed' | 'withdrawn'
 
 export type ExpenseApprovalStep = {
   role: string

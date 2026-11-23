@@ -1,6 +1,8 @@
 type NamedProduct = { id: string; name: string }
 
 type RepairLike = {
+  id?: string
+  ref?: string
   productId?: string
   productName?: string
   serialNumber?: string
@@ -77,6 +79,12 @@ export function buyBackConditionFromRepair(
 type RepairSerialMatch<T> = {
   existing: T | null
   serialText: string
+  /**
+   * The repair recorded no serial: serialText is an intake tag
+   * (UNK-<repair ref>) and the unit goes to With Issues to be identified,
+   * as machines tagged at intake do.
+   */
+  tagged?: boolean
 }
 
 /** Resolve serial text + existing serial row for a repair device intake. */
@@ -86,7 +94,16 @@ export function matchRepairDeviceSerial<T extends { id: string; productId: strin
   repair: RepairLike,
 ): RepairSerialMatch<T> | { error: string } {
   const serialText = String(repair.serialNumber ?? '').trim()
-  if (!serialText) return { error: 'Device has no serial to intake' }
+  if (!serialText) {
+    // A device given to Deed with no serial on record (it does not boot, or
+    // the sticker is gone) still comes in: under an intake tag, unidentified.
+    const linked = repair.serialId ? serials.find(s => s.id === repair.serialId) ?? null : null
+    if (linked) return { existing: linked, serialText: linked.serial }
+    const ref = String(repair.ref ?? repair.id ?? '').trim()
+    const tag = `UNK-${ref.replace(/[^A-Za-z0-9-]/g, '')}`.toUpperCase()
+    const already = serials.find(s => s.serial.toUpperCase() === tag) ?? null
+    return { existing: already, serialText: tag, tagged: true }
+  }
   const existing =
     serials.find(s => s.productId === productId && s.serial.toLowerCase() === serialText.toLowerCase())
     || (repair.serialId ? serials.find(s => s.id === repair.serialId) ?? null : null)

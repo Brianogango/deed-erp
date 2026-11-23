@@ -19,6 +19,7 @@ type OutsourceJobLike = {
   sentDate?: string | null
   createdAt?: string | null
   ref?: string | null
+  expectedReturnDate?: string | null
 }
 
 /** The job currently holding a repair's machine, if any. */
@@ -42,10 +43,32 @@ export function outsourceDaysOut(job: OutsourceJobLike, now: Date = new Date()):
   return Math.max(0, startOfToday - startOfSent)
 }
 
-export function isOutsourceOverdue(job: OutsourceJobLike, now: Date = new Date()): boolean {
-  if (job.status !== 'sent') return false
+/**
+ * Whole days past the date the vendor promised it back (or, for a job with no
+ * promised date, past a week out). 0 or less means not late.
+ */
+export function outsourceDaysLate(job: OutsourceJobLike, now: Date = new Date()): number | null {
+  if (job.status !== 'sent') return null
+  const promised = String(job.expectedReturnDate ?? '').trim()
+  if (promised) {
+    const due = Date.parse(promised.length === 10 ? `${promised}T00:00:00Z` : promised)
+    if (Number.isFinite(due)) {
+      const day = 86_400_000
+      return Math.floor(now.getTime() / day) - Math.floor(due / day)
+    }
+  }
   const days = outsourceDaysOut(job, now)
-  return days !== null && days > OUTSOURCE_OVERDUE_DAYS
+  return days === null ? null : days - OUTSOURCE_OVERDUE_DAYS
+}
+
+/**
+ * Overdue: past the promised return date. A screen swap promised in two days
+ * is late on day three; a motherboard promised in two weeks is not late on day
+ * eight. Jobs sent before return dates existed fall back to a week out.
+ */
+export function isOutsourceOverdue(job: OutsourceJobLike, now: Date = new Date()): boolean {
+  const late = outsourceDaysLate(job, now)
+  return late !== null && late > 0
 }
 
 export function formatDaysOut(days: number | null): string {

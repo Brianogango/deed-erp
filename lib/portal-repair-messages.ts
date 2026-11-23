@@ -22,6 +22,30 @@ function messagesStateKey(ref: string) {
   return `portal_messages_${normaliseRef(ref).replace(/\//g, '_')}`
 }
 
+/**
+ * Repairs with client messages nobody on staff has opened yet:
+ * ref → { count, lastAt, lastText }. Kept beside the threads so the repairs
+ * list can flag them without reading every thread. A staff reply or a staff
+ * read clears the entry.
+ */
+const UNREAD_KEY = 'portal_messages_unread'
+export type UnreadClientMessages = Record<string, { count: number; lastAt: string; lastText: string; senderName?: string }>
+
+async function updateUnread(change: (index: UnreadClientMessages) => UnreadClientMessages | null) {
+  await withAppStateKeyLock(UNREAD_KEY, async () => {
+    const state = await loadAppState([UNREAD_KEY])
+    const current = (state[UNREAD_KEY] && typeof state[UNREAD_KEY] === 'object' ? state[UNREAD_KEY] : {}) as UnreadClientMessages
+    const next = change({ ...current })
+    if (next) await saveStoreKeys({ [UNREAD_KEY]: JSON.stringify(next) })
+  })
+}
+
+export async function getUnreadClientMessages(): Promise<UnreadClientMessages> {
+  const state = await loadAppState([UNREAD_KEY])
+  const index = state[UNREAD_KEY]
+  return index && typeof index === 'object' && !Array.isArray(index) ? index as UnreadClientMessages : {}
+}
+
 export async function getMessagesStored(ref: string): Promise<RepairMessage[]> {
   const key = messagesStateKey(ref)
   const state = await loadAppState([key])
@@ -48,6 +72,18 @@ export async function addMessageStored(
     const next = [...existing, message].slice(-MAX_MESSAGES_PER_REPAIR)
     await saveStoreKeys({ [key]: JSON.stringify(next) })
   })
+  const unreadRef = normaliseRef(ref)
+  await updateUnread(index => {
+    if (message.sender === 'customer') {
+      const was = index[unreadRef]
+      index[unreadRef] = { count: (was?.count ?? 0) + 1, lastAt: message.timestamp, lastText: message.text.slice(0, 140), senderName: message.senderName }
+      return index
+    }
+    // Staff answered: handled.
+    if (!index[unreadRef]) return null
+    delete index[unreadRef]
+    return index
+  }).catch(err => console.error('[portal messages] unread index:', err))
   return message
 }
 
@@ -62,4 +98,12 @@ export async function markMessagesReadStored(ref: string, byRole: 'customer' | '
       await saveStoreKeys({ [key]: JSON.stringify(next) })
     }
   })
+  if (byRole === 'staff') {
+    const unreadRef = normaliseRef(ref)
+    await updateUnread(index => {
+      if (!index[unreadRef]) return null
+      delete index[unreadRef]
+      return index
+    }).catch(err => console.error('[portal messages] unread index:', err))
+  }
 }

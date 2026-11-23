@@ -141,6 +141,13 @@ function AgeingReport({
         <DataTable
           tableId={`finance-ageing-partners-${kind}`}
           hideSearch
+          mobileLayout="lines"
+          mobileLineSubtitle={r => {
+            // The buckets with money in them, oldest first: what a phone card hid.
+            const parts = ([['90+', r.over90], ['61–90', r.d90], ['31–60', r.d60], ['1–30', r.d30], ['Current', r.current]] as const)
+              .filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${fmtKes(Number(v))}`)
+            return parts.length ? parts.join(' · ') : null
+          }}
           perPage={50}
           emptyMessage="No outstanding balances"
           rowKey={r => r.id}
@@ -184,6 +191,7 @@ function AgeingReport({
       ) : (
         <DataTable
           tableId={`finance-ageing-invoices-${kind}`}
+          mobileLayout="lines"
           hideSearch
           perPage={50}
           emptyMessage="No outstanding balances"

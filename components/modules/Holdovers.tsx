@@ -829,7 +829,7 @@ function HoldoversContent() {
 
       <div className="holdover-notice px-3 sm:px-4 pt-2">
         <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
-          Holdovers track temporary device loans for repairs and demos. They do not post journals, affect stock valuation, or appear on the trial balance.
+          Loans of devices for repairs and demos. They don’t touch the books or stock value.
         </p>
       </div>
 

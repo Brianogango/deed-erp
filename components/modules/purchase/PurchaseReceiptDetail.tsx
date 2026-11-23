@@ -5,9 +5,11 @@ import { Badge, PanelHeader } from '@/components/ui'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { EmptyState, MobileActionBar, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge, WorkflowStageBar } from '@/components/erp'
 import { Fa, faBarcode, faBox } from '@/components/icons'
-import { printProductLabels, printSerialLabels } from '@/lib/product-label'
+import { printProductLabelsBatch, printSerialLabels, type ProductLabelRequest } from '@/lib/product-label'
 import type { SerialLabelItem } from '@/lib/product-label-meta'
 import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
+import { userCan } from '@/lib/auth/can'
+import { billableQty } from '@/lib/purchase/three-way-match'
 import { LOCATIONS, type LocationId } from '@/lib/store'
 import {
   receiptLineViews,
@@ -24,7 +26,7 @@ export default function PurchaseReceiptDetail() {
   const {
     activeReceipt, purchaseOrders, products, serials, currentUser,
     setSubView, setActiveId, setMainView, setActiveReceiptId, fmtDate, showToast,
-    startReceive, closeReceiptDetail, receiptOrigin,
+    startReceive, closeReceiptDetail, receiptOrigin, setBillRequestPoId,
   } = usePurchase()
   const lines = useMemo(
     () => (activeReceipt ? receiptLineViews(activeReceipt, serials) : []),
@@ -40,6 +42,10 @@ export default function PurchaseReceiptDetail() {
   const isDraft = activeReceipt.status === 'draft'
   const canProcess = isDraft && canValidatePurchaseReceipt(currentUser?.role)
   const validated = activeReceipt.status === 'validated'
+  // The bill is raised on the purchase order, but a validated receipt is
+  // where people look for it — the receipt page had no way to get there.
+  const canBill = validated && !!po && userCan(currentUser, 'postFinancial')
+    && po.lines.some(line => billableQty(line) > 0)
 
   const backToReceipts = () => closeReceiptDetail('list')
   const backToPo = () => {
@@ -52,9 +58,15 @@ export default function PurchaseReceiptDetail() {
     setMainView('orders')
     setSubView('form')
   }
+  const createBill = () => {
+    if (!po) return
+    setBillRequestPoId(po.id)
+    backToPo()
+  }
 
   const handlePrint = async () => {
     const serialItems: SerialLabelItem[] = []
+    const bulk: ProductLabelRequest[] = []
     for (const line of lines) {
       const prod = products.find(p => p.id === line.productId)
       if (line.requiresSerial && line.serials.length) {
@@ -71,9 +83,10 @@ export default function PurchaseReceiptDetail() {
           })
         }
       } else if (line.qtyReceived > 0 && prod) {
-        printProductLabels(prod, line.qtyReceived)
+        bulk.push({ product: prod, qty: line.qtyReceived })
       }
     }
+    if (bulk.length) printProductLabelsBatch(bulk, `${activeReceipt.ref} — Product Labels`)
     if (serialItems.length) await printSerialLabels(serialItems, { serials, products })
     if (!serialItems.length && lines.every(l => l.qtyReceived === 0)) {
       showToast('Nothing to print on this GRN yet', 'info')
@@ -113,6 +126,10 @@ export default function PurchaseReceiptDetail() {
           primaryAction={canProcess ? (
             <PrimaryActionButton hideLabelOnMobile={false} onClick={() => startReceive(activeReceipt.id)}>
               Review & Receive Goods
+            </PrimaryActionButton>
+          ) : canBill ? (
+            <PrimaryActionButton hideLabelOnMobile={false} onClick={createBill}>
+              Create Bill
             </PrimaryActionButton>
           ) : undefined}
           secondaryActions={(

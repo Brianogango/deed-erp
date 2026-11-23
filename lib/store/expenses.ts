@@ -62,4 +62,11 @@ export interface Expense {
   payeeName?: string
   notes?: string
   createdAt: string
+  /** Several expenses submitted together (a trip): same id and title. */
+  reportId?: string
+  reportTitle?: string
+  /** One payment that settled several claims (EXPB/NNNN). */
+  paymentBatchRef?: string
+  /** What happened to the claim: edited, approved, rejected, sent again, paid… */
+  history?: { date: string; by: string; action: string; note?: string }[]
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 import { AppProvider, useShellStore, User } from '@/lib/store'
@@ -9,6 +9,7 @@ import { markRouteWarmed } from '@/lib/warm-route'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
+import MobileTabBar from '@/components/layout/MobileTabBar'
 import JarvisPanel from '@/components/jarvis/JarvisPanel'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
@@ -180,7 +181,7 @@ function SidebarBackdrop({ onClose }: { onClose: () => void }) {
 
 function PublicPageSkeleton() {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#090b12] px-4">
+    <div className="flex min-h-[var(--app-h)] w-full items-center justify-center bg-[#090b12] px-4">
       <div className="h-12 w-12 rounded-2xl bg-white/10 animate-pulse" />
     </div>
   )
@@ -676,7 +677,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   if (!currentUserId) {
     return (
       <div className="
-        flex min-h-screen items-center justify-center
+        flex min-h-[var(--app-h)] items-center justify-center
         bg-[var(--bg-page)] px-6 text-sm text-[var(--text-3)]
       ">
         Your session has ended. Redirecting to sign in.
@@ -694,7 +695,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="app-shell-root flex h-screen h-dvh w-full overflow-hidden bg-[var(--bg-page)]">
+    <div className="app-shell-root flex h-screen h-[var(--app-h)] w-full overflow-hidden bg-[var(--bg-page)]">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-2 focus:z-[9500] focus:rounded-lg focus:bg-[var(--bg-card)] focus:px-3 focus:py-2 focus:text-xs focus:font-bold focus:text-[var(--text-1)]"
@@ -745,6 +746,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
             </ModuleRenderBoundary>
           </div>
         </main>
+
+        {/* Phone tab bar: under the content (not floating over it). */}
+        <Suspense fallback={null}>
+          <MobileTabBar />
+        </Suspense>
       </div>
 
       {/* Toast Notifications */}
@@ -790,9 +796,31 @@ export default function AppShell({
   serverState?: Record<string, unknown> | any
   children: React.ReactNode
 }) {
+  useAppHeight()
   return (
     <AppProvider initialUser={initialUser} initialUsers={initialUsers} serverState={serverState}>
       <AppContent>{children}</AppContent>
     </AppProvider>
   )
+}
+
+/**
+ * --app-h: the height of the window the app really has (app/globals.css).
+ * On an iPhone home-screen app 100vh / 100dvh were taller than the window,
+ * so full-height screens and dialogs ran past the bottom of the screen.
+ */
+function useAppHeight() {
+  useEffect(() => {
+    const root = document.documentElement
+    const set = () => root.style.setProperty('--app-h', `${window.innerHeight}px`)
+    set()
+    window.addEventListener('resize', set)
+    window.addEventListener('orientationchange', set)
+    window.addEventListener('pageshow', set)
+    return () => {
+      window.removeEventListener('resize', set)
+      window.removeEventListener('orientationchange', set)
+      window.removeEventListener('pageshow', set)
+    }
+  }, [])
 }

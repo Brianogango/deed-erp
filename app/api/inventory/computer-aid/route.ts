@@ -375,7 +375,7 @@ export async function POST(request: NextRequest) {
       deed_bulkStock: JSON.stringify(bulk),
       deed_stockMoves: JSON.stringify([stockMove, ...stockMoves]),
       deed_computerAidMovements: JSON.stringify([movement, ...movements]),
-    })
+    }, { bulkStockBase: state.deed_bulkStock })
 
     await writeFinancialAudit({
       userId: auth.session.user.id,

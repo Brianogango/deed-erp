@@ -26,9 +26,11 @@ import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { recordHttpMetric } from '@/lib/http-metrics'
 import { guardCollectionWrite } from '@/lib/store-bulk-delete-guard'
 import { applyCollectionDelta, isCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
+import { applyBulkStockDeltas, isBulkStockDeltaList } from '@/lib/inventory/bulk-stock-delta'
 import { SLIM_RULES, restoreSlimRows } from '@/lib/store-slim'
 import { filterStateForViewer } from '@/lib/store-viewer-state.server'
 import crypto from 'crypto'
+import { guardClaimRegression } from '@/lib/expenses/claim-actions'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_repairs_v2',
@@ -36,6 +38,7 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_expenses',
   'deed_outsourceJobs',
   'deed_outsourcePayments',
+  'deed_outsourceStatements',
   'deed_outsourceVendors',
   'deed_purchaseOrders',
   'deed_products',
@@ -256,7 +259,7 @@ export async function POST(request: Request) {
   }
 
   const rawBody = body as Record<string, unknown>
-  const allowedMetaKeys = new Set(['_version', 'If-Match', '_delta'])
+  const allowedMetaKeys = new Set(['_version', 'If-Match', '_delta', '_bulkStockDelta'])
   const unexpectedTopLevel = Object.keys(rawBody).filter(
     key => !key.startsWith('deed_') && !allowedMetaKeys.has(key),
   )
@@ -285,6 +288,20 @@ export async function POST(request: Request) {
       if (!rebuilt) return NextResponse.json({ error: 'Delta not applicable', key, code: 'delta_unavailable' }, { status: 409 })
       rawBody[key] = rebuilt
     }
+  }
+
+  // Quantity stock as changes (lib/inventory/bulk-stock-delta.ts): rebuild
+  // the list from the stored quantities, and save only the difference.
+  let bulkStockBase: unknown
+  const rawBulkDelta = rawBody._bulkStockDelta
+  delete rawBody._bulkStockDelta
+  if (rawBulkDelta !== undefined) {
+    if (!isBulkStockDeltaList(rawBulkDelta) || 'deed_bulkStock' in rawBody) {
+      return NextResponse.json({ error: 'Invalid _bulkStockDelta' }, { status: 400 })
+    }
+    const stored = await loadAppStateForWrite(['deed_bulkStock'])
+    bulkStockBase = Array.isArray(stored.deed_bulkStock) ? stored.deed_bulkStock : []
+    rawBody.deed_bulkStock = applyBulkStockDeltas(bulkStockBase, rawBulkDelta)
   }
 
   const unknownStoreKeys = Object.keys(rawBody).filter(
@@ -413,6 +430,18 @@ export async function POST(request: Request) {
     }
   }
 
+  // Expense claims: a save from an older screen can never move a claim
+  // backwards (undo an approval or payment the server recorded with its
+  // journal) or change the money on an approved / paid claim.
+  if (entries.deed_expenses && Array.isArray(serverState.deed_expenses)) {
+    try {
+      const incoming = JSON.parse(entries.deed_expenses)
+      if (Array.isArray(incoming)) {
+        entries.deed_expenses = JSON.stringify(guardClaimRegression(serverState.deed_expenses as Record<string, any>[], incoming))
+      }
+    } catch { /* left as sent; the merge below still applies */ }
+  }
+
   // Posted journals are append-only: existing refs are immutable and never
   // deleted. A rejected journal payload must only drop deed_journalEntries from
   // the batch — never fail the whole request — so co-bundled writes (POS
@@ -489,6 +518,7 @@ export async function POST(request: Request) {
         (
           key === 'deed_outsourceJobs'
           || key === 'deed_outsourcePayments'
+          || key === 'deed_outsourceStatements'
           || key === 'deed_outsourceVendors'
         )
         && entries[key]
@@ -611,7 +641,8 @@ export async function POST(request: Request) {
     )
   }
 
-  await saveStoreKeys(entries)
+  if (bulkStockBase !== undefined && entries.deed_bulkStock !== undefined) await saveStoreKeys(entries, { bulkStockBase })
+  else await saveStoreKeys(entries)
   await appendStoreAudit(session, savedKeys, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits)
   const version = await getAppStateVersion(savedKeys)
   const etag = buildStoreEtag(session, savedKeys, version)

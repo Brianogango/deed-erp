@@ -163,6 +163,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('inventory.reconcile', 'inventory', 'Run stock reconciliation', ['director', 'admin_officer', 'finance_officer', 'inventory_officer']),
       route('inventory.import', 'inventory', 'Import inbound stock and check table parity', ['director', 'admin_officer', 'inventory_officer']),
       route('inventory.serials.manage', 'inventory', 'Write off serials and normalise tags', ['director', 'admin_officer', 'inventory_officer', 'technical_lead']),
+      route('inventory.serials.delete', 'inventory', 'Delete serials from the system (inventory, With Issues and refurbishment)', ['director']),
       route('inventory.reconcile.apply', 'inventory', 'Apply stock reconciliation fixes', ['director']),
       route('inventory.products.edit', 'inventory', 'Edit products and their photos', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']),
       route('inventory.products.create', 'inventory', 'Create products, bulk upload and clean up the catalog', ['director', 'admin_officer', 'inventory_officer', 'technical_lead']),

@@ -124,12 +124,12 @@ export async function printSerialLabels(
   })))
 }
 
-export function printProductLabels(product: Product, qty: number): void {
+/** The thermal label for a product, or null when it has no barcode or SKU to print. */
+function productLabel(product: Product) {
   const barcodeValue = clean(product.barcode) || clean(product.sku)
-  if (!barcodeValue) return
-
+  if (!barcodeValue) return null
   const specsText = resolveProductSpecs(product as Product & { specs?: string | null })
-  const label = {
+  return {
     title: labelTitle(product.name),
     barcodeValue,
     caption: clean(product.sku) || barcodeValue,
@@ -139,10 +139,37 @@ export function printProductLabels(product: Product, qty: number): void {
       specsText,
     }),
   }
+}
 
-  const count = Math.max(0, Math.floor(Number(qty) || 0))
-  if (!count) return
-  printThermalLabelBatch(Array.from({ length: count }, () => label), `Product Label — ${product.name}`)
+export type ProductLabelRequest = { product: Product; qty: number }
+
+/**
+ * Labels for several products in one print job. Printing product by product
+ * opened a print window per product — the browser blocked all but the first,
+ * and each one needed its own trip through the print dialog.
+ *
+ * Returns how many labels went to the printer and the products skipped
+ * because they have no barcode or SKU to encode.
+ */
+export function printProductLabelsBatch(
+  requests: ProductLabelRequest[],
+  documentTitle = 'Product Labels',
+): { printed: number; skipped: Product[] } {
+  const labels: NonNullable<ReturnType<typeof productLabel>>[] = []
+  const skipped: Product[] = []
+  for (const { product, qty } of requests) {
+    const count = Math.max(0, Math.floor(Number(qty) || 0))
+    if (!count) continue
+    const label = productLabel(product)
+    if (!label) { skipped.push(product); continue }
+    for (let i = 0; i < count; i++) labels.push(label)
+  }
+  if (labels.length) printThermalLabelBatch(labels, documentTitle)
+  return { printed: labels.length, skipped }
+}
+
+export function printProductLabels(product: Product, qty: number): void {
+  printProductLabelsBatch([{ product, qty }], `Product Label — ${product.name}`)
 }
 
 type AssetTagItem = {

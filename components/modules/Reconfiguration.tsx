@@ -27,6 +27,7 @@ import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { compactSpecsString, UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
 import SearchablePick from '@/components/reconfiguration/SearchablePick'
+import { canFinishStuckBenchJob, readBenchNotes } from '@/lib/reconfiguration/bench-notes'
 import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { userCan } from '@/lib/auth/can'
 
@@ -44,7 +45,16 @@ type WorkOrderListItem = {
   finalSellingPrice?: number | null
   recommendedSellingPrice?: number | null
   version: number
+  notes?: string | null
+  dateCompleted?: string | null
+  removalLines?: { actualRemovedAt?: string | null; qaStatus?: string | null }[]
 }
+
+/** Parts pulled in a finished job and not yet tested. */
+const untestedParts = (o: { status: string; removalLines?: { actualRemovedAt?: string | null; qaStatus?: string | null }[] }) =>
+  o.status === 'completed' ? (o.removalLines ?? []).filter(l => l.actualRemovedAt && (l.qaStatus ?? 'pending') === 'pending').length : 0
+/** A bench job is done in one press; still "in progress" means it stopped half-way. */
+const isStuckBench = (o: { status: string; notes?: string | null }) => o.status === 'in_progress' && !!readBenchNotes(o.notes)
 
 type SlotDraft = {
   action: BenchActionKind
@@ -52,6 +62,13 @@ type SlotDraft = {
   moduleCount: number | ''
   outgoingProductId: string
   incomingProductId: string
+}
+
+function listNextAction(o: WorkOrderListItem): string {
+  if (isStuckBench(o)) return 'Stopped half-way — open it: Finish or Undo'
+  const untested = untestedParts(o)
+  if (untested > 0) return `Test ${untested} pulled part${untested === 1 ? '' : 's'}`
+  return String(reconfigurationNextAction(o.status) ?? '')
 }
 
 function reconfigurationNextAction(status: ReconfigStatus) {
@@ -118,6 +135,8 @@ export default function Reconfiguration() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<any>(null)
+  /** The bench job's saved notes (stuck reason, reversal), when the open job is one. */
+  const detailBench = detail ? readBenchNotes(detail.notes) : null
   const tab: 'orders' | 'new' | 'detail' =
     tabValue === 'new' ? 'new' : tabValue === 'detail' && detail ? 'detail' : 'orders'
   const setTab = useCallback((next: 'orders' | 'new' | 'detail') => {
@@ -137,11 +156,17 @@ export default function Reconfiguration() {
   const [ram, setRam] = useState<SlotDraft>(emptySlot)
   const [storage, setStorage] = useState<SlotDraft>(emptySlot)
   const [price, setPrice] = useState('')
+  const [labour, setLabour] = useState('')
+  const [jobReason, setJobReason] = useState('')
+  const [reverseReason, setReverseReason] = useState('')
+  const [reversing, setReversing] = useState(false)
   const [doneHint, setDoneHint] = useState<string | null>(null)
   const [manualRamGb, setManualRamGb] = useState('')
   const [manualStorageGb, setManualStorageGb] = useState('')
 
   const canCreate = userCan({ role }, 'createReconfiguration')
+  const canReverse = userCan({ role }, 'reverseReconfiguration')
+  const canTestParts = userCan({ role }, 'completeReconfiguration')
   const enabled = systemSettings?.reconfigurationEnabled !== false
 
   const ramParts = useMemo(() => ramComponentProducts(products), [products])
@@ -401,6 +426,8 @@ export default function Reconfiguration() {
           currentRamGb: currentRamGb || undefined,
           currentStorageGb: currentStorageGb || undefined,
           finalSellingPrice: price.trim() ? Number(price) : undefined,
+          labourCost: labour.trim() ? Number(labour) : undefined,
+          reason: jobReason.trim() || undefined,
         }),
       })
       setDetail(wo)
@@ -434,11 +461,12 @@ export default function Reconfiguration() {
         body: JSON.stringify({ version: detail.version, ...body }),
       })
       setDetail(data)
-      if (path === 'complete' && data?.status === 'completed') {
+      // The machine's specs or price changed: mirror them here at once.
+      if (['complete', 'finish', 'reverse', 'undo'].includes(path) && ['completed', 'reversed', 'cancelled'].includes(data?.status)) {
         const serialKey = data.serialId || data.manufacturerSerial
         if (serialKey) {
           try {
-            await refreshCompletedUnit(serialKey, data)
+            await refreshCompletedUnit(serialKey, data.status === 'completed' ? data : { finalSellingPrice: data.sellingPriceBefore })
           } catch {
             // Completion succeeded; SSE / the next device load can still refresh.
           }
@@ -470,6 +498,11 @@ export default function Reconfiguration() {
       </div>
     )
   }
+
+  const stuckCount = orders.filter(isStuckBench).length
+  const partsToTest = orders.reduce((sum, o) => sum + untestedParts(o), 0)
+  const weekStartDay = new Date(Date.now() - ((new Date().getDay() + 6) % 7) * 86400000).toISOString().slice(0, 10)
+  const olderOpen = orders.filter(o => !['completed', 'cancelled', 'reversed'].includes(o.status) && !isStuckBench(o)).length
 
   const orderColumns: ColumnDef<WorkOrderListItem>[] = [
     { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: o => <span className="text-xs font-bold text-[var(--text-1)]">{o.ref}</span>, accessor: o => o.ref, exportValue: o => o.ref },
@@ -509,7 +542,7 @@ export default function Reconfiguration() {
       sortValue: o => o.costAfter,
       exportValue: o => `${o.costBefore} -> ${o.costAfter}`,
     },
-    { key: 'next', label: 'Next action', priority: 3, width: '1.2fr', render: o => <span className="text-[11px] text-[var(--text-3)]">{reconfigurationNextAction(o.status)}</span>, sortable: false, exportValue: o => String(reconfigurationNextAction(o.status) ?? '') },
+    { key: 'next', label: 'Next action', priority: 3, width: '1.2fr', render: o => <span className="text-[11px] text-[var(--text-3)]">{listNextAction(o)}</span>, sortable: false, exportValue: o => listNextAction(o) },
   ]
 
   return (
@@ -546,25 +579,27 @@ export default function Reconfiguration() {
 
       <div className="mod-body reconfig-body" aria-busy={loading}>
       <section className="reconfig-summary" aria-label="Reconfiguration overview">
-        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('') }}>
-          <span>Needs action</span>
-          <strong>{orders.filter(order => ['pending_stock_check', 'components_reserved', 'pending_approval', 'approved'].includes(order.status)).length}</strong>
-          <small>Stock checks and approvals</small>
-        </button>
-        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('in_progress') }}>
-          <span>In progress</span>
-          <strong>{orders.filter(order => order.status === 'in_progress').length}</strong>
-          <small>Technician work underway</small>
-        </button>
-        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('pending_qa') }}>
-          <span>Awaiting QA</span>
-          <strong>{orders.filter(order => order.status === 'pending_qa').length}</strong>
-          <small>Ready for verification</small>
+        {/* Bench jobs finish in one press: what needs a person is a job that
+            stopped half-way, and parts pulled out that nobody has tested. */}
+        <button type="button" className={stuckCount > 0 ? 'is-alert' : ''} onClick={() => { setTab('orders'); setStatusFilter('in_progress') }}>
+          <span>Stuck</span>
+          <strong>{stuckCount}</strong>
+          <small>Stopped half-way: Finish or Undo</small>
         </button>
         <button type="button" onClick={() => { setTab('orders'); setStatusFilter('completed') }}>
-          <span>Completed</span>
-          <strong>{orders.filter(order => order.status === 'completed').length}</strong>
-          <small>Final configuration applied</small>
+          <span>Parts to test</span>
+          <strong>{partsToTest}</strong>
+          <small>Pulled out, not yet passed or failed</small>
+        </button>
+        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('completed') }}>
+          <span>Done this week</span>
+          <strong>{orders.filter(o => o.status === 'completed' && String(o.dateCompleted ?? '').slice(0, 10) >= weekStartDay).length}</strong>
+          <small>Machines changed since Monday</small>
+        </button>
+        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('') }}>
+          <span>All jobs</span>
+          <strong>{orders.length}</strong>
+          <small>{olderOpen > 0 ? `${olderOpen} older job${olderOpen === 1 ? '' : 's'} still open` : 'Completed, undone and reversed'}</small>
         </button>
       </section>
       {error && (
@@ -581,14 +616,6 @@ export default function Reconfiguration() {
       {tab === 'orders' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Work orders" count={orders.length}>
-            <input
-              aria-label="Search work orders"
-              className="form-input text-[11px] py-1.5"
-              style={{ width: 200 }}
-              placeholder="Search ref or serial…"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-            />
             <select aria-label="Filter by status" className="form-select text-[11px] py-1.5" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All statuses</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -604,7 +631,13 @@ export default function Reconfiguration() {
             columns={orderColumns}
             rows={orders}
             rowKey={o => o.id}
-            hideSearch
+            // The search lives in the table's toolbar beside its menu (it sat
+            // in the panel header, leaving the menu alone on its own row).
+            // The server does the matching, so the table does not filter again.
+            searchValue={q}
+            onSearchChange={setQ}
+            clientSearch={false}
+            searchPlaceholder="Search ref or serial…"
             onRowClick={o => void loadDetail(o.id)}
             emptyMessage={loading ? 'Loading work orders…' : 'No reconfiguration work orders yet.'}
             exportTitle="Reconfiguration work orders"
@@ -736,6 +769,20 @@ export default function Reconfiguration() {
               />
             </label>
           )}
+          {deviceConfig && (
+            <div className="reconfig-manual-grid">
+              <label className="reconfig-field">
+                <span>Labour cost (optional)</span>
+                <input type="number" className="form-input w-full" min={0} value={labour}
+                  onChange={e => setLabour(e.target.value)} placeholder="Added to this unit's cost" />
+              </label>
+              <label className="reconfig-field">
+                <span>Reason (optional)</span>
+                <input className="form-input w-full" value={jobReason} maxLength={200}
+                  onChange={e => setJobReason(e.target.value)} placeholder="e.g. Customer asked for 16GB" />
+              </label>
+            </div>
+          )}
 
           <div className="reconfig-apply-bar reconfig-bench-actions">
             <button
@@ -766,6 +813,19 @@ export default function Reconfiguration() {
               </div>
             </div>
             <div className="reconfig-action-bar">
+              {detailBench && detail.status === 'in_progress' ? (
+                <>
+                  {canCreate && canFinishStuckBenchJob(detail.notes) && (
+                    <button type="button" className="btn-primary" onClick={() => void runAction('finish')} disabled={loading}>Finish</button>
+                  )}
+                  {canCreate && (
+                    <button type="button" className="btn-secondary" onClick={() => {
+                      if (window.confirm('Put back every part this job moved and cancel it?')) void runAction('undo', {})
+                    }} disabled={loading}>Undo</button>
+                  )}
+                </>
+              ) : (
+                <>
               {['pending_stock_check', 'draft', 'components_reserved'].includes(detail.status) && (
                 <button type="button" className="btn-secondary" onClick={() => void runAction('reserve')} disabled={loading}>Reserve</button>
               )}
@@ -801,8 +861,47 @@ export default function Reconfiguration() {
               {!['completed', 'cancelled', 'reversed'].includes(detail.status) && (
                 <button type="button" className="btn-secondary" onClick={() => void runAction('cancel', { reason: 'Cancelled from UI' })} disabled={loading}>Cancel</button>
               )}
+                </>
+              )}
+              {detail.status === 'completed' && canReverse && !reversing && (
+                <button type="button" className="btn-secondary" onClick={() => { setReversing(true); setReverseReason('') }} disabled={loading}>Reverse</button>
+              )}
             </div>
           </div>
+
+          {detailBench?.stuck && detail.status === 'in_progress' && (
+            <div className="reconfig-banner reconfig-banner--danger" role="alert">
+              This job stopped half-way: {detailBench.stuck.message}.{' '}
+              {canFinishStuckBenchJob(detail.notes)
+                ? 'Fix the cause (for example, receive the missing part), then press Finish — or Undo to put the parts back.'
+                : 'It was started before jobs could be resumed: press Undo to put its parts back, then do the job again.'}
+            </div>
+          )}
+          {detailBench && detail.status === 'in_progress' && !detailBench.stuck && (
+            <div className="reconfig-banner reconfig-banner--danger" role="alert">
+              This bench job did not finish. {canFinishStuckBenchJob(detail.notes) ? 'Press Finish to complete it, or Undo to put the parts back.' : 'Press Undo to put its parts back, then do the job again.'}
+            </div>
+          )}
+          {detail.status === 'reversed' && (
+            <div className="reconfig-banner" role="status">
+              Reversed{detailBench?.reversed ? `: ${detailBench.reversed.reason}` : ''}. The parts went back and the machine is on its old specs, cost and price.
+            </div>
+          )}
+          {reversing && detail.status === 'completed' && (
+            <div className="reconfig-reverse">
+              <p>Reversing puts the fitted parts back on the shelf, puts the pulled parts back in the machine, and returns the machine to its old specs, cost and price. Reprint its label afterwards.</p>
+              <label className="reconfig-field">
+                <span>Why *</span>
+                <input className="form-input w-full" value={reverseReason} maxLength={300}
+                  onChange={e => setReverseReason(e.target.value)} placeholder="e.g. Wrong RAM fitted" />
+              </label>
+              <div className="reconfig-reverse__actions">
+                <button type="button" className="btn-outline" onClick={() => setReversing(false)}>Keep the job</button>
+                <button type="button" className="btn-primary" disabled={!reverseReason.trim() || loading}
+                  onClick={() => void runAction('reverse', { reason: reverseReason.trim() }).then(() => setReversing(false))}>Reverse job</button>
+              </div>
+            </div>
+          )}
 
           <div className="reconfig-compare">
             <h3>This unit’s name</h3>
@@ -845,9 +944,19 @@ export default function Reconfiguration() {
                 <li key={l.id}>
                   <span>
                     {l.componentProduct?.name} · {l.slotType} #{l.slotNumber}
-                    {l.actualRemovedAt ? ' — recorded' : ''}
+                    {l.actualRemovedAt
+                      ? l.qaStatus === 'passed' ? ' — tested good, on the shelf'
+                        : l.qaStatus === 'failed' ? ' — faulty, in quarantine'
+                        : detail.status === 'completed' ? ' — waiting to be tested' : ' — pulled'
+                      : ''}
                   </span>
-                  {detail.status === 'in_progress' && !l.actualRemovedAt && (
+                  {detail.status === 'completed' && l.actualRemovedAt && (l.qaStatus ?? 'pending') === 'pending' && canTestParts && (
+                    <span className="reconfig-test-actions">
+                      <button type="button" className="btn-secondary" disabled={loading} onClick={() => void runAction('test-part', { lineId: l.id, passed: true })}>Tested good</button>
+                      <button type="button" className="btn-outline" disabled={loading} onClick={() => void runAction('test-part', { lineId: l.id, passed: false })}>Faulty</button>
+                    </span>
+                  )}
+                  {!detailBench && detail.status === 'in_progress' && !l.actualRemovedAt && (
                     <button
                       type="button"
                       className="btn-secondary"
@@ -880,7 +989,7 @@ export default function Reconfiguration() {
                     {l.componentProduct?.name} → {l.targetSlotType} #{l.targetSlotNumber}
                     {l.installedAt ? ' — recorded' : ''}
                   </span>
-                  {detail.status === 'in_progress' && !l.installedAt && (
+                  {!detailBench && detail.status === 'in_progress' && !l.installedAt && (
                     <button
                       type="button"
                       className="btn-secondary"

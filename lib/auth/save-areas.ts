@@ -102,6 +102,9 @@ export const SAVE_AREAS: readonly SaveArea[] = [
   // The job form can add a vendor in place.
   area('save.outsource.vendors', 'Save outsource vendors', [...ADMIN, 'technical_lead', 'inventory_officer'], ['outsource', 'repair'], ['deed_outsourceVendors']),
   area('save.outsource.payments', 'Save outsource payments', FINANCE, ['outsource', 'accounting'], ['deed_outsourcePayments']),
+  // Weekly vendor statements are prepared by the app for whoever has the
+  // Outsource screen open; Finance confirms them into a bill.
+  area('save.outsource.statements', 'Save weekly outsource statements', [...REPAIR, 'inventory_officer'], ['outsource', 'repair', 'accounting'], ['deed_outsourceStatements']),
 
   // Finance
   area('save.accounting.books', 'Save payments, customer credits, accounts and journals', FINANCE, ['accounting'],

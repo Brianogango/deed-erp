@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Field, Input, Modal, Select } from '@/components/ui'
 import { LOCATIONS, useApp, type LocationId, type Product } from '@/lib/store'
 import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
-import { PLACEHOLDER_KINDS, type PlaceholderKind } from '@/lib/refurbishment/unidentified'
+import { PLACEHOLDER_KINDS, standInProductName, type PlaceholderKind } from '@/lib/refurbishment/unidentified'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { INTAKE_SHEET_COLUMNS, parseIntakeSheet, type IntakeSheetRow } from '@/lib/refurbishment/intake-sheet'
 import { readXlsx } from '@/lib/inventory/read-xlsx'
@@ -30,7 +30,10 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
   const [destination, setDestination] = useState<'with_issues' | 'refurbishment'>('with_issues')
   const [sourceProductId, setSourceProductId] = useState('')
   const [sourceLocation, setSourceLocation] = useState<LocationId | ''>('')
-  const [fileAs, setFileAs] = useState<PlaceholderKind | 'known'>('laptop')
+  const [fileAs, setFileAs] = useState<PlaceholderKind | 'known' | 'named'>('laptop')
+  // "A name for now": the device type and a quick name ("lenovo tm").
+  const [standInKind, setStandInKind] = useState<PlaceholderKind>('laptop')
+  const [standInName, setStandInName] = useState('')
   const [knownProductId, setKnownProductId] = useState('')
   // A model just created from the search: on screen before the list has it.
   const [createdModel, setCreatedModel] = useState<Product | null>(null)
@@ -65,7 +68,8 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
   /** The product machines are filed under when their model is not known. */
   async function fallbackProductId(): Promise<string | null> {
     if (fileAs === 'known') return knownProductId || null
-    const res = await fetch('/api/refurbishment/placeholders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: fileAs }) })
+    const body = fileAs === 'named' ? { kind: standInKind, name: standInName.trim() } : { kind: fileAs }
+    const res = await fetch('/api/refurbishment/placeholders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok || !data.product?.id) { setError(data.error || 'Could not set up the unidentified product'); return null }
     if (data.created) await refreshProductCatalog().catch(() => 0)
@@ -114,16 +118,41 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
       if (units.some(u => u.cost.trim() && !(Number(u.cost) >= 0))) return setError('Costs must be 0 or more')
     }
     if (fileAs === 'known' && !knownProductId) return setError('Choose the model, or file them as unidentified')
+    // From Excel, each unknown row's own Model is its stand-in name.
+    if (fileAs === 'named' && mode !== 'excel' && !standInProductName(standInName)) return setError('Type a name for now, e.g. lenovo tm')
     setSaving(true)
     try {
-      const needsFallback = mode === 'rows' || sheet!.some(r => !r.productId)
-      const fallback = needsFallback ? await fallbackProductId() : null
+      // Excel + "a name for now": one stand-in per unknown Model in the sheet.
+      const perModel = new Map<string, string>()
+      if (mode === 'excel' && fileAs === 'named') {
+        const models = [...new Set(sheet!.filter(r => !r.productId).map(r => String(r.model ?? '').trim()).filter(m => standInProductName(m)))]
+        for (const model of models) {
+          const res = await fetch('/api/refurbishment/placeholders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: standInKind, name: model }) })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok || !data.product?.id) { setError(data.error || `Could not set up a stand-in for ${model}`); return }
+          perModel.set(model.toLowerCase(), data.product.id)
+        }
+        if (models.length) await refreshProductCatalog().catch(() => 0)
+      }
+      const standInFor = (r: { model?: string | null }) => perModel.get(String(r.model ?? '').trim().toLowerCase())
+      const needsFallback = mode === 'rows' || sheet!.some(r => !r.productId && !standInFor(r))
+      const fallback = needsFallback
+        ? (mode === 'excel' && fileAs === 'named'
+          // A row with no Model at all goes under the plain device placeholder.
+          ? await (async () => {
+            const res = await fetch('/api/refurbishment/placeholders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: standInKind }) })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data.product?.id) { setError(data.error || 'Could not set up the unidentified product'); return null }
+            return data.product.id as string
+          })()
+          : await fallbackProductId())
+        : null
       if (needsFallback && !fallback) return
       const lines = mode === 'excel'
-        ? sheet!.map(r => ({ productId: r.productId ?? fallback!, serial: r.serial || undefined, assetId: r.assetId || undefined, issue: r.issue, cost: r.cost }))
+        ? sheet!.map(r => ({ productId: r.productId ?? standInFor(r) ?? fallback!, serial: r.serial || undefined, assetId: r.assetId || undefined, issue: r.issue, cost: r.cost }))
         : units.map(u => ({ serial: u.serial.trim() || undefined, assetId: u.assetId.trim() || undefined, issue: u.issue.trim(), cost: u.cost.trim() ? Number(u.cost) : null }))
       const made = await intakeTaggedMachines({
-        productId: (mode === 'excel' ? (fallback ?? sheet![0].productId) : fallback) as string,
+        productId: (mode === 'excel' ? (fallback ?? sheet![0].productId ?? standInFor(sheet![0])) : fallback) as string,
         units: lines,
         from: fromStock ? { productId: sourceProductId, location: sourceLocation as LocationId } : undefined,
         reference: `${destination === 'with_issues' ? 'ISSUES-IN' : 'REFURB-IN'} ${new Date().toISOString().slice(0, 10)}`,
@@ -186,12 +215,32 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
             ]} />
           </Field>
           <Field label={mode === 'excel' ? 'Models not in the catalog' : 'File them under'} required hint="Unidentified ones move to the right model once identified">
-            <Select value={fileAs} onChange={v => setFileAs(v as PlaceholderKind | 'known')} options={[
+            <Select value={fileAs} onChange={v => setFileAs(v as PlaceholderKind | 'known' | 'named')} options={[
               ...PLACEHOLDER_KINDS.map(k => ({ value: k.id, label: `${k.label} — unidentified` })),
+              { value: 'named', label: mode === 'excel' ? "Each row's Model as a stand-in" : 'A name for now (stand-in)…' },
               { value: 'known', label: 'A model I know…' },
             ]} />
           </Field>
         </div>
+        {fileAs === 'named' && (
+          <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-3">
+            <Field label="Device type" required>
+              <Select value={standInKind} onChange={v => setStandInKind(v as PlaceholderKind)} options={PLACEHOLDER_KINDS.map(k => ({ value: k.id, label: k.label }))} />
+            </Field>
+            {mode !== 'excel' && <Field
+              label="Name for now"
+              required
+              hint={standInProductName(standInName)
+                ? `Filed under "${standInProductName(standInName)}" — matched to its real product line after refurbishment`
+                : 'What is known, e.g. lenovo tm. Matched to the real product line after refurbishment.'}
+            >
+              <Input value={standInName} onChange={setStandInName} placeholder="e.g. lenovo tm" />
+            </Field>}
+            {mode === 'excel' && (
+              <p className="self-end pb-2 text-[11px] text-t3">Rows whose Model is not in the catalog go under "&lt;Model&gt; — unidentified" and are matched after refurbishment.</p>
+            )}
+          </div>
+        )}
         {fileAs === 'known' && (
           <RefurbProductPicker
             kind="machine"
@@ -269,7 +318,7 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
                       <span className="text-t4 tabular-nums">L{r.line}</span>
                       <span className="min-w-0">
                         <span className="block truncate text-t1">{r.productName ?? r.model}</span>
-                        {!r.productId && r.model && <span className="block text-[10px] text-t3">Not in catalog — filed as unidentified</span>}
+                        {!r.productId && r.model && <span className="block text-[10px] text-t3">{fileAs === 'named' && standInProductName(r.model) ? `Not in catalog — filed as "${standInProductName(r.model)}"` : 'Not in catalog — filed as unidentified'}</span>}
                         {r.problem && <span className="block text-[10px] font-semibold" style={{ color: 'var(--danger-text)' }}>{r.problem}</span>}
                       </span>
                       <span className="truncate text-t2">{r.serial || <span className="text-t4">no serial</span>}{r.issue ? <span className="block truncate text-[10px] text-t3">{r.issue}</span> : null}</span>

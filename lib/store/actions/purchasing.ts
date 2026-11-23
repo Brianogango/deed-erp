@@ -378,7 +378,13 @@ export function createPurchasingActions(store: StoreDeps): Pick<AppState, 'creat
           })
           if (!response.ok) {
             const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
-            const message = payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
+            // A 401 here is never about the role — Admin Officers may validate.
+            // The server refused the sign-in itself: the role or password changed
+            // since signing in, or MFA is required for this role. A bare
+            // "Unauthorized" read as "you are not allowed", which was wrong.
+            const message = response.status === 401
+              ? 'Your sign-in needs to be renewed before stock can be received (your role or password may have changed since you signed in). Sign out, sign back in, then validate the receipt again.'
+              : payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
             store.showToast(message, 'error')
             return false
           }

@@ -41,6 +41,7 @@ const { mockSql, mockPrisma, mockWriteStoreRecords } = vi.hoisted(() => {
       product: { findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       serialNumber: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn(), create: vi.fn() },
       stockMovement: { upsert: vi.fn() },
+      stockLocationLevel: { findMany: vi.fn().mockResolvedValue([]), upsert: vi.fn(), delete: vi.fn() },
       goodsReceivedNote: { upsert: vi.fn() },
       purchaseOrder: { findUnique: vi.fn() },
     },
@@ -191,5 +192,35 @@ describe('a serial the serials table cannot hold', () => {
     const result = await serials([{ id: '44444444-4444-4444-8444-444444444444', serial: 'SN-OK', productId }])
     expect(result.skipped).toBe(0)
     expect(result.error).toBeUndefined()
+  })
+})
+
+describe('a unit deleted from the system', () => {
+  it('is not brought back by a stale copy of its row, only by a new unit', async () => {
+    const productId = '33333333-3333-4333-8333-333333333333'
+    const deletedId = '55555555-5555-4555-8555-555555555555'
+    mockPrisma.product.findMany.mockResolvedValue([{ id: productId }])
+    mockPrisma.serialNumber.findMany.mockResolvedValue([{ id: deletedId, serialNumber: 'SN-GONE', productId, removedAt: new Date(), createdAt: new Date(0) }])
+    mockPrisma.serialNumber.update.mockClear()
+    mockPrisma.serialNumber.create.mockClear()
+    await mirrorKnownDomain('deed_serials', JSON.stringify([{ id: deletedId, serial: 'SN-GONE', productId, status: 'available', location: 'warehouse' }]), null)
+    expect(mockPrisma.serialNumber.update).not.toHaveBeenCalled()
+    expect(mockPrisma.serialNumber.create).not.toHaveBeenCalled()
+    // Received again as a new unit: allowed.
+    await mirrorKnownDomain('deed_serials', JSON.stringify([{ id: '66666666-6666-4666-8666-666666666666', serial: 'SN-GONE', productId, status: 'available', location: 'warehouse' }]), null)
+    expect(mockPrisma.serialNumber.update).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('stock levels saved from a browser', () => {
+  it('keeps rows the saved list does not have (a receipt made after the tab loaded)', async () => {
+    mockPrisma.stockLocationLevel.findMany.mockResolvedValueOnce([
+      { productId: 'p-old', location: 'warehouse', qty: 2 },
+      { productId: 'p-received', location: 'warehouse', qty: 1 },
+    ])
+    const stale = JSON.stringify([{ productId: 'p-old', location: 'warehouse', qty: 1 }])
+    await mirrorKnownDomain('deed_bulkStock', stale, null)
+    expect(mockPrisma.stockLocationLevel.delete).not.toHaveBeenCalled()
+    expect(mockPrisma.stockLocationLevel.upsert).toHaveBeenCalledTimes(1)
   })
 })

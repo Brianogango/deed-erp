@@ -1,0 +1,89 @@
+/* ── "Turn on alerts" card in the installed app ────────────────────────── */
+.push-nudge {
+  position: fixed;
+  z-index: 9400;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  width: min(380px, calc(100vw - 32px));
+  padding: 0.875rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+  background: var(--bg-card, #fff);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  color: var(--text-2);
+  font-size: 12px;
+  animation: push-nudge-in 220ms var(--ease-out, ease-out);
+}
+.push-nudge__icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: url('/deed-logo.png') center / cover no-repeat, var(--navy);
+}
+.push-nudge__dot {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.push-nudge__copy b {
+  display: block;
+  margin-bottom: 0.125rem;
+  color: var(--text-1);
+  font-size: 13px;
+}
+.push-nudge__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.push-nudge__actions button {
+  min-height: 40px;
+  padding: 0 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.push-nudge__later {
+  border: 1px solid var(--border-lt);
+  background: transparent;
+  color: var(--text-2);
+}
+.push-nudge__on {
+  border: 0;
+  background: var(--accent-cyan, #00AEEF);
+  color: #fff;
+}
+.push-nudge button:disabled { opacity: 0.6; }
+@media (max-width: 767px) {
+  /* Above the bottom tab bar. */
+  .push-nudge {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: calc(var(--mobile-tab-h, 0px) + 12px);
+  }
+}
+@keyframes push-nudge-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .push-nudge { animation: none; }
+}

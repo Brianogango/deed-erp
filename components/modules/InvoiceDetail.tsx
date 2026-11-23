@@ -1,5 +1,6 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import JobTrail from '@/components/erp/JobTrail'
 import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
 import { DocumentWarranties } from '@/components/aftersales/DocumentWarranties'
@@ -34,6 +35,7 @@ import Chatter from '@/components/erp/Chatter'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
+import { findRepairForInvoice, repairDeviceHeading } from '@/lib/repair-invoice-device-section'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
@@ -111,6 +113,7 @@ export default function InvoiceDetail() {
     getDocumentPaymentDetails,
     setDocumentPaymentDetails,
     scheduleInvoiceDelivery,
+    repairs,
   } = useFinanceStore()
 
   const { deliveryJobs, riders, recordCustomerPaidRider } = useDeliveryStore()
@@ -121,6 +124,32 @@ export default function InvoiceDetail() {
   const canCancelOrReset = canCancelOrResetInvoice(currentUser?.role)
   const canApplyCredit = canApplyCustomerCredit(currentUser?.role)
   const invoice = invoices.find(i => i.id === id)
+
+  // The device a repair invoice was for, shown above its lines as on the PDF.
+  // Found from the repairs this page has, else asked of the server: the
+  // Finance pages do not load the repair list.
+  const localDeviceHeading = (() => {
+    if (!invoice || invoice.type !== 'customer_invoice') return ''
+    const so = saleOrders.find(o => o.id === invoice.saleOrderId)
+    const repair = findRepairForInvoice(invoice, repairs, so?.repairId)
+    return repair ? repairDeviceHeading(repair) : ''
+  })()
+  const [serverDeviceHeading, setServerDeviceHeading] = useState('')
+  const invoiceIsCustomer = invoice?.type === 'customer_invoice'
+  useEffect(() => {
+    setServerDeviceHeading('')
+    if (!id || !invoiceIsCustomer || localDeviceHeading) return
+    const controller = new AbortController()
+    fetch(`/api/invoices/${encodeURIComponent(id)}/repair-device`, { signal: controller.signal, cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then((body: { heading?: string | null } | null) => { if (body?.heading) setServerDeviceHeading(body.heading) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [id, invoiceIsCustomer, localDeviceHeading])
+  const deviceHeading = localDeviceHeading || serverDeviceHeading
+  // Lines that already carry headings (a combined repair invoice, or ones
+  // Finance added) keep their own; the device heading is not added on top.
+  const showDeviceHeading = !!deviceHeading && !(invoice?.lines ?? []).some(l => l.lineType === 'section')
 
   const [showPayModal, setShowPayModal] = useState(false)
   const [showCreditNote, setShowCreditNote] = useState(false)
@@ -593,6 +622,7 @@ export default function InvoiceDetail() {
           companySettings,
           bankAccounts,
           getDocumentPaymentDetails(invoice.id),
+          repairs,
         )
       } catch { /* the email still sends without the attachment */ }
       const res = await fetch(`/api/invoices/${invoice.id}/send`, {
@@ -628,6 +658,7 @@ export default function InvoiceDetail() {
         companySettings,
         bankAccounts,
         getDocumentPaymentDetails(invoice.id),
+        repairs,
       )
     } catch {
       showToast('PDF generation failed', 'error')
@@ -803,7 +834,7 @@ export default function InvoiceDetail() {
             {invoice.type === 'customer_invoice' && availableCredit > 0 && (
               <p className="invoice-detail__country">Store credit {fmtKes(availableCredit)} — apply from More actions</p>
             )}
-            <p className="invoice-detail__country">{partnerCountry}</p>
+            <p className="invoice-detail__country invoice-detail__country--place">{partnerCountry}</p>
             <div className="invoice-detail__dates">
               <span className="invoice-detail__date-item">
                 <Fa icon={faCalendarDay} aria-hidden="true" />
@@ -853,7 +884,7 @@ export default function InvoiceDetail() {
         </div>
 
         {journeyNotice && (
-          <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)]" role="note">
+          <div className={`invoice-detail__notice rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)] ${payState === 'paid' ? 'is-settled' : ''}`} role="note">
             <strong className="text-[var(--text-1)]">{journeyNotice.title}</strong>{' '}
             {journeyNotice.message}
           </div>
@@ -1005,6 +1036,14 @@ export default function InvoiceDetail() {
                   </tr>
                 </thead>
                 <tbody>
+                  {showDeviceHeading && (
+                    <tr className="invoice-detail__section-row">
+                      <td className="is-num" />
+                      <td colSpan={invoice.status === 'draft' && canManageFinance ? 7 : 6}>
+                        <span className="font-bold">{deviceHeading}</span>
+                      </td>
+                    </tr>
+                  )}
                   {(invoice.lines || []).map((line, idx) => {
                     const canReorder = invoice.status === 'draft' && canManageFinance
                     const moveButtons = canReorder ? (
@@ -1062,15 +1101,15 @@ export default function InvoiceDetail() {
                       ? 'Rider delivery'
                       : (rawDesc || '—')
                     return (
-                      <tr key={line.id || idx}>
-                        <td className="is-num">{idx + 1}</td>
-                        <td><span className="invoice-detail__line-desc">{desc}</span></td>
-                        <td className="is-num">{line.qty}</td>
-                        <td className="is-num">{fmtKes(line.unitPrice)}</td>
-                        <td className="is-num">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '0%'}</td>
-                        <td className="is-num">{(line.taxRate ?? 0) > 0 ? `${line.taxRate}%` : '0%'}</td>
-                        <td className="is-num is-strong">{fmtKes(line.subtotal)}</td>
-                        {canReorder && <td>{moveButtons}</td>}
+                      <tr key={line.id || idx} className="invoice-detail__item-row">
+                        <td className="is-num" data-col="index">{idx + 1}</td>
+                        <td data-col="description"><span className="invoice-detail__line-desc">{desc}</span></td>
+                        <td className="is-num" data-col="qty">{line.qty}</td>
+                        <td className="is-num" data-col="price">{fmtKes(line.unitPrice)}</td>
+                        <td className="is-num" data-col="discount" data-zero={(line.discountPct ?? 0) > 0 ? undefined : '1'}>{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '0%'}</td>
+                        <td className="is-num" data-col="tax">{(line.taxRate ?? 0) > 0 ? `${line.taxRate}%` : '0%'}</td>
+                        <td className="is-num is-strong" data-col="amount">{fmtKes(line.subtotal)}</td>
+                        {canReorder && <td data-col="actions">{moveButtons}</td>}
                       </tr>
                     )
                   })}
@@ -1217,11 +1256,11 @@ export default function InvoiceDetail() {
             </header>
             <dl className="invoice-detail__dl">
               {invoice.customerPoNumber && <div><dt>Customer PO</dt><dd>{invoice.customerPoNumber}</dd></div>}
-              <div><dt>Payments</dt><dd>{(invoice.payments || []).length}</dd></div>
-              <div><dt>Journal</dt><dd>{invoice.type === 'customer_invoice' ? 'Customer Invoices' : 'Vendor Bills'}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Payments</dt><dd>{(invoice.payments || []).length}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Journal</dt><dd>{invoice.type === 'customer_invoice' ? 'Customer Invoices' : 'Vendor Bills'}</dd></div>
               <div><dt>Tax</dt><dd>{invoiceIsVat ? `VAT ${companySettings.vatRate}%` : 'Non-VAT'}</dd></div>
-              <div><dt>Company</dt><dd>{companySettings.name}</dd></div>
-              <div><dt>Currency</dt><dd>{companySettings.currency || 'KES'}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Company</dt><dd>{companySettings.name}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Currency</dt><dd>{companySettings.currency || 'KES'}</dd></div>
             </dl>
             {existingOrc && (
               <div className="mt-2">
@@ -1527,16 +1566,16 @@ export default function InvoiceDetail() {
 
       {showPayModal && (
         <Modal title={invoice.type === 'customer_invoice' ? 'Record customer receipt' : 'Record vendor payment'} onClose={() => setShowPayModal(false)} width={460}>
-          <div className="flex flex-col gap-4">
-            {/* Invoice summary */}
-            <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex justify-between">
-              <div>
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">{docLabel}</p>
-                <p className="text-xs font-bold text-[var(--text-1)]">{displayDocRef(invoice.ref)} · {invoice.partnerName}</p>
+          <div className="pay-form flex flex-col gap-4">
+            {/* Who and how much, in one line each. */}
+            <div className="pay-form__summary flex items-start justify-between gap-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-[var(--text-1)]">{invoice.partnerName}</p>
+                <p className="text-[11px] text-[var(--text-3)]">{displayDocRef(invoice.ref)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Balance Due</p>
-                <p className="text-xs font-black font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
+              <div className="shrink-0 text-right">
+                <p className="text-[11px] text-[var(--text-3)]">Balance due</p>
+                <p className="text-[13px] font-bold font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
               </div>
             </div>
 
@@ -1555,32 +1594,18 @@ export default function InvoiceDetail() {
 
             <Field label={`${invoice.type === 'customer_invoice' ? 'Amount received' : 'Amount paid'} (max ${fmtKes(balance)})`}>
               <Input type="number" value={payAmount} onChange={setPayAmount} placeholder="0.00" />
-              {overpay && (
-                <p className="text-[10px] text-amber-600 mt-1 font-bold">Will be capped at {fmtKes(balance)}</p>
-              )}
-              {willFullyPay && !overpay && Number(payAmount) > 0 && (
-                <p className="text-[10px] text-emerald-600 mt-1 font-bold">✓ This fully clears the {docLabel.toLowerCase()}</p>
-              )}
-              {paying > 0 && paying < balance && (
-                <p className="text-[10px] text-[var(--text-4)] mt-1">Remaining after this: {fmtKes(balance - paying)}</p>
+              {/* One line: what is left once this is recorded. */}
+              {overpay ? (
+                <p className="mt-1 text-[11px] font-semibold text-amber-600">More than is due — {fmtKes(balance)} will be recorded</p>
+              ) : (paying + withheld) > 0 && (
+                <p className={`mt-1 text-[11px] font-semibold ${balance - paying - withheld <= 0 ? 'text-emerald-600' : 'text-[var(--text-3)]'}`} aria-live="polite">
+                  {balance - paying - withheld <= 0
+                    ? `✓ Clears the ${docLabel.toLowerCase()}`
+                    : `${fmtKes(balance - paying - withheld)} left after this`}
+                  {withheld > 0 ? ` · incl. ${fmtKes(withheld)} withheld` : ''}
+                </p>
               )}
             </Field>
-
-            <div className="grid grid-cols-3 gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3" aria-label="Payment balance preview">
-              <div>
-                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">Before</p>
-                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(balance)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">{invoice.type === 'customer_invoice' ? 'Receiving' : 'Paying'}</p>
-                <p className="text-xs font-bold font-mono text-[var(--primary)]">− {fmtKes(paying + withheld)}</p>
-                {withheld > 0 && <p className="text-[9px] text-[var(--text-4)]">incl. {fmtKes(withheld)} withheld</p>}
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">After</p>
-                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(Math.max(0, balance - paying - withheld))}</p>
-              </div>
-            </div>
 
             {invoice.type === 'customer_invoice' && (
               <WithholdingFields
@@ -1591,19 +1616,30 @@ export default function InvoiceDetail() {
               />
             )}
 
-            <Field label={invoice.type === 'customer_invoice' ? 'Receipt method *' : 'Payment method *'}>
-              <Select
-                value={payMethod}
-                onChange={setPayMethod}
-                options={[
-                  { value: '', label: 'Select method…' },
+            <Field label={invoice.type === 'customer_invoice' ? 'Received by *' : 'Paid by *'}>
+              {/* One tap instead of opening a list. */}
+              <div className="pay-form__methods flex flex-wrap gap-2" role="radiogroup" aria-label="Payment method">
+                {[
                   { value: 'mpesa', label: 'M-Pesa' },
-                  { value: 'bank_transfer', label: 'Bank Transfer' },
+                  { value: 'bank_transfer', label: 'Bank' },
                   { value: 'cash', label: 'Cash' },
                   { value: 'card', label: 'Card' },
                   { value: 'cheque', label: 'Cheque' },
-                ]}
-              />
+                ].map(m => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={payMethod === m.value}
+                    onClick={() => setPayMethod(m.value)}
+                    className={`min-h-[40px] rounded-lg border px-3.5 text-[13px] font-semibold transition-colors ${payMethod === m.value
+                      ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--navy)]'
+                      : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-2)]'}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </Field>
 
             {activeBanks.length > 0 && (
@@ -1613,7 +1649,7 @@ export default function InvoiceDetail() {
                   onChange={setPayBankAccountId}
                   options={[
                     { value: '', label: 'Select account…' },
-                    ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id })),
+                    ...activeBanks.map(b => ({ value: b.id, label: bankChoiceLabel(b) })),
                   ]}
                 />
               </Field>
@@ -1642,7 +1678,7 @@ export default function InvoiceDetail() {
               </div>
             )}
 
-            <Field label="Memo / Reference">
+            <Field label="Reference (optional)">
               <Input
                 value={payReference}
                 onChange={setPayReference}
@@ -1657,7 +1693,7 @@ export default function InvoiceDetail() {
               </Field>
             )}
 
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="pay-form__actions flex flex-wrap justify-end gap-2 pt-2">
               <button className="btn-outline" onClick={() => setShowPayModal(false)}>Cancel</button>
               {payMethod === 'mpesa' && darajaReady && invoice.type === 'customer_invoice' && (
                 <button

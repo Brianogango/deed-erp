@@ -23,6 +23,7 @@ import type {
 } from '@/lib/data-table/toolbar-types'
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
+import BulkActionsBar from './BulkActionsBar'
 import EnterprisePagination, { DEFAULT_PAGE_SIZE_OPTIONS } from './EnterprisePagination'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
 
@@ -148,6 +149,12 @@ interface DataTableProps<T> {
 
   selectable?: boolean
   bulkActions?: (ctx: { rows: T[]; clear: () => void }) => ReactNode
+  /** Phones: 'lines' shows a statement/register (one line per row) instead of cards. */
+  mobileLayout?: 'cards' | 'lines'
+  /** Phones, 'lines': the second line of a row. */
+  mobileLineSubtitle?: (row: T) => ReactNode
+  /** Phones, 'lines': the first line of a row. */
+  mobileLineTitle?: (row: T) => ReactNode
 
   createAction?: ReactNode
   quickStats?: ReactNode
@@ -207,6 +214,9 @@ export default function DataTable<T>({
   rowClassName,
   selectable,
   bulkActions,
+  mobileLayout,
+  mobileLineSubtitle,
+  mobileLineTitle,
   createAction,
   quickStats,
   onRefresh,
@@ -442,6 +452,22 @@ export default function DataTable<T>({
     })
   }
 
+  // Phones: the selection bar rises in and, when the selection is cleared,
+  // sinks away for a moment instead of vanishing (components/erp/motion.css).
+  const mobileBulkOpen = breakpoint === 'mobile' && !!bulkActions && selectedKeys.size > 0
+  const [mobileBulkLeaving, setMobileBulkLeaving] = useState(false)
+  const lastBulkCount = useRef(0)
+  const wasBulkOpen = useRef(false)
+  useEffect(() => {
+    if (mobileBulkOpen) { wasBulkOpen.current = true; setMobileBulkLeaving(false); return }
+    if (!wasBulkOpen.current) return
+    wasBulkOpen.current = false
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    setMobileBulkLeaving(true)
+    const t = window.setTimeout(() => setMobileBulkLeaving(false), 160)
+    return () => window.clearTimeout(t)
+  }, [mobileBulkOpen])
+
   const selectedRows = useMemo(
     () => filteredRows.filter(row => selectedKeys.has(rowKey(row))),
     [filteredRows, selectedKeys, rowKey],
@@ -533,7 +559,8 @@ export default function DataTable<T>({
           overflowActions={overflowActions}
           createAction={createAction}
           quickStats={quickStats}
-          selectedCount={selectedRows.length}
+          // Phones: the selection bar sits at the bottom of the list instead (below).
+          selectedCount={breakpoint === 'mobile' && bulkActions ? 0 : selectedRows.length}
           onClearSelection={() => setSelectedKeys(new Set())}
           bulkActions={bulkActions ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : undefined}
           loading={isLoading}
@@ -590,8 +617,23 @@ export default function DataTable<T>({
               rowActions={rowActions}
               cardAccent={cardAccent}
               renderCard={renderCard}
+              variant={mobileLayout}
+              lineSubtitle={mobileLineSubtitle}
+              lineTitle={mobileLineTitle}
+              selection={selectable ? { isSelected: row => selectedKeys.has(rowKey(row)), toggle: row => toggleSelected(rowKey(row)), count: selectedKeys.size, clear: () => setSelectedKeys(new Set()) } : undefined}
             />
-          ) : (
+          ) : null}
+          {breakpoint === 'mobile' && bulkActions && (selectedRows.length > 0 || mobileBulkLeaving) ? (
+            // Where the thumb is: pinned to the bottom of the list while rows are ticked.
+            <div className={`dt-mobile-bulk${selectedRows.length > 0 ? '' : ' is-leaving'}`} aria-hidden={selectedRows.length === 0 || undefined}>
+              <BulkActionsBar
+                selectedCount={selectedRows.length > 0 ? (lastBulkCount.current = selectedRows.length) : lastBulkCount.current}
+                onClear={() => setSelectedKeys(new Set())}
+                actions={selectedRows.length > 0 ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : null}
+              />
+            </div>
+          ) : null}
+          {breakpoint === 'mobile' ? null : (
             <Table
               tableId={tableId}
               minWidth={tableMinWidth}

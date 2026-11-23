@@ -349,7 +349,7 @@ export async function applyDeliveryStockMutation(params: {
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
     deed_stockReservations: JSON.stringify(stockReservations),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
 
   return { ok: true }
 }
@@ -463,7 +463,7 @@ export async function reverseDeliveryStockMutation(params: {
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify(remainingMoves),
     deed_stockReservations: JSON.stringify(stockReservations),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
 }
 
 /**
@@ -994,7 +994,7 @@ export async function applyPosStockMutation(params: {
       deed_serials: JSON.stringify(serials),
       deed_bulkStock: JSON.stringify(bulkStock),
       deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
-    })
+    }, { bulkStockBase: state.deed_bulkStock })
     return { ok: true, moves: newMoves }
   })
 }
@@ -1278,7 +1278,7 @@ export async function applyReceiptStockMutation(params: {
         deed_serials: JSON.stringify(serials),
         deed_bulkStock: JSON.stringify(bulkStock),
         deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
-      })
+      }, { bulkStockBase: state.deed_bulkStock })
     }
 
     // Best-effort relational SerialNumber mirror — deed_serials (just written
@@ -1380,7 +1380,7 @@ export async function applyTransferStockMutation(params: {
     deed_serials: JSON.stringify(serials),
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
   return { ok: true, moves: newMoves }
 }
 
@@ -1440,7 +1440,7 @@ export async function applyAdjustmentStockMutation(params: {
     deed_products: JSON.stringify(products),
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify([move, ...stockMoves]),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
   return { ok: true, moves: [move] }
 }
 
@@ -1513,7 +1513,7 @@ export async function applyCustomerReturnStockMutation(params: {
     deed_serials: JSON.stringify(serials),
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
   return { ok: true, moves: newMoves }
 }
 
@@ -1679,6 +1679,6 @@ export async function applyVendorReturnStockMutation(params: {
     deed_serials: JSON.stringify(serials),
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
-  })
+  }, { bulkStockBase: state.deed_bulkStock })
   return { ok: true, moves: newMoves }
 }

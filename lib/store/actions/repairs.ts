@@ -1,7 +1,11 @@
-import { type OutsourceVendor, type OutsourceJob, OUTSOURCE_SERVICE_TYPES, type OutsourcePayment, type RepairOrder } from '../repairs'
+import { type OutsourceVendor, type OutsourceJob, OUTSOURCE_SERVICE_TYPES, type OutsourcePayment, type OutsourceStatement, type RepairOrder } from '../repairs'
 import { uid, now } from '../ids'
 import type { Contact, Quote, SaleOrder } from '../sales'
 import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
+import { defaultExpectedReturnDate, findStockSerialForOutsource, statusAfterUnfixedReturn, planWeeklyStatements, weekOf, OUTSOURCE_COST_ACCOUNT } from '@/lib/repair/outsource-jobs'
+import { downloadedThisSession } from '@/lib/store-freshness'
+import { contactPaymentTermsDays } from '@/lib/due-date'
+import { isOutsourceOverdue, outsourceDaysLate } from '@/lib/repair/outsource-visibility'
 import { userIdsWithRoles } from '@/lib/in-app-notifications'
 import type { RepairStatus, RepairDiagnosis, RepairQuoteLine, RepairQuote, RepairQAItem } from '@/lib/repair-types'
 import { prepareRepairQcItemsForRound, buildDefaultRepairQcItems, summarizeFailedQcItems } from '@/lib/repair-qc'
@@ -50,7 +54,7 @@ import type { AppState } from '../state'
 import type { StoreDeps } from './deps'
 
 /** repairs actions of the store. `store` reads the provider's current state, setters and helpers. */
-export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOutsourceJobBill' | 'addOutsourceVendor' | 'updateOutsourceVendor' | 'addOutsourceJob' | 'returnOutsourceJob' | 'recordOutsourcePayment' | 'createRepair' | 'updateRepair' | 'deleteRepair' | 'checkWarrantyForRepair' | 'fileWarrantyClaim' | 'verifyRepairIntake' | 'assignTechnicianToRepair' | 'logDiagnosis' | 'stopAtDiagnosis' | 'markDiagnosisFeePaid' | 'generateRepairQuote' | 'sendQuoteToCustomer' | 'approveRepairQuote' | 'startRepair' | 'markRepairComplete' | 'addRepairQAItem' | 'completeRepairQA' | 'markPartsArrived' | 'markRepairReady' | 'scheduleDelivery' | 'deliverRepair' | 'closeRepairJob' | 'createInvoiceFromRepair' | 'consolidateRepairInvoices' | 'reviewPortalPayment' | 'canViewRepair' | 'getVisibleRepairs' | 'updateRepairProgress' | 'moveRepairToPreviousProgress' | 'requestProcurement' | 'correctPartsCount' | 'raisePartsPurchaseOrder' | 'appendRepairHistory' | 'declineQuote' | 'waiveDiagnosisFee' | 'markRepairNoCharge' | 'markUnrepairable' | 'returnToCustomer' | 'leaveDeviceWithDeed' | 'convertRetainedRepairToDonation' | 'convertRetainedRepairToBuyBack' | 'createTradeInFromRepair'> {
+export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOutsourceJobBill' | 'addOutsourceVendor' | 'updateOutsourceVendor' | 'addOutsourceJob' | 'returnOutsourceJob' | 'cancelOutsourceJob' | 'updateOutsourceJob' | 'deleteOutsourceVendor' | 'chargeOutsourceToRepair' | 'remindLateOutsourceJobs' | 'prepareOutsourceStatements' | 'holdOutsourceStatementJob' | 'releaseOutsourceJobHold' | 'confirmOutsourceStatement' | 'recordOutsourcePayment' | 'createRepair' | 'updateRepair' | 'deleteRepair' | 'checkWarrantyForRepair' | 'fileWarrantyClaim' | 'verifyRepairIntake' | 'assignTechnicianToRepair' | 'logDiagnosis' | 'stopAtDiagnosis' | 'markDiagnosisFeePaid' | 'generateRepairQuote' | 'sendQuoteToCustomer' | 'approveRepairQuote' | 'startRepair' | 'markRepairComplete' | 'addRepairQAItem' | 'completeRepairQA' | 'markPartsArrived' | 'markRepairReady' | 'scheduleDelivery' | 'deliverRepair' | 'closeRepairJob' | 'createInvoiceFromRepair' | 'consolidateRepairInvoices' | 'reviewPortalPayment' | 'canViewRepair' | 'getVisibleRepairs' | 'updateRepairProgress' | 'moveRepairToPreviousProgress' | 'requestProcurement' | 'correctPartsCount' | 'raisePartsPurchaseOrder' | 'appendRepairHistory' | 'declineQuote' | 'waiveDiagnosisFee' | 'markRepairNoCharge' | 'markUnrepairable' | 'returnToCustomer' | 'leaveDeviceWithDeed' | 'convertRetainedRepairToDonation' | 'convertRetainedRepairToBuyBack' | 'createTradeInFromRepair'> {
   /** Move the planned parts to the repair unit: serials are assigned to the repair, bulk stock is transferred. */
   const applyReserveSteps = (steps: ReturnType<typeof planRepairPartReserve>['steps'], repairId: string, repairRef: string) => {
     for (const step of steps) {
@@ -70,6 +74,15 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
     }
   }
 
+  /** A stock machine back from a vendor (or never sent) returns to where it sat. */
+  const returnStockSerial = (job: OutsourceJob, reason: string) => {
+    const serial = store.serialRef.current.find(s => s.id === job.stockSerialId)
+    if (!serial || serial.location !== 'vendor') return
+    const home = (job.stockFromLocation ?? 'warehouse') as LocationId
+    store.setSerials(p => p.map(s => s.id === serial.id ? { ...s, location: home } : s))
+    store.addMove(serial.productId, serial.productName, 1, 'transfer', reason, job.ref, 'vendor', home, [serial.serial])
+  }
+
   return {
     createOutsourceJobBill: (jobId) => {
         const job = store.outsourceJobsRef.current.find(j => j.id === jobId)
@@ -77,37 +90,65 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         if (job.billId && store.invRef.current.some(i => i.id === job.billId && i.status !== 'cancelled')) {
           store.showToast(`${job.ref} already has a bill`, 'info'); return
         }
+        if (job.statementId) { store.showToast(`${job.ref} is billed on statement ${job.statementRef ?? ''}`.trim(), 'info'); return }
         if (!(Number(job.finalCost) > 0)) { store.showToast(`${job.ref} has no final cost to bill`, 'error'); return }
         const billId = store.createOutsourceBill(job, Number(job.finalCost))
         store.setOutsourceJobs(prev => prev.map(j => j.id === jobId ? { ...j, billId } : j))
       },
 
     addOutsourceVendor: (v) => {
-        const vendor: OutsourceVendor = { ...v, id: uid(), createdAt: now() }
+        const vendor: OutsourceVendor = { ...v, id: uid(), createdAt: now(), active: true }
+        // Bills are raised against a Contacts record. Reuse the one with this
+        // name (adding the vendor used to post a second one every time), and
+        // say so when the contact could not be saved.
+        const sameName = (c: Contact) => c.name.trim().toLowerCase() === v.name.trim().toLowerCase()
+        const existing = store.contacts.find(c => sameName(c) && c.isVendor) ?? store.contacts.find(sameName)
+        if (existing) vendor.contactId = existing.id
         store.setOutsourceVendors(prev => [...prev, vendor])
-        // Also create a vendor contact so they appear in the Contacts module
-        const contactPayload: Omit<Contact, 'id' | 'createdAt'> = {
-          type: 'company',
-          name: v.name,
-          phone: v.phone,
-          email: v.email ?? '',
-          address: v.address ?? '',
-          isCustomer: false,
-          isVendor: true,
-          tags: ['outsource-vendor'],
-          notes: v.notes,
+        if (!existing) {
+          const contactPayload: Omit<Contact, 'id' | 'createdAt'> = {
+            type: 'company',
+            name: v.name,
+            phone: v.phone,
+            email: v.email ?? '',
+            address: v.address ?? '',
+            isCustomer: false,
+            isVendor: true,
+            tags: ['outsource-vendor'],
+            notes: v.notes,
+          }
+          fetch('/api/contacts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contactPayload),
+          }).then(async r => {
+            if (!r.ok) throw new Error(String(r.status))
+            const c = await r.json()
+            store.setContacts(p => [c, ...p])
+            store.setOutsourceVendors(prev => prev.map(x => x.id === vendor.id ? { ...x, contactId: c.id } : x))
+          }).catch(() => {
+            store.showToast(`${v.name} was added, but its contact could not be saved — add it in Contacts so Finance can bill it`, 'error')
+          })
         }
-        fetch('/api/contacts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(contactPayload),
-        }).then(r => (r.ok ? r.json().then(c => store.setContacts(p => [c, ...p])) : undefined)).catch(() => {})
         store.showToast('Vendor added', 'success')
         return vendor
       },
 
     updateOutsourceVendor: (id, p) => {
         store.setOutsourceVendors(prev => prev.map(v => v.id === id ? { ...v, ...p } : v))
+      },
+
+    deleteOutsourceVendor: (id) => {
+        const vendor = store.outsourceVendors.find(v => v.id === id)
+        if (!vendor) return false
+        const used = store.outsourceJobsRef.current.filter(j => j.vendorId === id).length
+        if (used > 0) {
+          store.showToast(`${vendor.name} has ${used} job${used === 1 ? '' : 's'} on record — make it inactive instead`, 'error')
+          return false
+        }
+        store.setOutsourceVendors(prev => prev.filter(v => v.id !== id))
+        store.showToast(`${vendor.name} removed`, 'success')
+        return true
       },
 
     addOutsourceJob: (j) => {
@@ -134,6 +175,20 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             return null
           }
         }
+        const vendor = store.outsourceVendors.find(v => v.id === j.vendorId)
+        if (vendor && vendor.active === false) {
+          store.showToast(`${vendor.name} is inactive — choose another vendor or make it active again`, 'error')
+          return null
+        }
+        // A machine of ours (no repair) leaves the shelf: it moves to Vendor.
+        const stockSerial = !linkedRepair ? findStockSerialForOutsource(store.serialRef.current, j.serial) : undefined
+        if (stockSerial) {
+          const holding = store.outsourceJobsRef.current.find(x => x.status === 'sent' && x.stockSerialId === stockSerial.id)
+          if (holding) {
+            store.showToast(`${stockSerial.serial} is already at ${holding.vendorName} via ${holding.ref}`, 'error')
+            return null
+          }
+        }
         const job: OutsourceJob = {
           ...j,
           id: uid(),
@@ -143,10 +198,16 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           sentByUserId: user.id,
           sentByName: user.name,
           previousRepairStatus: linkedRepair?.status,
+          expectedReturnDate: j.expectedReturnDate || defaultExpectedReturnDate(j.sentDate, j.serviceType) || undefined,
+          ...(stockSerial ? { stockSerialId: stockSerial.id, stockFromLocation: stockSerial.location } : {}),
           status: 'sent',
           createdAt: now(),
         }
         store.setOutsourceJobs(prev => [job, ...prev])
+        if (stockSerial) {
+          store.setSerials(p => p.map(s => s.id === stockSerial.id ? { ...s, location: 'vendor' as LocationId } : s))
+          store.addMove(stockSerial.productId, stockSerial.productName, 1, 'transfer', `Sent to ${job.vendorName} for ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType}`, job.ref, stockSerial.location, 'vendor', [stockSerial.serial])
+        }
         if (linkedRepair) {
           const lockedRepair = store.markRepairLockedForOutsource(linkedRepair, job)
           store.setRepairs(prev => prev.map(r => r.id === linkedRepair.id ? lockedRepair : r))
@@ -173,16 +234,30 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
 
     returnOutsourceJob: (id, p) => {
         const job = store.outsourceJobsRef.current.find(j => j.id === id)
-        if (!job) return
+        if (!job) return false
+        // Only a job still out can come back. Two people (or two tabs) marking
+        // the same job returned used to raise two vendor bills.
+        if (job.status !== 'sent') {
+          store.showToast(`${job.ref} was already ${job.status === 'cancelled' ? 'cancelled' : 'marked returned'}${job.returnedByName ? ` by ${job.returnedByName}` : ''}`, 'error')
+          return false
+        }
+        const receiver = store.currentUser()
+        const receivedBy = receiver?.name ?? job.sentByName
+        // Claim the job before anything else, so a second click finds it returned.
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => j.id === id ? { ...j, status: p.isResolved ? 'returned_resolved' : 'returned_unresolved' } : j)
   
         // A vendor that charged gets a bill whether or not the device came
         // back fixed (it used to be billed only when fixed, so a charge for an
         // unfixed device counted as owed in Outsource with no bill anywhere).
-        const billId = p.finalCost && p.finalCost > 0 ? store.createOutsourceBill(job, p.finalCost) : undefined
+        // Weekly vendors: the cost waits for the week's statement (one bill a
+        // week). Per-job vendors are billed now, as before.
+        const vendor = store.outsourceVendors.find(v => v.id === job.vendorId)
+        const billsWeekly = (vendor?.billing ?? 'weekly') === 'weekly'
+        const billId = !billsWeekly && p.finalCost && p.finalCost > 0 ? store.createOutsourceBill(job, p.finalCost) : undefined
   
         store.setOutsourceJobs(prev => prev.map(j =>
           j.id === id
-            ? { ...j, ...p, status: p.isResolved ? 'returned_resolved' : 'returned_unresolved', ...(billId ? { billId } : {}) }
+            ? { ...j, ...p, status: p.isResolved ? 'returned_resolved' : 'returned_unresolved', returnedByUserId: receiver?.id, returnedByName: receivedBy, ...(billId ? { billId } : {}) }
             : j
         ))
   
@@ -209,7 +284,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
                   status: resumeStatus,
                   date: now(),
                   note: `Outsource job ${job.ref} returned fixed from ${job.vendorName}; moved to QC`,
-                  by: job.sentByName,
+                  by: receivedBy,
                 },
               ],
             } : null
@@ -239,9 +314,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             // Unresolved — apply next-step to the linked repair
             const nextStep = p.repairNextStep ?? 'keep'
             if (repair) {
-              const newStatus = nextStep === 'unrepairable' ? 'unrepairable' as const
-                : nextStep === 'in_repair' ? 'in_repair' as const
-                : 'in_repair' as const
+              const newStatus = statusAfterUnfixedReturn(nextStep, job.previousRepairStatus) as RepairStatus
               const returnedRepair = {
                 ...repair,
                 status: newStatus,
@@ -251,7 +324,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
                     status: newStatus,
                     date: now(),
                     note: `Outsource job ${job.ref} returned unresolved from ${job.vendorName}`,
-                    by: job.sentByName,
+                    by: receivedBy,
                   },
                 ],
               }
@@ -265,7 +338,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
   
             const nextLabel = p.repairNextStep === 'unrepairable' ? 'marked unrepairable'
               : p.repairNextStep === 'in_repair' ? 'moved back to in-repair'
-              : 'status unchanged'
+              : `back at ${statusAfterUnfixedReturn('keep', job.previousRepairStatus).replace(/_/g, ' ')}`
             store.notifyUsers({
               recipientRoles: ['technical_lead'],
               recipients: [
@@ -285,7 +358,297 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           }
         }
   
-        if (!billId) store.showToast('Job marked as returned', 'success')
+        if (job.stockSerialId) returnStockSerial(job, `Back from ${job.vendorName}${p.isResolved ? ' — fixed' : ' — not fixed'}`)
+        if (!billId) {
+          const week = billsWeekly && p.finalCost && p.finalCost > 0 ? weekOf(p.returnedDate) : null
+          store.showToast(week ? `Job marked as returned — billed on ${job.vendorName}'s statement for the week of ${week.weekStart}` : 'Job marked as returned', 'success')
+        }
+        return true
+      },
+
+    cancelOutsourceJob: (id, reason) => {
+        const job = store.outsourceJobsRef.current.find(j => j.id === id)
+        if (!job) return false
+        if (job.status !== 'sent') { store.showToast(`${job.ref} is no longer out — it cannot be cancelled`, 'error'); return false }
+        const why = reason.trim()
+        if (!why) { store.showToast('Say why the job is cancelled', 'error'); return false }
+        const user = store.currentUser()
+        const by = user?.name ?? 'Unknown'
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => j.id === id ? { ...j, status: 'cancelled' } : j)
+        store.setOutsourceJobs(prev => prev.map(j => j.id === id
+          ? { ...j, status: 'cancelled', cancelledDate: now(), cancelledByName: by, cancelReason: why }
+          : j))
+        if (job.repairOrderId) {
+          const repair = store.repairsRef.current.find(r => r.id === job.repairOrderId)
+          if (repair) {
+            // Back where it was before it went out.
+            const back = (job.previousRepairStatus && job.previousRepairStatus !== repair.status ? job.previousRepairStatus : repair.status) as RepairStatus
+            const restored = {
+              ...repair,
+              status: back,
+              statusHistory: [
+                ...(repair.statusHistory ?? []),
+                { status: back, date: now(), note: `Outsource job ${job.ref} to ${job.vendorName} cancelled: ${why}`, by },
+              ],
+            }
+            store.setRepairs(prev => prev.map(r => r.id === repair.id ? restored : r))
+            store.syncRepairToPortal(restored, `Outsource job ${job.ref} cancelled — repair continues in our workshop`)
+            store.addAuditLog('outsource_cancel', repair.id, `Outsource job ${job.ref} cancelled (${why}); repair back at ${back}`)
+          }
+        }
+        if (job.stockSerialId) returnStockSerial(job, `Outsource job ${job.ref} cancelled`)
+        store.showToast(`${job.ref} cancelled`, 'success')
+        return true
+      },
+
+    updateOutsourceJob: (id, p) => {
+        const job = store.outsourceJobsRef.current.find(j => j.id === id)
+        if (!job) return false
+        if (job.status !== 'sent') { store.showToast(`${job.ref} is back — only open jobs can be changed`, 'error'); return false }
+        if (p.vendorId && p.vendorId !== job.vendorId) {
+          const vendor = store.outsourceVendors.find(v => v.id === p.vendorId)
+          if (!vendor) { store.showToast('Vendor not found', 'error'); return false }
+          if (vendor.active === false) { store.showToast(`${vendor.name} is inactive`, 'error'); return false }
+          p = { ...p, vendorName: vendor.name }
+        }
+        const labels: Record<string, string> = { vendorName: 'vendor', serviceType: 'service', issueDescription: 'work to do', quotedCost: 'quote', expectedReturnDate: 'promised date', notes: 'notes', accessories: 'accessories', sentDate: 'date sent' }
+        const changed = Object.entries(p)
+          .filter(([k, v]) => k !== 'vendorId' && (job as unknown as Record<string, unknown>)[k] !== v && labels[k])
+          .map(([k, v]) => `${labels[k]}: ${String((job as unknown as Record<string, unknown>)[k] ?? '—')} → ${String(v ?? '—')}`)
+        if (!changed.length) return true
+        const by = store.currentUser()?.name ?? 'Unknown'
+        store.setOutsourceJobs(prev => prev.map(j => j.id === id
+          ? { ...j, ...p, editLog: [...(j.editLog ?? []), { date: now(), by, note: changed.join('; ') }] }
+          : j))
+        if (p.vendorName && job.repairOrderId) {
+          store.addAuditLog('outsource_repair', job.repairOrderId, `${job.ref} moved from ${job.vendorName} to ${p.vendorName}`)
+        }
+        store.showToast(`${job.ref} updated`, 'success')
+        return true
+      },
+
+    remindLateOutsourceJobs: () => {
+        const due = store.outsourceJobsRef.current.filter(j =>
+          isOutsourceOverdue(j) && j.expectedReturnDate && j.lateReminderFor !== j.expectedReturnDate)
+        if (!due.length) return
+        const ids = new Set(due.map(j => j.id))
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => ids.has(j.id) ? { ...j, lateReminderFor: j.expectedReturnDate } : j)
+        store.setOutsourceJobs(prev => prev.map(j => ids.has(j.id) ? { ...j, lateReminderFor: j.expectedReturnDate } : j))
+        for (const job of due) {
+          const late = outsourceDaysLate(job) ?? 0
+          store.notifyUsers({
+            recipientRoles: ['technical_lead'],
+            recipients: [job.sentByUserId, ...userIdsWithRoles(store.users, ['technical_lead'])],
+            type: 'repair',
+            title: `${job.ref} is late at ${job.vendorName}`,
+            body: `${job.deviceDescription} was promised back on ${job.expectedReturnDate} (${late === 1 ? '1 day' : `${late} days`} ago). Chase the vendor, or mark it returned if it is back.`,
+            module: 'outsource',
+            icon: '⏰',
+            entityKey: `outsource:${job.id}:late:${job.expectedReturnDate}`,
+          })
+        }
+      },
+
+    prepareOutsourceStatements: () => {
+        // Only from complete, current copies: preparing from a half-loaded
+        // list would bill a week twice or miss jobs.
+        if (!downloadedThisSession(['deed_outsourceJobs', 'deed_outsourceVendors', 'deed_outsourceStatements'])) return
+        const weekly = new Set(store.outsourceVendors.filter(v => (v.billing ?? 'weekly') === 'weekly').map(v => v.id))
+        const plans = planWeeklyStatements(store.outsourceJobsRef.current, weekly)
+        if (!plans.length) return
+        const statements = [...store.outsourceStatementsRef.current]
+        const created: OutsourceStatement[] = []
+        const assigned = new Map<string, { id: string; ref: string }>()
+        for (const plan of plans) {
+          const vendor = store.outsourceVendors.find(v => v.id === plan.vendorId)
+          const lines = plan.jobs.map(j => ({
+            jobId: j.id,
+            jobRef: j.ref,
+            description: `${OUTSOURCE_SERVICE_TYPES.find(t => t.value === j.serviceType)?.label ?? j.serviceType} — ${j.deviceDescription}`,
+            amount: Math.round(Number(j.finalCost) * 100) / 100,
+          }))
+          // A pending statement for that week takes late entries; a confirmed
+          // one is never changed, so they go on another for the same week.
+          const open = statements.find(st => st.vendorId === plan.vendorId && st.weekStart === plan.weekStart && st.status === 'pending')
+          if (open) {
+            const merged = { ...open, lines: [...open.lines, ...lines], total: Math.round((open.total + lines.reduce((a, l) => a + l.amount, 0)) * 100) / 100 }
+            statements[statements.indexOf(open)] = merged
+            for (const l of lines) assigned.set(l.jobId, { id: open.id, ref: open.ref })
+            continue
+          }
+          const sameWeek = statements.filter(st => st.vendorId === plan.vendorId && st.weekStart === plan.weekStart).length
+          // A fixed id per vendor and week: two people preparing at once save
+          // the same statement, not two.
+          const statement: OutsourceStatement = {
+            id: `ost-${plan.vendorId}-${plan.weekStart}${sameWeek ? `-${sameWeek + 1}` : ''}`,
+            ref: store.outsourceStatementRef(),
+            vendorId: plan.vendorId,
+            vendorName: vendor?.name ?? plan.jobs[0]?.vendorName ?? 'Vendor',
+            weekStart: plan.weekStart,
+            weekEnd: plan.weekEnd,
+            lines,
+            total: Math.round(lines.reduce((a, l) => a + l.amount, 0) * 100) / 100,
+            status: 'pending',
+            createdAt: now(),
+          }
+          statements.unshift(statement)
+          created.push(statement)
+          for (const l of lines) assigned.set(l.jobId, { id: statement.id, ref: statement.ref })
+        }
+        store.outsourceStatementsRef.current = statements
+        store.setOutsourceStatements(statements)
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => assigned.has(j.id) ? { ...j, statementId: assigned.get(j.id)!.id, statementRef: assigned.get(j.id)!.ref } : j)
+        store.setOutsourceJobs(prev => prev.map(j => assigned.has(j.id) ? { ...j, statementId: assigned.get(j.id)!.id, statementRef: assigned.get(j.id)!.ref } : j))
+        for (const st of created) {
+          store.notifyUsers({
+            recipientRoles: ['finance_officer', 'admin_officer'],
+            recipients: userIdsWithRoles(store.users, ['finance_officer', 'admin_officer']),
+            type: 'repair',
+            title: `${st.vendorName}: weekly statement ready`,
+            body: `${st.lines.length} job${st.lines.length === 1 ? '' : 's'} returned ${st.weekStart} to ${st.weekEnd}, ${store.fmtKes(st.total)}. Check and confirm it in Outsource → Statements.`,
+            module: 'outsource',
+            icon: '🧾',
+            entityKey: `outsource-statement:${st.id}`,
+          })
+        }
+      },
+
+    holdOutsourceStatementJob: (statementId, jobId, reason) => {
+        const st = store.outsourceStatementsRef.current.find(x => x.id === statementId)
+        if (!st || st.status !== 'pending') { store.showToast('Only a statement not yet confirmed can change', 'error'); return false }
+        const line = st.lines.find(l => l.jobId === jobId)
+        if (!line) return false
+        const why = reason.trim()
+        if (!why) { store.showToast('Say why this job is held back', 'error'); return false }
+        const by = store.currentUser()?.name ?? 'Unknown'
+        const lines = st.lines.filter(l => l.jobId !== jobId)
+        const updated = { ...st, lines, total: Math.round(lines.reduce((a, l) => a + l.amount, 0) * 100) / 100 }
+        // An empty statement goes; there is nothing left to bill on it.
+        const next = lines.length
+          ? store.outsourceStatementsRef.current.map(x => x.id === statementId ? updated : x)
+          : store.outsourceStatementsRef.current.filter(x => x.id !== statementId)
+        store.outsourceStatementsRef.current = next
+        store.setOutsourceStatements(next)
+        const hold = { reason: why, by, date: now() }
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => j.id === jobId ? { ...j, statementId: undefined, statementRef: undefined, billingHold: hold } : j)
+        store.setOutsourceJobs(prev => prev.map(j => j.id === jobId ? { ...j, statementId: undefined, statementRef: undefined, billingHold: hold } : j))
+        store.showToast(`${line.jobRef} held back from ${st.ref}`, 'success')
+        return true
+      },
+
+    releaseOutsourceJobHold: (jobId) => {
+        const job = store.outsourceJobsRef.current.find(j => j.id === jobId)
+        if (!job?.billingHold) return false
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => j.id === jobId ? { ...j, billingHold: undefined } : j)
+        store.setOutsourceJobs(prev => prev.map(j => j.id === jobId ? { ...j, billingHold: undefined } : j))
+        store.showToast(`${job.ref} will be billed on its week's statement`, 'success')
+        return true
+      },
+
+    confirmOutsourceStatement: (statementId) => {
+        const user = store.currentUser()
+        // Finance Officer, Admin Officer or Director (who may post bills and payments).
+        if (!canManageFinance(user)) { store.showToast('Only Finance, an Admin Officer or the Director can confirm a statement', 'error'); return null }
+        const st = store.outsourceStatementsRef.current.find(x => x.id === statementId)
+        if (!st) return null
+        if (st.status !== 'pending') { store.showToast(`${st.ref} is already confirmed${st.billRef ? ` (${st.billRef})` : ''}`, 'info'); return null }
+        if (!st.lines.length || !(st.total > 0)) { store.showToast(`${st.ref} has nothing to bill`, 'error'); return null }
+        const vendor = store.outsourceVendors.find(v => v.id === st.vendorId)
+        const contactId = vendor?.contactId
+          ?? store.contacts.find(c => c.isVendor && c.name.trim().toLowerCase() === st.vendorName.trim().toLowerCase())?.id
+          ?? st.vendorId
+        const account = store.accounts.some(a => a.code === OUTSOURCE_COST_ACCOUNT.code) ? OUTSOURCE_COST_ACCOUNT.code : undefined
+        const bill: Invoice = {
+          id: uid(),
+          ref: store.draftInvoiceRef('vendor_bill'),
+          type: 'vendor_bill',
+          status: 'draft',
+          partnerId: contactId,
+          partnerName: st.vendorName,
+          date: now(),
+          dueDate: new Date(Date.now() + contactPaymentTermsDays(store.contacts.find(c => c.id === contactId), store.systemSettings.purDefaultPaymentTermsDays ?? 30) * 86_400_000).toISOString(),
+          // One line per job, so the bill reads like the statement.
+          lines: st.lines.map(l => ({
+            id: uid(),
+            description: `${l.jobRef} · ${l.description}`,
+            ...(account ? { accountCode: account } : {}),
+            qty: 1,
+            unitPrice: l.amount,
+            taxRate: 0,
+            subtotal: l.amount,
+          })),
+          subtotal: st.total,
+          taxTotal: 0,
+          total: st.total,
+          amountPaid: 0,
+          notes: `Outsource statement ${st.ref} — jobs returned ${st.weekStart} to ${st.weekEnd} · confirmed by ${user?.name ?? 'staff'}`,
+        }
+        store.invRef.current = [bill, ...store.invRef.current]
+        store.setInvoices(p => [bill, ...p])
+        void store.saveInvoiceToServer(bill, msg => store.showToast(msg, 'error'))
+        const jobIds = new Set(st.lines.map(l => l.jobId))
+        const confirmed = { ...st, status: 'confirmed' as const, billId: bill.id, billRef: bill.ref, confirmedAt: now(), confirmedByName: user?.name }
+        store.outsourceStatementsRef.current = store.outsourceStatementsRef.current.map(x => x.id === statementId ? confirmed : x)
+        store.setOutsourceStatements(prev => prev.map(x => x.id === statementId ? confirmed : x))
+        // The jobs point at the bill too: paying the vendor finds it through them.
+        store.outsourceJobsRef.current = store.outsourceJobsRef.current.map(j => jobIds.has(j.id) ? { ...j, billId: bill.id } : j)
+        store.setOutsourceJobs(prev => prev.map(j => jobIds.has(j.id) ? { ...j, billId: bill.id } : j))
+        store.addAuditLog('create_bill', bill.ref, `Outsource statement ${st.ref} (${st.vendorName}, week of ${st.weekStart}) confirmed into draft bill`)
+        store.showToast(`Draft bill for ${st.vendorName} created — post it in Finance to pay`, 'success')
+        return bill.ref
+      },
+
+    chargeOutsourceToRepair: (jobId, amount) => {
+        const job = store.outsourceJobsRef.current.find(j => j.id === jobId)
+        if (!job?.repairOrderId) return false
+        if (job.customerChargeAddedAt) { store.showToast(`${job.ref} is already on the customer's quote`, 'info'); return false }
+        const price = Math.round(Number(amount))
+        if (!(price > 0)) { store.showToast('Enter what the customer pays for this work', 'error'); return false }
+        const repair = store.repairsRef.current.find(r => r.id === job.repairOrderId)
+        if (!repair) return false
+        if (isRepairNoCharge(repair)) { store.showToast(`${repair.ref} is not charged to the customer`, 'info'); return false }
+        if (repair.invoiceId) { store.showToast(`${repair.ref} is already invoiced — add the charge on the invoice in Finance`, 'error'); return false }
+        if (!repair.quote) { store.showToast(`${repair.ref} has no quote yet — add the outsourced work when quoting`, 'error'); return false }
+        const service = OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType
+        const line: RepairQuoteLine = {
+          id: uid(),
+          type: 'service',
+          description: `${service} (specialist repair, ${job.ref})`,
+          qty: 1,
+          unitPrice: price,
+          subtotal: price,
+          reserved: false,
+        }
+        const vatRate = Number(store.companySettings.vatRate) || 0
+        const addedTax = repair.quote.tax > 0 ? Math.round(price * vatRate / 100) : 0
+        const by = store.currentUser()?.name ?? 'Unknown'
+        const prevTotal = repair.quote.total
+        const quote: RepairQuote = {
+          ...repair.quote,
+          lines: [...repair.quote.lines, line],
+          subtotal: repair.quote.subtotal + price,
+          tax: repair.quote.tax + addedTax,
+          total: repair.quote.total + price + addedTax,
+          ...(repair.quote.approvedTotal != null ? { approvedTotal: repair.quote.approvedTotal + price + addedTax } : {}),
+          prevTotal,
+          changeSummary: `Added ${service} done by a specialist (${job.ref})`,
+        }
+        // Merge into the latest row: this runs straight after the return,
+        // whose status change may not have reached repairsRef yet.
+        store.setRepairs(prev => prev.map(r => r.id === repair.id
+          ? {
+            ...r,
+            quote,
+            statusHistory: [
+              ...(r.statusHistory ?? []),
+              { status: r.status, date: now(), note: `Added ${store.fmtKes(price)} for outsourced ${service} (${job.ref}) to the quote`, by },
+            ],
+          }
+          : r))
+        store.setOutsourceJobs(prev => prev.map(j => j.id === jobId ? { ...j, customerChargeAmount: price, customerChargeAddedAt: now() } : j))
+        store.addAuditLog('outsource_charge', repair.id, `Outsourced work ${job.ref} added to the quote at ${price}`)
+        store.showToast(`${store.fmtKes(price)} added to ${repair.ref}'s quote`, 'success')
+        return true
       },
 
     recordOutsourcePayment: async (p) => {
@@ -3900,12 +4263,15 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         const extraNotes = String(opts.notes ?? '').trim()
   
         let serialId: string | undefined
+        // No serial on the repair: an intake tag, and With Issues to identify it.
+        let tagged = false
         if (product.requiresSerial || repair.serialNumber?.trim()) {
           const matched = matchRepairDeviceSerial(store.serialRef.current, product.id, repair)
           if ('error' in matched) {
             store.showToast(matched.error, 'error')
             return { ok: false, message: matched.error }
           }
+          tagged = !!matched.tagged
           if (matched.existing) {
             serialId = matched.existing.id
             if (matched.existing.status !== 'sold' && matched.existing.location !== 'customer') {
@@ -3924,8 +4290,9 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
               status: 'sold',
               receivedDate: at,
               soldDate: at,
-              barcode: store.buildInventoryBarcodeForProduct(product.id, matched.serialText),
-            }
+              barcode: tagged ? matched.serialText : store.buildInventoryBarcodeForProduct(product.id, matched.serialText),
+              ...(tagged ? { identityPending: true, intakeTag: matched.serialText } : {}),
+            } as SerialNumber
             store.setSerials(p => [...p, newSerial])
             sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
             serialId = newSerial.id
@@ -3977,7 +4344,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             notes: `Trade-in from repair ${repair.ref}`,
           }],
           total: unitPrice,
-          destinationLocation: 'warehouse',
+          destinationLocation: tagged ? 'shop' : 'warehouse',
           notes: `Trade-in after evaluation from repair ${repair.ref}${extraNotes ? ` — ${extraNotes}` : ''}`,
         }
         store.setBuyBacks(p => [bb, ...p])

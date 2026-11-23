@@ -131,6 +131,28 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
+  it('saves quantity stock sent as changes against the stored quantities', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const stored = [{ productId: 'tape', location: 'warehouse', qty: 4 }, { productId: 'acc', location: 'warehouse', qty: 1 }]
+    mockLoadAppState.mockResolvedValue({ deed_bulkStock: stored })
+    const res = await STORE_POST(postReq({ _bulkStockDelta: [{ productId: 'tape', location: 'warehouse', delta: -1 }] }))
+    expect(res.status).toBe(200)
+    const [entries, opts] = mockSaveStoreKeys.mock.calls[0] as [Record<string, string>, { bulkStockBase: unknown }]
+    // The stock received meanwhile (acc) is kept; only this browser's sale applies.
+    expect(JSON.parse(entries.deed_bulkStock)).toEqual(expect.arrayContaining([
+      { productId: 'tape', location: 'warehouse', qty: 3 },
+      { productId: 'acc', location: 'warehouse', qty: 1 },
+    ]))
+    expect(opts.bulkStockBase).toEqual(stored)
+  })
+
+  it('refuses a malformed quantity stock change list', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_POST(postReq({ _bulkStockDelta: [{ productId: 'tape', delta: 'x' }] }))
+    expect(res.status).toBe(400)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
   it('saves permitted keys and drops unknown namespaces from a mixed batch', async () => {
     mockGetSession.mockResolvedValue(directorSession)
     const res = await STORE_POST(postReq({

@@ -89,6 +89,7 @@ export function useRealtimeSync(
       'deed_expenses',
       'deed_outsourceJobs',
       'deed_outsourcePayments',
+      'deed_outsourceStatements',
       'deed_outsourceVendors',
     ] as const
     const CRITICAL_VISIBILITY_KEY_SET = new Set<string>(CRITICAL_VISIBILITY_KEYS)

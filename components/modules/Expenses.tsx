@@ -1,5 +1,7 @@
 'use client'
-import { useState, useRef, useEffect, useMemo, Suspense } from 'react'
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
+import { useState, useRef, useEffect, useMemo, Suspense, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   useFinanceStore, fmtDate, fmtKes,
@@ -25,6 +27,17 @@ import { newestDocumentFirst } from '@/lib/document-order'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+
+/**
+ * Expense dialogs render on document.body. Inline, iPhone Safari kept them
+ * inside the page's layer, so the top bar hid the Back header and the tab bar
+ * hid Confirm. The wrapper keeps the workspace styles without adding a box.
+ */
+function ExpensesModalPortal({ children }: { children: ReactNode }) {
+  if (typeof document === 'undefined') return null
+  return createPortal(<div className="expenses-workspace expenses-modal-portal">{children}</div>, document.body)
+}
+
 const PAYMENT_METHODS: { value: ExpensePaymentMethod; label: string; desc: string; isReimbursable: boolean }[] = [
   { value: 'reimbursement',  label: 'Reimbursement',     desc: 'I paid from my own pocket',      isReimbursable: true },
   { value: 'petty_cash',     label: 'Petty Cash',        desc: 'Pay from company petty cash',      isReimbursable: false },
@@ -38,6 +51,7 @@ const STATUS_META: Record<Expense['status'], { label: string; badgeStatus: strin
   rejected:    { label: 'Rejected',       badgeStatus: 'failed' },
   paid:        { label: 'Paid',           badgeStatus: 'paid' },
   reimbursed:  { label: 'Reimbursed',     badgeStatus: 'paid' },
+  withdrawn:   { label: 'Withdrawn',      badgeStatus: 'cancelled' },
 }
 
 const CAT_ICONS: Record<string, IconProp> = {
@@ -65,6 +79,8 @@ function reimbursementMethodLabel(v?: string) {
   return v ? (labels[v] ?? v) : '—'
 }
 function isReimbursable(method: ExpensePaymentMethod) { return method === 'reimbursement' }
+/** Monthly bills better kept as recurring bills in Finance. */
+const RECURRING_CATEGORIES = new Set<string>(['rent', 'service_charge', 'electricity', 'internet', 'insurance', 'utilities'])
 
 function ExpenseApprovalChain({ chain }: { chain: NonNullable<Expense['approvalChain']> }) {
   return (
@@ -131,7 +147,7 @@ function ExpensesContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const { users, currentUserId, expenses: storedExpenses, submitExpense, reviewExpense, payExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
+  const { users, currentUserId, expenses: storedExpenses, submitExpense, expenseAction, showToast, bankAccounts } = useFinanceStore()
   // Newest claim first: latest submission date, then highest reference.
   const expenses = useMemo(
     () => [...storedExpenses].sort((a, b) => newestDocumentFirst({ date: a.submittedDate, ref: a.ref }, { date: b.submittedDate, ref: b.ref })),
@@ -196,7 +212,7 @@ function ExpensesContent() {
   // Review status filter starts at "all" (no preselected status).
   const [reviewStatusValue, setReviewStatusValue] = useUrlUiState('status', 'all')
   const reviewStatus: Expense['status'] | 'all' =
-    ['all', 'submitted', 'approved', 'rejected', 'paid', 'reimbursed'].includes(reviewStatusValue)
+    ['all', 'submitted', 'approved', 'rejected', 'paid', 'reimbursed', 'withdrawn'].includes(reviewStatusValue)
       ? reviewStatusValue as Expense['status'] | 'all'
       : 'all'
   const setReviewStatus = (value: Expense['status'] | 'all') =>
@@ -238,6 +254,13 @@ function ExpensesContent() {
     notes:         '',
   })
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  /** Changing a claim (before review) or correcting a rejected one: the form opens on it. */
+  const [editTarget, setEditTarget] = useState<{ id: string; kind: 'edit' | 'resubmit'; hasReceipt: boolean } | null>(null)
+  /** An expense report: several items submitted together and paid as one. */
+  type ReportItem = { category: ExpenseCategory; description: string; amount: number; expenseDate: string; payeeName: string; notes: string; receiptFile: File | null }
+  const [reportItems, setReportItems] = useState<ReportItem[]>([])
+  const [reportTitle, setReportTitle] = useState('')
+  const [busy, setBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -246,7 +269,69 @@ function ExpensesContent() {
     setForm({ category: '', description: '', amount: '', expenseDate: '', paymentMethod: '', payeeName: '', notes: '' })
     setReceiptFile(null)
     setIsScanning(false)
+    setEditTarget(null)
+    setReportItems([])
+    setReportTitle('')
     setShowSubmit(true)
+  }
+
+  /** Open the form on an existing claim: change it, or correct it and send it again. */
+  function openEdit(exp: Expense, kind: 'edit' | 'resubmit') {
+    setForm({
+      category: exp.category,
+      description: exp.description,
+      amount: String(exp.amount),
+      expenseDate: (exp.expenseDate || '').slice(0, 10),
+      paymentMethod: exp.paymentMethod,
+      payeeName: exp.payeeName ?? '',
+      notes: exp.notes ?? '',
+    })
+    setReceiptFile(null)
+    setIsScanning(false)
+    setReportItems([])
+    setReportTitle('')
+    setEditTarget({ id: exp.id, kind, hasReceipt: Boolean(exp.receiptFileName) })
+    setReviewingId(null)
+    setShowSubmit(true)
+  }
+
+  /** The item in the form, checked; null with a message when something is missing. */
+  function currentItem(): ReportItem | null {
+    const amt = Number(form.amount)
+    const missing: string[] = []
+    if (!form.category) missing.push('Category')
+    if (!form.expenseDate) missing.push('Expense Date')
+    if (!form.description.trim()) missing.push('Description')
+    if (!form.amount.trim() || !Number.isFinite(amt) || amt <= 0) missing.push('Amount (greater than 0)')
+    if (missing.length || !form.category) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return null
+    }
+    return { category: form.category, description: form.description.trim(), amount: amt, expenseDate: form.expenseDate, payeeName: form.payeeName.trim(), notes: form.notes.trim(), receiptFile }
+  }
+
+  /** Put the item in the form on the report and clear it for the next one (date and payment stay). */
+  function addToReport() {
+    const item = currentItem()
+    if (!item) return
+    setReportItems(list => [...list, item])
+    setForm(f => ({ ...f, category: '', description: '', amount: '', payeeName: '', notes: '' }))
+    setReceiptFile(null)
+  }
+
+  async function readReceipt(file: File | null): Promise<{ dataUrl: string; meta: { name: string; size: number; type: string } } | undefined> {
+    if (!file) return undefined
+    const meta = { name: file.name, size: file.size, type: file.type }
+    if (file.type.startsWith('image/')) {
+      return { dataUrl: await readGuardedImageAsDataUrl(file, { label: 'Receipt image', maxBytes: 8 * 1024 * 1024 }), meta }
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(new Error('Could not read the file'))
+      reader.readAsDataURL(file)
+    })
+    return { dataUrl, meta }
   }
 
   async function handleFile(file: File | null) {
@@ -303,51 +388,64 @@ function ExpensesContent() {
     }
   }
 
-  function handleSubmit() {
-    const amt = Number(form.amount)
-    const missing: string[] = []
-    if (!form.category) missing.push('Category')
-    if (!form.expenseDate) missing.push('Expense Date')
-    if (!form.description.trim()) missing.push('Description')
-    if (!form.amount.trim() || !Number.isFinite(amt) || amt <= 0) missing.push('Amount (greater than 0)')
-    if (!form.paymentMethod) missing.push('Payment route / funding source')
-    if (missing.length || !form.category || !form.paymentMethod) {
-      showToast(`Required: ${missing.join(', ')}`, 'error')
-      return
-    }
-    const category = form.category
+  async function handleSubmit() {
+    if (!form.paymentMethod) { showToast('Required: Payment route / funding source', 'error'); return }
     const paymentMethod = form.paymentMethod
+    // The form's own item joins the report when it has been filled in.
+    const formStarted = Boolean(form.description.trim() || form.amount.trim() || form.category)
+    const formItem = !reportItems.length || formStarted ? currentItem() : undefined
+    if (formItem === null) return
+    const items = [...reportItems, ...(formItem ? [formItem] : [])]
+    if (!items.length) return
+    if (items.length > 1 && !reportTitle.trim()) { showToast('Give the report a name, e.g. "Mombasa trip 12–14 Nov"', 'error'); return }
 
-    const save = (dataUrl?: string, meta?: { name: string; size: number; type: string }) => {
-      submitExpense({
-        category,
-        description:     form.description.trim(),
-        amount:          amt,
-        expenseDate:     form.expenseDate,
-        paymentMethod,
-        payeeName:       form.payeeName.trim() || undefined,
-        notes:           form.notes.trim() || undefined,
-        receiptDataUrl:  dataUrl,
-        receiptFileName: meta?.name,
-        receiptFileSize: meta?.size,
-        receiptFileType: meta?.type,
-      })
-      setShowSubmit(false)
-    }
-
-    if (receiptFile) {
-      if (receiptFile.type.startsWith('image/')) {
-        readGuardedImageAsDataUrl(receiptFile, { label: 'Receipt image', maxBytes: 8 * 1024 * 1024 })
-          .then(dataUrl => save(dataUrl, { name: receiptFile.name, size: receiptFile.size, type: receiptFile.type }))
-          .catch(err => showToast(err instanceof Error ? err.message : 'Receipt image could not be validated', 'error'))
+    setBusy(true)
+    try {
+      if (editTarget) {
+        const item = items[0]
+        const receipt = !editTarget.hasReceipt ? await readReceipt(item.receiptFile) : undefined
+        if (receipt) {
+          const res = await fetch(`/api/expense-receipts/${editTarget.id}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl: receipt.dataUrl, fileName: receipt.meta.name, fileType: receipt.meta.type, fileSize: receipt.meta.size }),
+          }).catch(() => null)
+          if (!res?.ok) { showToast('The receipt did not upload — nothing was changed', 'error'); return }
+        }
+        const patch = {
+          category: item.category, description: item.description, amount: item.amount, expenseDate: item.expenseDate,
+          paymentMethod, payeeName: item.payeeName, notes: item.notes,
+          ...(receipt ? { receiptFileName: receipt.meta.name, receiptFileType: receipt.meta.type, receiptFileSize: receipt.meta.size } : {}),
+        }
+        const out = await expenseAction(editTarget.kind === 'edit'
+          ? { action: 'edit', id: editTarget.id, patch }
+          : { action: 'resubmit', id: editTarget.id, patch })
+        if (out.ok) setShowSubmit(false)
         return
       }
-
-      const reader = new FileReader()
-      reader.onload = () => save(reader.result as string, { name: receiptFile.name, size: receiptFile.size, type: receiptFile.type })
-      reader.readAsDataURL(receiptFile)
-    } else {
-      save()
+      const reportId = items.length > 1 ? `rpt_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` : undefined
+      for (const item of items) {
+        const receipt = await readReceipt(item.receiptFile)
+        submitExpense({
+          category: item.category,
+          description: item.description,
+          amount: item.amount,
+          expenseDate: item.expenseDate,
+          paymentMethod,
+          payeeName: item.payeeName || undefined,
+          notes: item.notes || undefined,
+          receiptDataUrl: receipt?.dataUrl,
+          receiptFileName: receipt?.meta.name,
+          receiptFileSize: receipt?.meta.size,
+          receiptFileType: receipt?.meta.type,
+          ...(reportId ? { reportId, reportTitle: reportTitle.trim() } : {}),
+        })
+      }
+      if (items.length > 1) showToast(`Report "${reportTitle.trim()}" submitted: ${items.length} items`, 'success')
+      setShowSubmit(false)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not read the receipt', 'error')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -355,7 +453,33 @@ function ExpensesContent() {
   const [reviewingId, setReviewingId] = useUrlRecordId()
   const [reviewNotes, setReviewNotes] = useState('')
 
-  const [reimbursingId, setReimbursingId] = useState<string | null>(null)
+  /** The claims being paid in one payment (one or many). */
+  const [payIds, setPayIds] = useState<string[]>([])
+  function openPay(ids: string[]) {
+    setPayIds(ids)
+    setReimburseNote('')
+    setReimburseMethod('')
+    setReimburseBankAccountId('')
+    setReimburseReference('')
+    setReimburseDate(new Date().toISOString().slice(0, 10))
+  }
+  // ── Books check (claims whose journals are missing) ──
+  const [booksCheck, setBooksCheck] = useState<null | { loading: boolean; findings: Array<{ id: string; ref: string; status: string; amount: number; missing: string; fixable: boolean; note?: string }> }>(null)
+  async function checkBooks() {
+    setBooksCheck({ loading: true, findings: [] })
+    const res = await fetch('/api/expenses/repair').catch(() => null)
+    const data = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok) { setBooksCheck(null); showToast(data.error || 'Could not check the books', 'error'); return }
+    setBooksCheck({ loading: false, findings: data.findings ?? [] })
+  }
+  async function fixBooks() {
+    setBooksCheck(c => c && { ...c, loading: true })
+    const res = await fetch('/api/expenses/repair', { method: 'POST' }).catch(() => null)
+    const data = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok) { showToast(data.error || 'Could not fix the books', 'error'); setBooksCheck(c => c && { ...c, loading: false }); return }
+    showToast(`${data.fixed?.length ?? 0} journal${data.fixed?.length === 1 ? '' : 's'} posted${data.failed?.length ? ` · ${data.failed.length} could not be posted` : ''}`, data.failed?.length ? 'info' : 'success')
+    await checkBooks()
+  }
   const [reimburseNote, setReimburseNote] = useState('')
   const [reimburseBankAccountId, setReimburseBankAccountId] = useState('')
   const [reimburseMethod, setReimburseMethod] = useState('')
@@ -435,6 +559,45 @@ function ExpensesContent() {
 
   const totalPendingAmt = allPending.reduce((s, e) => s + e.amount, 0)
   const reimbDue        = pendingReimbursements.reduce((s, e) => s + e.amount, 0)
+
+  /**
+   * Ticked claims: approve or reject them together, or pay them in one
+   * payment (staff reimbursements and company-paid expenses go separately).
+   */
+  function BulkBar({ rows, clear }: { rows: Expense[]; clear: () => void }) {
+    const reviewable = rows.filter(e => e.status === 'submitted' && canUserReviewExpense(currentUser?.role, e.approvalChain))
+    const approved = rows.filter(e => e.status === 'approved')
+    const staff = approved.filter(e => isReimbursable(e.paymentMethod))
+    const company = approved.filter(e => !isReimbursable(e.paymentMethod))
+    const sum = (list: Expense[]) => fmtKes(list.reduce((t, e) => t + e.amount, 0))
+    const review = async (approvedFlag: boolean) => {
+      let notes: string | undefined
+      if (!approvedFlag) {
+        const why = window.prompt(`Reject ${reviewable.length} claim${reviewable.length === 1 ? '' : 's'} — reason for the staff member:`)
+        if (why === null) return
+        notes = why
+      }
+      const out = await expenseAction({ action: 'review', ids: reviewable.map(e => e.id), approved: approvedFlag, notes })
+      if (out.ok) clear()
+    }
+    return (
+      <div className="expenses-bulk">
+        {reviewable.length > 0 && (
+          <>
+            <button type="button" className="dt-toolbar-btn" onClick={() => void review(true)}>Approve {reviewable.length} · {sum(reviewable)}</button>
+            <button type="button" className="dt-toolbar-btn is-danger" onClick={() => void review(false)}>Reject {reviewable.length}</button>
+          </>
+        )}
+        {isFinance && staff.length > 0 && (
+          <button type="button" className="dt-toolbar-btn" onClick={() => { openPay(staff.map(e => e.id)); clear() }}>Reimburse {staff.length} · {sum(staff)}</button>
+        )}
+        {isFinance && company.length > 0 && (
+          <button type="button" className="dt-toolbar-btn" onClick={() => { openPay(company.map(e => e.id)); clear() }}>Pay {company.length} · {sum(company)}</button>
+        )}
+        {!reviewable.length && !approved.length && <span className="expenses-bulk__none">Nothing to approve or pay among these</span>}
+      </div>
+    )
+  }
 
   if (!mounted) return <ModuleSkeleton />
 
@@ -524,6 +687,7 @@ function ExpensesContent() {
                   { value: 'rejected', label: 'Rejected' },
                   { value: 'paid', label: 'Paid' },
                   { value: 'reimbursed', label: 'Reimbursed' },
+                  { value: 'withdrawn', label: 'Withdrawn' },
                 ],
                 onChange: v => setReviewStatus(v as typeof reviewStatus),
               },
@@ -542,16 +706,17 @@ function ExpensesContent() {
             onClearFilters={() => patchExpenseUi({ status: 'all', staff: null, reviewPage: null, period: null, from: null, to: null })}
             onPreview={openReceiptPreview}
             onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
-            onReimburse={e => {
-              setReimbursingId(e.id)
-              setReimburseNote('')
-              setReimburseMethod('')
-              setReimburseBankAccountId('')
-              setReimburseReference('')
-              setReimburseDate('')
-            }}
+            onReimburse={isFinance ? e => openPay([e.id]) : undefined}
             onView={e => setReviewingId(e.id)}
+            selectable
+            bulkActions={({ rows, clear }) => <BulkBar rows={rows} clear={clear} />}
               />
+            {isFinance && (
+              <div className="expenses-books-check">
+                <button type="button" className="btn-outline text-[11px] py-1.5 px-3" onClick={() => void checkBooks()}>Check the books</button>
+                <span>Finds approved or paid claims whose journal is missing, and posts it.</span>
+              </div>
+            )}
             </section>
           </div>
         )}
@@ -559,11 +724,12 @@ function ExpensesContent() {
 
       {/* ── Submit Expense Modal ──────────────────────────────────────────── */}
       {showSubmit && (
+        <ExpensesModalPortal>
         <div className="modal-overlay expenses-modal-overlay" onClick={() => setShowSubmit(false)}>
           <div className="modal-box expenses-submit-modal w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="expenses-modal-header flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-sm font-bold text-t1">New Expense</h3>
+                <h3 className="text-sm font-bold text-t1">{editTarget ? (editTarget.kind === 'edit' ? 'Change expense' : 'Correct and send again') : reportItems.length ? 'Expense report' : 'New Expense'}</h3>
                 <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
                   Submitting as <span className="font-semibold" style={{ color: 'var(--navy)' }}>{currentUser?.name ?? '—'}</span>
                 </p>
@@ -572,6 +738,25 @@ function ExpensesContent() {
             </div>
 
             <div className="expenses-submit-form space-y-3">
+              {reportItems.length > 0 && (
+                <div className="expenses-report-box">
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Report name *</label>
+                  <input aria-label="Report name" className="form-input w-full text-[12px]" maxLength={120}
+                    placeholder='e.g. "Mombasa trip 12–14 Nov"'
+                    value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
+                  <ul className="expenses-report-items">
+                    {reportItems.map((item, i) => (
+                      <li key={i}>
+                        <span>{catLabel(item.category)} · {item.description}{item.receiptFile ? ' · receipt' : ''}</span>
+                        <strong>{fmtKes(item.amount)}</strong>
+                        <button type="button" aria-label="Remove item" onClick={() => setReportItems(list => list.filter((_, j) => j !== i))}>×</button>
+                      </li>
+                    ))}
+                    <li className="is-total"><span>{reportItems.length} item{reportItems.length === 1 ? '' : 's'} so far</span><strong>{fmtKes(reportItems.reduce((t, x) => t + x.amount, 0))}</strong><span /></li>
+                  </ul>
+                  <p className="text-[10px] text-t3">Fill in the next item below, or submit the report.</p>
+                </div>
+              )}
               {/* Category + Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -584,6 +769,11 @@ function ExpensesContent() {
                     ))}
                   </select>
                 </div>
+                {RECURRING_CATEGORIES.has(form.category) && (
+                  <p className="expenses-recurring-hint col-span-2">
+                    A bill like this that comes every month can be set up once in Finance → Bills → Recurring bills, instead of a claim each month.
+                  </p>
+                )}
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Expense Date *</label>
                   <input type="date" aria-label="Expense date" className="form-input w-full text-[12px]" value={form.expenseDate}
@@ -644,6 +834,9 @@ function ExpensesContent() {
               </div>
 
               {/* Receipt upload */}
+              {editTarget?.hasReceipt ? (
+                <p className="text-[11px] text-t3">The receipt already attached stays with the claim (a stored receipt is never replaced).</p>
+              ) : (
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">
                   Attach Receipt / Transaction Message
@@ -699,6 +892,7 @@ function ExpensesContent() {
                   )}
                 </div>
               </div>
+              )}
 
               {/* Notes */}
               <div>
@@ -710,10 +904,19 @@ function ExpensesContent() {
 
             <div className="expenses-modal-actions flex gap-2 mt-4 justify-end">
               <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowSubmit(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={handleSubmit}>Submit Expense</button>
+              {!editTarget && (
+                <button type="button" className="btn-outline text-[11px] py-2 px-4" disabled={busy} onClick={addToReport}
+                  title="Several expenses (a trip, a site visit) submitted together and paid as one">
+                  + Add another expense
+                </button>
+              )}
+              <button className="btn-primary text-[11px] py-2 px-4" disabled={busy} onClick={() => void handleSubmit()}>
+                {busy ? 'Saving…' : editTarget ? (editTarget.kind === 'edit' ? 'Save changes' : 'Send again') : reportItems.length ? `Submit report (${reportItems.length + (form.description.trim() || form.amount.trim() ? 1 : 0)})` : 'Submit Expense'}
+              </button>
             </div>
           </div>
         </div>
+        </ExpensesModalPortal>
       )}
 
       {/* ── Approve / Reject Modal ────────────────────────────────────────── */}
@@ -722,7 +925,13 @@ function ExpensesContent() {
         if (!exp) return null
         const canReview = exp.status === 'submitted'
           && canUserReviewExpense(currentUser?.role, exp.approvalChain)
+        const mine = exp.submittedByUserId === currentUserId
+        const untouched = exp.status === 'submitted' && !(exp.approvalChain ?? []).some(s => s.status !== 'pending')
+        const report = exp.reportId ? expenses.filter(e => e.reportId === exp.reportId) : []
+        const reportReviewable = report.filter(e => e.status === 'submitted' && canUserReviewExpense(currentUser?.role, e.approvalChain))
+        const reportPayable = report.filter(e => e.status === 'approved')
         return (
+          <ExpensesModalPortal>
           <div className="modal-overlay expenses-modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box expenses-review-modal w-full max-w-md" onClick={e => e.stopPropagation()}>
               <div className="expenses-review-form">
@@ -760,6 +969,47 @@ function ExpensesContent() {
 
               {exp.approvalChain && exp.approvalChain.length > 0 && (
                 <ExpenseApprovalChain chain={exp.approvalChain} />
+              )}
+
+              {report.length > 1 && (
+                <div className="expenses-report-box mb-3">
+                  <p className="text-[11px] font-semibold text-t1">Report: {exp.reportTitle}</p>
+                  <ul className="expenses-report-items">
+                    {report.map(item => (
+                      <li key={item.id} className={item.id === exp.id ? 'is-current' : ''}>
+                        <button type="button" className="expenses-report-item-link" onClick={() => setReviewingId(item.id)}>{item.ref} · {item.description}</button>
+                        <strong>{fmtKes(item.amount)}</strong>
+                        <span className="expenses-report-item-status">{STATUS_META[item.status].label}</span>
+                      </li>
+                    ))}
+                    <li className="is-total"><span>{report.length} items</span><strong>{fmtKes(report.reduce((t, x) => t + x.amount, 0))}</strong><span /></li>
+                  </ul>
+                  <div className="expenses-report-actions">
+                    {reportReviewable.length > 1 && (
+                      <button type="button" className="btn-primary text-[11px] py-1.5 px-3" style={{ background: 'var(--success)' }}
+                        onClick={() => void expenseAction({ action: 'review', ids: reportReviewable.map(e => e.id), approved: true, notes: reviewNotes || undefined }).then(o => { if (o.ok) setReviewingId(null) })}>
+                        Approve the whole report ({reportReviewable.length})
+                      </button>
+                    )}
+                    {isFinance && reportPayable.length > 1 && reportPayable.every(e => isReimbursable(e.paymentMethod) === isReimbursable(reportPayable[0].paymentMethod)) && (
+                      <button type="button" className="btn-primary text-[11px] py-1.5 px-3"
+                        onClick={() => { openPay(reportPayable.map(e => e.id)); setReviewingId(null) }}>
+                        {isReimbursable(reportPayable[0].paymentMethod) ? 'Reimburse' : 'Pay'} the whole report · {fmtKes(reportPayable.reduce((t, x) => t + x.amount, 0))}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {exp.history && exp.history.length > 0 && (
+                <div className="expenses-history mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-1">History</p>
+                  <ul>
+                    {exp.history.slice().reverse().map((h, i) => (
+                      <li key={i}><span>{fmtDate(h.date.slice(0, 10))} · {h.by}</span> {h.action}{h.note ? ` — ${h.note}` : ''}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               {exp.receiptFileName && (
@@ -800,52 +1050,86 @@ function ExpensesContent() {
                 {canReview ? (
                   <>
                     <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
-                    <button onClick={() => { reviewExpense(reviewingId, false, reviewNotes); setReviewingId(null) }}
+                    <button onClick={() => void expenseAction({ action: 'review', ids: [reviewingId], approved: false, notes: reviewNotes || undefined }).then(o => { if (o.ok) setReviewingId(null) })}
                       style={{ fontSize: 11, padding: '8px 16px', borderRadius: 8, border: '1px solid #FECACA', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
                       Reject
                     </button>
-                    <button onClick={() => { reviewExpense(reviewingId, true, reviewNotes); setReviewingId(null) }}
+                    <button onClick={() => void expenseAction({ action: 'review', ids: [reviewingId], approved: true, notes: reviewNotes || undefined }).then(o => { if (o.ok) setReviewingId(null) })}
                       className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--success)' }}>
                       Approve
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Close</button>
+                  <>
+                    {mine && untouched && (
+                      <>
+                        <button type="button" className="btn-outline text-[11px] py-2 px-4" onClick={() => {
+                          const why = window.prompt('Withdraw this claim? You can send it again later. Reason (optional):')
+                          if (why === null) return
+                          void expenseAction({ action: 'withdraw', id: exp.id, reason: why || undefined }).then(o => { if (o.ok) setReviewingId(null) })
+                        }}>Withdraw</button>
+                        <button type="button" className="btn-primary text-[11px] py-2 px-4" onClick={() => openEdit(exp, 'edit')}>Change</button>
+                      </>
+                    )}
+                    {mine && (exp.status === 'rejected' || exp.status === 'withdrawn') && (
+                      <button type="button" className="btn-primary text-[11px] py-2 px-4" onClick={() => openEdit(exp, 'resubmit')}>Correct and send again</button>
+                    )}
+                    <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Close</button>
+                  </>
                 )}
               </div>
               </div>
             </div>
           </div>
+          </ExpensesModalPortal>
         )
       })()}
 
       {/* ── Reimburse Modal ───────────────────────────────────────────────── */}
-      {reimbursingId && (() => {
-        const exp = expenses.find(e => e.id === reimbursingId)
+      {payIds.length > 0 && (() => {
+        const paying = expenses.filter(e => payIds.includes(e.id))
+        const exp = paying[0]
         if (!exp) return null
+        const many = paying.length > 1
+        const total = paying.reduce((t, e) => t + e.amount, 0)
+        const people = [...new Set(paying.map(e => e.submittedByName))]
+        const closePay = () => setPayIds([])
         return (
-          <div className="modal-overlay expenses-modal-overlay" onClick={() => setReimbursingId(null)}>
+          <ExpensesModalPortal>
+          <div className="modal-overlay expenses-modal-overlay" onClick={closePay}>
             <div className="modal-box expenses-reimburse-modal w-full max-w-sm" onClick={e => e.stopPropagation()}>
-              <div className="expenses-modal-header flex items-center justify-between mb-4">
+              <div className="expenses-modal-header expenses-reimburse-header flex items-center justify-between mb-4">
+                {/* Phones: the form fills the screen; Back stays at the top. */}
+                <button type="button" className="expenses-modal-back" onClick={closePay} aria-label="Back to expenses">‹ Back</button>
                 <div>
-                  <h3 className="text-sm font-bold text-t1">{isReimbursable(exp.paymentMethod) ? 'Reimburse Expense' : 'Pay Expense'}</h3>
-                  <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
+                  <h3 className="text-sm font-bold text-t1">{isReimbursable(exp.paymentMethod) ? (many ? `Reimburse ${paying.length} claims` : 'Reimburse Expense') : (many ? `Pay ${paying.length} expenses` : 'Pay Expense')}</h3>
+                  <p className="text-[11px] text-t3">{many ? `${people.length === 1 ? people[0] : `${people.length} people`} · one payment` : `${exp.ref} · ${exp.submittedByName}`}</p>
                 </div>
-                <button className="expenses-modal-close" aria-label="Close expense payment" onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+                <button className="expenses-modal-close" aria-label="Close expense payment" onClick={closePay} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               <div className="expenses-reimburse-amount rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                <p className="text-[10px] text-t3 mb-1">{isReimbursable(exp.paymentMethod) ? `Amount to reimburse to ${exp.submittedByName}` : 'Approved company expense to pay'}</p>
-                <p className="text-2xl font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</p>
-                <p className="text-[10px] text-t3 mt-1">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
+                <p className="text-[10px] text-t3 mb-1">{isReimbursable(exp.paymentMethod) ? `Amount to reimburse to ${people.length === 1 ? exp.submittedByName : `${people.length} people`}` : many ? 'Approved company expenses to pay' : 'Approved company expense to pay'}</p>
+                <p className="text-2xl font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(total)}</p>
+                <p className="text-[10px] text-t3 mt-1">{many ? `${paying.length} claims in one payment — one line in the books, one on the bank statement` : `${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}`}</p>
               </div>
+              {many && (
+                <ul className="expenses-report-items mb-4">
+                  {paying.map(e => (
+                    <li key={e.id}><span>{e.ref} · {e.description}{people.length > 1 ? ` · ${e.submittedByName}` : ''}</span><strong>{fmtKes(e.amount)}</strong><span /></li>
+                  ))}
+                </ul>
+              )}
+              {many && people.length > 1 && isReimbursable(exp.paymentMethod) && (
+                <p className="text-[11px] mb-3" style={{ color: 'var(--warning-text)' }}>These are claims from {people.length} people. Pay them together only if one transfer covers all of them.</p>
+              )}
 
               <div className="expenses-reimburse-form space-y-3 mb-4">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account *</label>
                   <select aria-label="Expense payment account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
                     <option value="">— Select Bank Account —</option>
-                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{bankChoiceLabel(a)}</option>)}
                   </select>
                 </div>
                 <div>
@@ -881,9 +1165,10 @@ function ExpensesContent() {
               </div>
 
               <div className="expenses-modal-actions flex gap-2 justify-end">
-                <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
+                <button onClick={closePay} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
                 <button
-                  onClick={() => {
+                  disabled={busy}
+                  onClick={async () => {
                   const missing: string[] = []
                   if (!reimburseBankAccountId) missing.push('Bank Account')
                   if (!reimburseMethod) missing.push('Payment Method')
@@ -892,32 +1177,72 @@ function ExpensesContent() {
                     showToast(`Required: ${missing.join(', ')}`, 'error')
                     return
                   }
-                  const reference = reimburseReference.trim() || undefined
-                  const bankAccountId = reimburseBankAccountId || undefined
-                  const note = reimburseNote.trim() || undefined
-                  if (isReimbursable(exp.paymentMethod)) {
-                    reimburseExpense(reimbursingId, note, reimburseMethod, bankAccountId, reference, reimburseDate)
-                  } else {
-                    payExpense(reimbursingId, reimburseMethod, bankAccountId, reference, reimburseDate, note)
-                  }
-                  setReimbursingId(null)
-                  setReimburseReference('')
-                  setReimburseBankAccountId('')
-                  setReimburseNote('')
-                  setReimburseMethod('')
-                  setReimburseDate('')
+                  setBusy(true)
+                  const out = await expenseAction({
+                    action: 'pay',
+                    ids: paying.map(e => e.id),
+                    method: reimburseMethod,
+                    bankAccountId: reimburseBankAccountId || undefined,
+                    reference: reimburseReference.trim() || undefined,
+                    date: reimburseDate,
+                    notes: reimburseNote.trim() || undefined,
+                  })
+                  setBusy(false)
+                  if (out.ok) closePay()
                 }}
                   className="btn-primary text-[11px] py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'var(--accent-cyan)' }}>
-                  {isReimbursable(exp.paymentMethod) ? 'Confirm Reimbursement' : 'Confirm Payment'}
+                  {busy ? 'Saving…' : `${isReimbursable(exp.paymentMethod) ? 'Confirm Reimbursement' : 'Confirm Payment'}${many ? ` · ${fmtKes(total)}` : ''}`}
                 </button>
               </div>
             </div>
           </div>
+          </ExpensesModalPortal>
         )
       })()}
 
+      {/* ── Books check ───────────────────────────────────────────────────── */}
+      {booksCheck && (
+        <ExpensesModalPortal>
+        <div className="modal-overlay expenses-modal-overlay" onClick={() => setBooksCheck(null)}>
+          <div className="modal-box expenses-review-modal w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="expenses-modal-header flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-t1">Claims and the books</h3>
+                <p className="text-[11px] text-t3">Approved or paid claims whose journal is missing</p>
+              </div>
+              <button className="expenses-modal-close" aria-label="Close" onClick={() => setBooksCheck(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+            </div>
+            {booksCheck.loading ? (
+              <p className="text-[12px] text-t3">Checking…</p>
+            ) : booksCheck.findings.length === 0 ? (
+              <p className="text-[12px]" style={{ color: 'var(--success-text)' }}>Every approved and paid claim has its journal.</p>
+            ) : (
+              <ul className="expenses-report-items mb-3">
+                {booksCheck.findings.map(f => (
+                  <li key={`${f.id}-${f.missing}`}>
+                    <span>{f.ref} · {f.status} · no {f.missing} journal{f.note ? ` — ${f.note}` : ''}</span>
+                    <strong>{fmtKes(f.amount)}</strong>
+                    <span />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="expenses-modal-actions flex gap-2 justify-end">
+              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setBooksCheck(null)}>Close</button>
+              {!booksCheck.loading && booksCheck.findings.some(f => f.fixable) && (
+                <button className="btn-primary text-[11px] py-2 px-4" onClick={() => void fixBooks()}>
+                  Post the {booksCheck.findings.filter(f => f.fixable).length} missing journal{booksCheck.findings.filter(f => f.fixable).length === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        </ExpensesModalPortal>
+      )}
+
       {/* ── Receipt Preview Modal ─────────────────────────────────────────── */}
       {previewExp && (
+        <ExpensesModalPortal>
         <div className="modal-overlay expenses-modal-overlay" onClick={closeReceiptPreview}>
           <div className="modal-box expenses-receipt-preview w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="expenses-modal-header expenses-receipt-preview__header flex items-center justify-between mb-3">
@@ -985,6 +1310,7 @@ function ExpensesContent() {
             </div>
           </div>
         </div>
+        </ExpensesModalPortal>
       )}
       </div>{/* mod-body */}
     </div>
@@ -1009,6 +1335,8 @@ function ExpenseTable({
   onReview,
   onReimburse,
   onView,
+  selectable,
+  bulkActions,
 }: {
   rows: Expense[]
   showSubmitter: boolean
@@ -1025,6 +1353,8 @@ function ExpenseTable({
   onReview?: (e: Expense) => void
   onReimburse?: (e: Expense) => void
   onView?: (e: Expense) => void
+  selectable?: boolean
+  bulkActions?: (ctx: { rows: Expense[]; clear: () => void }) => ReactNode
 }) {
   // The row (or card) opens the claim; only Review / Pay need a button.
   const hasAction = (exp: Expense) => Boolean((onReview && exp.status === 'submitted') || (onReimburse && exp.status === 'approved'))
@@ -1051,6 +1381,7 @@ function ExpenseTable({
       render: exp => (
         <div className="min-w-0" style={{ maxWidth: 250 }}>
           <p className="text-[var(--text-1)] font-bold erp-truncate" title={exp.description}>{exp.description}</p>
+          {exp.reportTitle && <p className="expenses-report-chip erp-truncate" title={`Report: ${exp.reportTitle}`}>Report: {exp.reportTitle}</p>}
           {exp.notes && <p className="text-[10px] text-[var(--text-4)] erp-truncate mt-0.5" title={exp.notes}>{exp.notes}</p>}
         </div>
       ),
@@ -1071,6 +1402,9 @@ function ExpenseTable({
           )}
           {exp.status === 'reimbursed' && exp.reimbursementReference && (
             <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.reimbursementReference}>Paid: {exp.reimbursementReference}</p>
+          )}
+          {exp.paymentBatchRef && (
+            <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.paymentBatchRef}>With {exp.paymentBatchRef}</p>
           )}
           {exp.status === 'paid' && exp.paymentReference && (
             <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.paymentReference}>Paid: {exp.paymentReference}</p>
@@ -1137,13 +1471,11 @@ function ExpenseTable({
       key={exp.id}
       eyebrow={exp.ref}
       title={exp.description}
-      subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}${exp.payeeName ? ` · Payee: ${exp.payeeName}` : ''}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
+      // Payment method joins the line above instead of a row of its own.
+      subtitle={`${exp.reportTitle ? `${exp.reportTitle} · ` : ''}${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)} · ${pmLabel(exp.paymentMethod)}${exp.payeeName ? ` · Payee: ${exp.payeeName}` : ''}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
       amount={fmtKes(exp.amount)}
       status={<ExpenseStatusBadge status={exp.status} />}
-      meta={[
-        { label: 'Payment', value: pmLabel(exp.paymentMethod) },
-        ...(exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []),
-      ]}
+      meta={exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []}
       actions={rowActions(exp) ?? undefined}
       onClick={onView ? () => onView(exp) : undefined}
     />
@@ -1167,6 +1499,8 @@ function ExpenseTable({
       hideColumnFilters={Boolean(primaryFilters?.length)}
       rowActions={rows.some(hasAction) ? rowActions : undefined}
       onRowClick={onView}
+      selectable={selectable}
+      bulkActions={bulkActions}
       renderCard={renderExpenseCard}
       exportTitle={showSubmitter ? 'Expense Reviews' : 'My Expenses'}
       exportFilename="expenses"

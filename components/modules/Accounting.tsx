@@ -1,5 +1,7 @@
 'use client'
 
+import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
+import { PERIODS, periodOf, periodRange } from '@/lib/finance/period-range'
 import { planMigrationImport } from '@/lib/finance/migration-import'
 import { newestDocumentFirst } from '@/lib/document-order'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
@@ -27,6 +29,7 @@ import { faArrowDown, faMoneyBillWave, faArrowUp, faBook, faBalanceScale, faChar
 import { useFinanceStore, Invoice, JournalEntry, Account, fmtKes, fmtDate } from '@/lib/store'
 import { PdfLine } from '@/lib/pdf'
 import { downloadInvoicePdf } from '@/components/modules/invoice-pdf'
+import { textMatchesSearch } from '@/lib/text-search'
 import { CO } from '@/lib/company'
 import {
   invoiceDocState,
@@ -799,9 +802,12 @@ function AccountingContent() {
     }
   }, [invoices, localInvoices])
 
+  const saleOrderRefById = useMemo(() => new Map(saleOrders.map(o => [o.id, o.ref])), [saleOrders])
+  const purchaseOrderRefById = useMemo(() => new Map(purchaseOrders.map(o => [o.id, o.ref])), [purchaseOrders])
+
   const filteredInvoices = useMemo(() => {
     const list = tab === 'invoices' ? customerInvoices : vendorBills
-    const q = invSearch.toLowerCase()
+    const q = invSearch.trim()
     const res: Invoice[] = []
     for (const i of list) {
       // Odoo semantics: document state (Draft/Posted/Cancelled) is separate
@@ -821,17 +827,32 @@ function AccountingContent() {
       else pass = docState === invFilter
 
       if (pass) {
+        // Any capitals, any word order, any separators in the number — and the
+        // sale/purchase order, customer PO and amount, not only number and name.
+        const sourceRef = (i as Invoice & { sourceRef?: string; saleOrderRef?: string; purchaseOrderRef?: string })
         if (
           !q ||
-          i.ref.toLowerCase().includes(q) ||
-          i.partnerName.toLowerCase().includes(q)
+          textMatchesSearch(
+            q,
+            i.ref,
+            displayDocRef(i.ref),
+            i.partnerName,
+            sourceRef.sourceRef,
+            sourceRef.saleOrderRef,
+            sourceRef.purchaseOrderRef,
+            i.saleOrderId ? saleOrderRefById.get(i.saleOrderId) : '',
+            i.purchaseOrderId ? purchaseOrderRefById.get(i.purchaseOrderId) : '',
+            i.customerPoNumber,
+            i.subject,
+            Math.round(Number(i.total) || 0),
+          )
         ) {
           res.push(i)
         }
       }
     }
     return res.sort(newestDocumentFirst)
-  }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
+  }, [tab, customerInvoices, vendorBills, invFilter, invSearch, saleOrderRefById, purchaseOrderRefById])
 
   const sourceReferenceForInvoice = (invoice: Invoice): string => {
     const explicit = String(
@@ -1184,6 +1205,7 @@ function AccountingContent() {
             companySettings,
             bankAccounts,
             inv.type === 'customer_invoice' ? getDocumentPaymentDetails(inv.id) : undefined,
+            appState.repairs,
           )
           ok += 1
           // Brief gap so the browser does not coalesce / block successive saves.
@@ -1444,6 +1466,9 @@ function AccountingContent() {
 
   if (!mounted) return <ModuleSkeleton />
 
+  // A section with one sub-tab ("Financial reports") gets no sub-tab row.
+  const sectionTabs = FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'recurring_bills' || canManageFullFinance) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))
+
   return (
     <AccountingProvider value={ctxValue as any}>
       <div className="mod-page finance-workspace finance-workspace--accounts" data-finance-tab={tab}>
@@ -1507,10 +1532,10 @@ function AccountingContent() {
             maxVisibleDesktop={6}
             ariaLabel="Finance workspaces"
           />
-          {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
+          {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && sectionTabs.length > 1 && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'recurring_bills' || canManageFullFinance) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))}
+                tabs={sectionTabs}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"
@@ -1526,6 +1551,18 @@ function AccountingContent() {
         <div className="mod-body finance-workspace__body">
         {tab === 'reports' && (
           <div className="finance-report-command mb-3 space-y-2">
+            {/* Phones: one picker for every report instead of two tab rows and a fold. */}
+            <label className="finance-report-picker">
+              <span className="sr-only">Report</span>
+              <select value={reportTab} onChange={e => setReport(e.target.value as ReportTab)} aria-label="Report">
+                <optgroup label="Management reports">
+                  {REPORT_TABS.filter(t => MANAGEMENT_REPORT_IDS.has(t.id)).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </optgroup>
+                <optgroup label="Compliance & detailed reports">
+                  {REPORT_TABS.filter(t => CONTROL_REPORT_IDS.has(t.id)).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </optgroup>
+              </select>
+            </label>
             <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2 space-y-2">
               <div>
                 <div className="px-1 pb-1 text-xs font-semibold text-text-3">Management reports</div>
@@ -1555,7 +1592,7 @@ function AccountingContent() {
               </details>
             </div>
             {journalSot && (
-              <details className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
+              <details className="finance-report-status rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
                 <summary className="cursor-pointer font-semibold text-[var(--text-2)]">Report data status</summary>
                 <div
                   className={`finance-sot-notice mt-2 rounded-lg border px-3 py-2 text-xs ${
@@ -1757,26 +1794,29 @@ function AccountingContent() {
                       amount={fmtKes(balance || i.total)}
                       status={<span className="inline-flex items-center gap-1"><Badge status={badge.status as any} label={badge.label} size="xs" />{badge.overdue && <Badge status="cancelled" label="Overdue" size="xs" />}</span>}
                       accent={balance > 0 ? 'var(--danger)' : 'var(--success)'}
-                      meta={[
+                      // The amount above is the balance (or the total once
+                      // settled) and the badge says paid / not paid, so the
+                      // breakdown only adds anything while part paid.
+                      meta={balance > 0 && i.amountPaid > 0 ? [
                         { label: 'Total', value: fmtKes(i.total) },
-                        { label: 'Paid', value: fmtKes(i.amountPaid) },
-                        { label: 'Paid %', value: `${Math.round(pct)}%` },
-                      ]}
+                        { label: `Paid (${Math.round(pct)}%)`, value: fmtKes(i.amountPaid) },
+                      ] : []}
                       onClick={() => openInvoiceRecord(i.id)}
                     />
                   )
                 }}
-                bulkActions={({ rows, clear }) => {
+                bulkActions={({ rows }) => {
                   const payable = rows.filter(b => invoiceDocState(b.status) === 'posted' && b.total > b.amountPaid)
                   const totalOutstanding = payable.reduce((s, b) => s + invoiceResidual(b), 0)
                   const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
                   return (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-[var(--text-2)]">
-                        {rows.length} selected
-                        {payable.length > 0 ? ` · ${payable.length} payable · ${fmtKes(totalOutstanding)} outstanding` : ''}
-                      </span>
-                      <button type="button" className="btn-ghost text-xs" onClick={clear}>Clear</button>
+                      {/* The bar itself shows "N selected" and Clear. */}
+                      {payable.length > 0 && (
+                        <span className="text-xs font-semibold text-[var(--text-2)]">
+                          {payable.length} unpaid · {fmtKes(totalOutstanding)} outstanding
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="btn-secondary text-xs flex items-center gap-1.5"
@@ -2192,6 +2232,23 @@ function AccountingContent() {
                 <div className="flex items-center gap-2 flex-wrap">
                   {plSource === 'prisma' && (
                     <>
+                      {/* One tap for the usual periods; the dates below still allow any range. */}
+                      <div className="finance-period-presets flex w-full gap-1 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-1 sm:w-auto" role="group" aria-label="P&L period">
+                        {PERIODS.map(p => {
+                          const on = periodOf(pnlDateFrom, pnlDateTo) === p.id
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => { const r = periodRange(p.id); setPnlDateFrom(r.from); setPnlDateTo(r.to) }}
+                              className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${on ? 'bg-[var(--navy)] text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface-2)]'}`}
+                            >
+                              {p.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                       <label className="text-[11px] text-[var(--text-3)] flex items-center gap-1">
                         From
                         <input
@@ -2678,7 +2735,7 @@ function AccountingContent() {
                   <Field label={tab === 'invoices' ? 'Bank / Account Received Into *' : 'Bank / Account Paid From *'}>
                     <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
                       { value: '', label: tab === 'invoices' ? '— Select receiving account —' : '— Select paying account —' },
-                      ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))
+                      ...activeBanks.map(b => ({ value: b.id, label: bankChoiceLabel(b) }))
                     ]} />
                   </Field>
                 )}
