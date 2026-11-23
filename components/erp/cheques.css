@@ -1,0 +1,89 @@
+/* ── Upload many cheques (components/finance/BulkCheques.tsx) ─────────── */
+.bulk-cheques { display: flex; flex-direction: column; gap: 1rem; }
+.bulk-cheques__settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.bulk-cheques__settings label { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.bulk-cheques__settings label > span { color: var(--text-2); font-size: 12px; font-weight: 600; }
+.bulk-cheques__dir { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem; }
+.bulk-cheques__dir button {
+  min-height: 40px;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bulk-cheques__dir button.is-active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.bulk-cheques__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+.bulk-cheques__add > span { color: var(--text-3); font-size: 12px; }
+.bulk-cheques__docs { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; font-size: 12px; color: var(--text-2); }
+.bulk-cheques__docs li { padding: 0.375rem 0.625rem; border-radius: var(--radius-sm); background: var(--bg-surface); }
+.bulk-cheques__docs li.is-ok { background: color-mix(in srgb, var(--success) 8%, transparent); }
+.bulk-cheques__docs li.is-over { background: color-mix(in srgb, var(--warning) 10%, transparent); }
+.bulk-cheques__rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.bulk-cheques__rows li {
+  display: grid;
+  grid-template-columns: 1.5rem 7rem minmax(0, 1fr) 10rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-md);
+}
+.bulk-cheques__rows li.is-bad { border-color: var(--danger); }
+.bulk-cheques__rows li.is-saved { opacity: 0.6; }
+.bulk-cheques__n { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.bulk-cheques__rows img,
+.bulk-cheques__nophoto {
+  width: 7rem;
+  height: 3.25rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-lt);
+  object-fit: cover;
+}
+.bulk-cheques__nophoto { display: flex; align-items: center; justify-content: center; color: var(--text-4); font-size: 11px; }
+.bulk-cheques__fields { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.375rem; }
+.bulk-cheques__fields .form-input { min-height: 36px; padding: 0 0.5rem; font-size: 12px; }
+.bulk-cheques__state { display: flex; flex-direction: column; gap: 0.125rem; font-size: 11px; color: var(--text-3); }
+.bulk-cheques__state .is-ok { color: var(--success); font-weight: 600; }
+.bulk-cheques__state .is-bad { color: var(--danger); font-weight: 600; }
+.bulk-cheques__state small { color: var(--text-4); font-size: 11px; }
+.bulk-cheques__state button { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--text-3); font-size: 11px; text-decoration: underline; cursor: pointer; }
+.bulk-cheques__total { margin-right: auto; color: var(--text-2); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+  .bulk-cheques__settings { grid-template-columns: minmax(0, 1fr); }
+  .bulk-cheques__rows li { grid-template-columns: 1.25rem minmax(0, 1fr); }
+  .bulk-cheques__rows img, .bulk-cheques__nophoto { width: 100%; height: 5rem; }
+  .bulk-cheques__fields, .bulk-cheques__state { grid-column: 1 / -1; }
+  .bulk-cheques__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bulk-cheques__total { display: none; }
+}
+
+/* ── Cheques on an invoice / bill (components/finance/DocumentCheques.tsx) ── */
+.doc-cheques { display: flex; flex-direction: column; gap: 0.5rem; }
+.doc-cheques__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.doc-cheques__head strong { color: var(--text-1); font-size: 13px; }
+.doc-cheques__head span { color: var(--text-3); font-size: 12px; }
+.doc-cheques__head button { padding: 0; border: 0; background: none; color: var(--primary); font-size: 12px; font-weight: 600; cursor: pointer; }
+.doc-cheques ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.5rem; }
+.doc-cheques li { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; border: 1px solid var(--border-lt); border-radius: var(--radius-md); font-size: 12px; color: var(--text-2); }
+.doc-cheques li img { width: 100%; height: 4.5rem; border-radius: var(--radius-sm); object-fit: cover; cursor: zoom-in; }
+.doc-cheques li b { color: var(--text-1); font-variant-numeric: tabular-nums; }
+.doc-cheques li small { color: var(--text-3); font-size: 11px; }

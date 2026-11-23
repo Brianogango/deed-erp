@@ -54,7 +54,7 @@ beforeEach(() => {h.rows.length = 0
 describe('cheque register API', () => {
   it('only lets director, admin officer and finance officer in', async () => {
     h.requirePermission.mockRejectedValueOnce(Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }))
-    expect((await GET()).status).toBe(403)
+    expect((await GET(new Request('http://x/api/cheques'))).status).toBe(403)
     expect(h.requirePermission).toHaveBeenCalledWith('accounting.cheques.view')
   })
 

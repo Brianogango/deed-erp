@@ -1,9 +1,14 @@
 /**
  * Cheque register (lib/cheques/cheque-rules.ts).
  *
- * GET  — every cheque, newest cheque date first, with today's alert state.
- * POST — add a cheque received or given, optionally with a photo of it.
+ * GET  — every cheque, newest cheque date first, with today's alert state
+ *        and, when it pays a document on its date, that schedule.
+ * POST — add a cheque received or given, optionally with a photo of it, and
+ *        optionally the invoice / bill it pays on its date (scheduleInvoiceId +
+ *        bankAccountId; lib/cheques/cheque-schedule.server.ts). A cheque dated
+ *        today or earlier is applied at once.
  */
+import { applyMaturedCheques, listSchedules, scheduleCheque } from '@/lib/cheques/cheque-schedule.server'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
@@ -26,12 +31,31 @@ export const runtime = 'nodejs'
 const text = (value: unknown, max: number) => String(value ?? '').trim().slice(0, max)
 const dateOrNull = (value: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? '')) ? new Date(`${value}T00:00:00Z`) : null)
 
-export async function GET() {
+export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await requirePermission('accounting.cheques.view')
-    const rows = await prisma.cheque.findMany({ orderBy: [{ chequeDate: 'desc' }, { createdAt: 'desc' }], take: 2000 })
+    // ?invoiceId=&ref= : the cheques for one invoice / bill (scheduled on it, or naming it).
+    const url = new URL(request.url)
+    const invoiceId = url.searchParams.get('invoiceId')?.trim() || ''
+    const ref = url.searchParams.get('ref')?.trim() || ''
+    const forDoc = invoiceId || ref
+      ? {
+          OR: [
+            ...(invoiceId ? [{ id: { in: (await listSchedules({ invoiceId }).catch(() => [])).map(s => s.chequeId) } }] : []),
+            ...(ref ? [{ linkedRef: { contains: ref, mode: 'insensitive' as const } }] : []),
+          ],
+        }
+      : undefined
+    const rows = await prisma.cheque.findMany({ where: forDoc, orderBy: [{ chequeDate: forDoc ? 'asc' : 'desc' }, { createdAt: 'desc' }], take: 2000 })
     const today = nairobiToday()
-    return NextResponse.json({ today, cheques: rows.map(row => toChequeDto(row, today)) })
+    const schedules = new Map((await listSchedules().catch(() => [])).map(s => [s.chequeId, s]))
+    return NextResponse.json({
+      today,
+      cheques: rows.map(row => {
+        const s = schedules.get(row.id)
+        return { ...toChequeDto(row, today), ...(s ? { schedule: { invoiceId: s.invoiceId, state: s.state, message: s.message, appliedAt: s.appliedAt } } : {}) }
+      }),
+    })
   })
 }
 
@@ -103,6 +127,19 @@ export async function POST(request: Request) {
         history: [{ at: now, by: user.name || user.username || user.id, status: 'pending', note: direction === 'received' ? 'Cheque received' : 'Cheque issued' }],
       },
     })
-    return NextResponse.json({ cheque: toChequeDto(row) }, { status: 201 })
+    // Pays an invoice / bill on its date: link it now; a cheque already due goes at once.
+    const scheduleInvoiceId = text(body.scheduleInvoiceId, 64)
+    if (scheduleInvoiceId) {
+      try {
+        await scheduleCheque({ chequeId: row.id, invoiceId: scheduleInvoiceId, bankAccountId: text(body.bankAccountId, 64) })
+      } catch (err) {
+        await prisma.cheque.delete({ where: { id: row.id } }).catch(() => {})
+        const status = (err as { status?: number })?.status ?? 422
+        return NextResponse.json({ error: err instanceof Error ? err.message : 'Could not link the cheque to that document' }, { status })
+      }
+      if (input.chequeDate <= nairobiToday()) await applyMaturedCheques({ onlyChequeIds: [row.id] }).catch(() => [])
+    }
+    const fresh = await prisma.cheque.findUnique({ where: { id: row.id } })
+    return NextResponse.json({ cheque: toChequeDto(fresh ?? row) }, { status: 201 })
   })
 }

@@ -25,7 +25,12 @@ export async function POST(request: NextRequest) {
     const agentCommissions = await syncAgentCommissions()
       .then(r => ({ posted: r.posted, failed: r.failed }))
       .catch(err => ({ error: err instanceof Error ? err.message : 'failed' }))
-    return NextResponse.json({ ok: true, scan, worker, agentCommissions })
+    // Post-dated cheques whose date has come pay their invoice / bill.
+    const cheques = await import('@/lib/cheques/cheque-schedule.server')
+      .then(m => m.applyMaturedCheques())
+      .then(r => ({ applied: r.filter(x => x.result === 'applied').length, waiting: r.filter(x => x.result === 'waiting').length }))
+      .catch(err => ({ error: err instanceof Error ? err.message : 'failed' }))
+    return NextResponse.json({ ok: true, scan, worker, agentCommissions, cheques })
   })
 }
 

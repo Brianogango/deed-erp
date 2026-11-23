@@ -1,5 +1,8 @@
 'use client'
 
+import { prepareImage } from '@/components/finance/cheque-image'
+import BulkCheques from '@/components/finance/BulkCheques'
+
 import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
@@ -36,6 +39,17 @@ type Cheque = {
   hasImage: boolean
   history: HistoryEntry[]
   alert: ChequeAlert
+  /** Pays an invoice / bill on its date (lib/cheques/cheque-schedule.server.ts). */
+  schedule?: { invoiceId: string; state: 'scheduled' | 'applied' | 'reversed' | 'skipped'; message: string | null; appliedAt: string | null }
+}
+
+const scheduleText = (c: Cheque): string | null => {
+  const s = c.schedule
+  if (!s) return null
+  if (s.state === 'applied') return `Paid ${c.linkedRef ?? 'the document'} on its date`
+  if (s.state === 'reversed') return 'Payment reversed'
+  if (s.state === 'skipped') return s.message ?? 'Not applied'
+  return s.message ?? `Pays ${c.linkedRef ?? 'the document'} on ${c.chequeDate}`
 }
 type Scan = { chequeNumber: string; bankName: string; payeeName: string; accountName: string; amount: number | null; chequeDate: string; warnings: string[] }
 
@@ -60,18 +74,6 @@ async function readJson<T>(res: Response): Promise<T> {
   return payload as T
 }
 
-/** Phone photos run to several MB; shrink to a readable 1600px JPEG before uploading. */
-async function prepareImage(file: File): Promise<{ base64: string; mimeType: string; previewUrl: string }> {
-  const bitmap = await createImageBitmap(file)
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(bitmap.width * scale)
-  canvas.height = Math.round(bitmap.height * scale)
-  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-  return { base64: dataUrl.split(',')[1] ?? '', mimeType: 'image/jpeg', previewUrl: dataUrl }
-}
-
 const EMPTY_FORM = { direction: 'received' as ChequeDirection, chequeNumber: '', bankName: '', partyName: '', amount: '', chequeDate: '', receivedDate: '', linkedRef: '', notes: '' }
 
 export default function Cheques({ showToast }: { showToast: Toast }) {
@@ -81,6 +83,23 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
   const [direction, setDirection] = useState<'all' | ChequeDirection>('all')
   const [statusFilter, setStatusFilter] = useState<'open' | 'deposited' | 'closed' | 'all'>('open')
   const [adding, setAdding] = useState(false)
+  const [bulk, setBulk] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const applyDue = async () => {
+    setApplying(true)
+    try {
+      const d = await readJson<{ results: Array<{ result: string; chequeNumber: string; invoiceRef: string; message?: string }> }>(await fetch('/api/cheques/apply-due', { method: 'POST' }))
+      const applied = d.results.filter(r => r.result === 'applied')
+      const waiting = d.results.filter(r => r.result === 'waiting')
+      showToast(applied.length ? `${applied.length} cheque${applied.length === 1 ? '' : 's'} applied to ${[...new Set(applied.map(a => a.invoiceRef))].join(', ')}` : 'No cheques due to apply', applied.length ? 'success' : 'info')
+      if (waiting.length) showToast(`${waiting.length} waiting: ${waiting.map(w => `${w.chequeNumber} (${w.message})`).join('; ')}`, 'error')
+      await load()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not apply cheques', 'error')
+    } finally {
+      setApplying(false)
+    }
+  }
   const [selected, setSelected] = useState<Cheque | null>(null)
 
   const load = useCallback(async () => {
@@ -175,7 +194,12 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
     },
     {
       key: 'linked', label: 'For', priority: 3, width: '130px',
-      render: c => <span className="font-mono text-[11px] text-t2">{c.linkedRef || '—'}</span>,
+      render: c => (
+        <span className="flex flex-col">
+          <span className="font-mono text-[11px] text-t2">{c.linkedRef || '—'}</span>
+          {scheduleText(c) && <span className="text-[10px] text-t3">{scheduleText(c)}</span>}
+        </span>
+      ),
       exportValue: c => c.linkedRef ?? '',
     },
     {
@@ -221,6 +245,7 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
           <option value="closed">Closed</option>
           <option value="all">All</option>
         </select>
+        <button type="button" className="btn-secondary shrink-0 px-3 py-1.5 text-[12px]" onClick={() => setBulk(true)}>Many</button>
         <button type="button" className="btn-primary shrink-0 px-3 py-1.5 text-[12px]" onClick={() => setAdding(true)}>Add</button>
       </div>
 
@@ -243,7 +268,11 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
             ))}
           </div>
         </div>
-        <button type="button" className="btn-primary ml-auto text-[12px]" onClick={() => setAdding(true)}>Add cheque</button>
+        <button type="button" className="btn-secondary ml-auto text-[12px]" disabled={applying} onClick={() => void applyDue()} title="Pay the invoices / bills of cheques whose date has come (the server also does this on its own)">
+          {applying ? 'Applying…' : 'Apply due now'}
+        </button>
+        <button type="button" className="btn-secondary text-[12px]" onClick={() => setBulk(true)}>Upload many</button>
+        <button type="button" className="btn-primary text-[12px]" onClick={() => setAdding(true)}>Add cheque</button>
       </div>
 
       <DataTable
@@ -269,6 +298,7 @@ export default function Cheques({ showToast }: { showToast: Toast }) {
         }}
       />
 
+      {bulk && <BulkCheques showToast={showToast} onClose={() => setBulk(false)} onSaved={load} />}
       {adding && <AddCheque showToast={showToast} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await load() }} />}
       {selected && <ChequeDetail cheque={selected} now={now} onClose={() => setSelected(null)} onMove={move} />}
     </div>
@@ -306,7 +336,7 @@ function ChequeDetail({ cheque, now, onClose, onMove }: {
           <div><dt className="text-[10px] text-t3">Date on the cheque</dt><dd>{fmtDate(cheque.chequeDate)}{cheque.alert ? ` — ${alertLabel(cheque.direction, cheque.alert, cheque.chequeDate, now)}` : ''}</dd></div>
           <div><dt className="text-[10px] text-t3">Bank</dt><dd>{cheque.bankName || '—'}</dd></div>
           <div><dt className="text-[10px] text-t3">{cheque.direction === 'received' ? 'Received on' : 'Issued on'}</dt><dd>{cheque.receivedDate ? fmtDate(cheque.receivedDate) : '—'}</dd></div>
-          <div><dt className="text-[10px] text-t3">For</dt><dd>{cheque.linkedRef || '—'}</dd></div>
+          <div><dt className="text-[10px] text-t3">For</dt><dd>{cheque.linkedRef || '—'}{scheduleText(cheque) ? <span className="block text-[11px] text-t3">{scheduleText(cheque)}</span> : null}</dd></div>
           {cheque.notes && <div className="col-span-2"><dt className="text-[10px] text-t3">Notes</dt><dd>{cheque.notes}</dd></div>}
         </dl>
         {cheque.hasImage && (
@@ -444,8 +474,13 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   const stale = form.chequeDate && isStaleCheque(form.chequeDate, today())
   const alert = form.chequeDate ? chequeAlert({ status: 'pending', chequeDate: form.chequeDate }, today()) : null
 
+  // Dated ahead: it pays its document on that date (lib/cheques/cheque-schedule.server.ts), not today.
+  const postDated = !!form.chequeDate && form.chequeDate > today()
+  const schedule = postDated && recordPayment && linkedDocs.length > 0
   const save = async () => {
     if (withheld > 0 && !wht.certificate.trim()) { showToast('Required: Withholding certificate number', 'error'); return }
+    if (schedule && linkedDocs.length > 1) { showToast('A post-dated cheque pays one document on its date — keep one, or add a cheque for each', 'error'); return }
+    if (schedule && !payBankId) { showToast('Pick the bank account the cheque goes through', 'error'); return }
     setSaving(true)
     try {
       await readJson(await fetch('/api/cheques', {
@@ -462,10 +497,11 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
             : form.notes,
           imageBase64: image?.base64,
           imageType: image?.mimeType,
+          ...(schedule ? { scheduleInvoiceId: linkedDocs[0].id, bankAccountId: payBankId } : {}),
         }),
       }))
-      showToast(`Cheque ${form.chequeNumber} added`, 'success')
-      if (linkedDocs.length && recordPayment) {
+      showToast(schedule ? `Cheque ${form.chequeNumber} added — it pays ${linkedDocs[0].ref} on ${form.chequeDate}` : `Cheque ${form.chequeNumber} added`, 'success')
+      if (linkedDocs.length && recordPayment && !schedule) {
         const failed: string[] = []
         let recorded = 0
         for (const { doc, amount } of allocation) {
@@ -612,9 +648,11 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
             )}
             <label className="mt-2 flex items-center gap-2 text-t1">
               <input type="checkbox" checked={recordPayment} onChange={e => setRecordPayment(e.target.checked)} />
-              {form.direction === 'received'
-                ? `Also record this as a receipt on the ${linkedDocs.length > 1 ? 'invoices' : 'invoice'}`
-                : `Also record this as a payment on the ${linkedDocs.length > 1 ? 'bills' : 'bill'}`}
+              {postDated
+                ? `Pay the ${form.direction === 'received' ? 'invoice' : 'bill'} on the cheque's date (${form.chequeDate}), straight to the bank`
+                : form.direction === 'received'
+                  ? `Also record this as a receipt on the ${linkedDocs.length > 1 ? 'invoices' : 'invoice'}`
+                  : `Also record this as a payment on the ${linkedDocs.length > 1 ? 'bills' : 'bill'}`}
             </label>
             {recordPayment && activeBanks.length > 0 && (
               <select
