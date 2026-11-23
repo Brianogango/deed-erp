@@ -553,7 +553,10 @@ export function createPurchasingActions(store: StoreDeps): Pick<AppState, 'creat
         // Three-way match keys off PO qtyReceived. A missing blob GRN with
         // status === 'validated' used to block Create Bill even when the modal
         // already showed "Up to N billable now" from Prisma-hydrated receipts.
-        if (!poHasReceivedGoods(po.lines)) {
+        // Paid in advance: the supplier often invoices before delivery, so the
+        // ordered quantity can be billed (the receipt later fills GRNI).
+        const prepaid = Number(po.advancePaid ?? 0) > 0
+        if (!prepaid && !poHasReceivedGoods(po.lines)) {
           store.showToast('Receive goods before creating a vendor bill', 'error'); return null
         }
   
@@ -577,7 +580,7 @@ export function createPurchasingActions(store: StoreDeps): Pick<AppState, 'creat
         try {
           billableLines = po.lines
             .map(l => {
-              const reconciledLine = { ...l, qtyBilled: activeBilledQty(l) }
+              const reconciledLine = { ...l, qtyBilled: activeBilledQty(l), prepaid }
               const maxBillable = billableQty(reconciledLine)
               const billQty = overrideMap ? Math.min(maxBillable, overrideMap.get(l.id) ?? 0) : maxBillable
               assertBillableQty(reconciledLine, billQty)
@@ -590,7 +593,7 @@ export function createPurchasingActions(store: StoreDeps): Pick<AppState, 'creat
         }
   
         if (billableLines.length === 0) {
-          store.showToast('No received quantity left to bill on this purchase order', 'error')
+          store.showToast(prepaid ? 'Everything on this purchase order is already billed' : 'No received quantity left to bill on this purchase order', 'error')
           return null
         }
   

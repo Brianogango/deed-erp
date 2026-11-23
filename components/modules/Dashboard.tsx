@@ -825,6 +825,26 @@ export function Dashboard() {
       })
     }
 
+    // Paid before delivery and the goods are not all in yet: chase the supplier.
+    if (canSeeFinance || canSeeInventory) {
+      const paidWaiting = (purchaseOrders ?? []).filter(po =>
+        Number(po.advancePaid ?? 0) > 0
+        && ['sent', 'confirmed', 'partial'].includes(po.status)
+        && po.lines.some(l => (Number(l.qtyReceived) || 0) < (Number(l.qty) || 0)))
+      if (paidWaiting.length > 0) {
+        const amount = paidWaiting.reduce((s, po) => s + Number(po.advancePaid ?? 0), 0)
+        const oldest = [...paidWaiting].sort((a, b) => String(a.date).localeCompare(String(b.date)))[0]
+        items.push({
+          key: 'paid-not-received',
+          title: `${paidWaiting.length} purchase order${paidWaiting.length === 1 ? '' : 's'} paid but not received`,
+          sub: `${fmtKes(amount)} paid in advance · oldest ${oldest.ref} (${oldest.vendorName})`,
+          tone: 'warn',
+          module: 'purchase',
+          path: `/purchases?id=${encodeURIComponent(oldest.id)}`,
+        })
+      }
+    }
+
     if (canSeeFinance && financeDeskStats) {
       // Shared finance exceptions: overdue collections/payables, reimbursements
       // due, payroll approvals, reconciliation backlog, negative cash accounts.
@@ -893,7 +913,7 @@ export function Dashboard() {
       .filter(item => !item.module || has(item.module))
       .sort((a, b) => (rank[a.tone as keyof typeof rank] ?? 3) - (rank[b.tone as keyof typeof rank] ?? 3))
       .slice(0, 5)
-  }, [invoicedNotDelivered, canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
+  }, [invoicedNotDelivered, canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, purchaseOrders, has])
 
   const executiveSnapshot = useMemo(() => {
     const paid = invoiceFigures?.revenue

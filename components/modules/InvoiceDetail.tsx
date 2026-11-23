@@ -702,7 +702,26 @@ export default function InvoiceDetail() {
     (c: { sourceInvoiceId?: string; status?: string }) => c.sourceInvoiceId === invoice.id && c.status !== 'void',
   )
 
+  // A bill on an order paid before delivery: use the advance on it
+  // (normally done when the bill is confirmed; this catches a later advance).
+  const applyAdvance = async () => {
+    try {
+      const r = await fetch(`/api/invoices/${invoice.id}/apply-advance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || d.message || 'Could not apply the advance')
+      showToast(Number(d.applied) > 0 ? `${fmtKes(Number(d.applied))} paid from the advance` : 'No advance left on this order to use', Number(d.applied) > 0 ? 'success' : 'info')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not apply the advance', 'error')
+    }
+  }
   const moreActions = [
+    {
+      id: 'apply-advance',
+      label: 'Apply advance payment',
+      onClick: () => { void applyAdvance() },
+      hidden: !canManageFinance || !(invoice.type === 'vendor_bill' && invoice.purchaseOrderId && invoiceDocState(invoice.status) === 'posted'
+        && Number(invoice.total) > Number(invoice.amountPaid ?? 0)),
+    },
     {
       id: 'download',
       label: `Download ${docLabel}`,

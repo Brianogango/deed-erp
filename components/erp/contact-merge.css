@@ -92,3 +92,56 @@
 @media (max-width: 767px) {
   .contacts-paymethod { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ── Purchase order: paid in advance (components/modules/purchase/PoAdvancePanel.tsx) ── */
+.po-advance {
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border-lt));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--primary) 5%, var(--bg-card));
+}
+.po-advance__head strong { display: block; color: var(--text-1); font-size: 13px; }
+.po-advance__head span { color: var(--text-3); font-size: 12px; }
+.po-advance ul { margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.po-advance li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.375rem 0;
+  border-top: 1px solid var(--border-lt);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.po-advance li > span { flex: 1 1 12rem; min-width: 0; }
+.po-advance li > b { color: var(--text-1); font-variant-numeric: tabular-nums; }
+.po-advance li > small { color: var(--text-3); font-size: 11px; }
+.po-advance li > button {
+  min-height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.po-advance__form { display: flex; flex-direction: column; gap: 0.75rem; }
+.po-advance__note { margin: 0; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.po-advance__methods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.375rem; }
+.po-advance__methods button {
+  min-height: 40px;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.po-advance__methods button.is-active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}

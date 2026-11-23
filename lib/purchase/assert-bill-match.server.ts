@@ -7,6 +7,7 @@ import 'server-only'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
+import { orderIsPrepaid } from '@/lib/purchase/vendor-advance.server'
 
 type VendorBillMatchLine = {
   purchaseOrderItemId?: string | null
@@ -47,6 +48,10 @@ function matchError(message: string): Error {
   return Object.assign(new Error(message), { status: 409 })
 }
 const close = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol
+/** Units a bill may take on a line: received, or ordered on an order paid in advance. */
+const cover = (item: { qtyReceived: unknown; qtyOrdered: unknown }, prepaid: boolean) =>
+  prepaid ? Math.max(n(item.qtyReceived), n(item.qtyOrdered)) : n(item.qtyReceived)
+const shortMsg = (prepaid: boolean) => prepaid ? 'ordered and not yet billed' : 'received and not yet billed. Receive the rest first, or lower the quantity on the bill.'
 
 export async function assertVendorBillThreeWayMatchInTx(
   tx: Prisma.TransactionClient,
@@ -61,6 +66,8 @@ export async function assertVendorBillThreeWayMatchInTx(
     ;(err as Error & { status?: number }).status = 404
     throw err
   }
+  // Paid in advance: the supplier may invoice before delivery.
+  const prepaid = await orderIsPrepaid(tx, po.id)
   if (input.vendorId && po.clientId && input.vendorId !== po.clientId) {
     throw matchError(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
   }
@@ -129,10 +136,10 @@ export async function assertVendorBillThreeWayMatchInTx(
     // increment beyond it needs received-unbilled cover and a fresh claim.
     const ownQty = ownQtyByPoItem.get(poItemId) || 0
     const additional = Math.max(0, req.qty - ownQty)
-    const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + ownQty
+    const remaining = cover(poItem, prepaid) - n(poItem.qtyBilled) + ownQty
     if (req.qty > remaining + 1e-9) {
       throw matchError(
-        `${po.poNumber}: the bill has quantity ${req.qty} on ${req.line.description || 'a line'}, but only ${remaining} has been received and not yet billed. Receive the rest first, or lower the quantity on the bill.`,
+        `${po.poNumber}: the bill has quantity ${req.qty} on ${req.line.description || 'a line'}, but only ${remaining} has been ${shortMsg(prepaid)}`,
       )
     }
 
@@ -166,6 +173,7 @@ export async function assertVendorBillThreeWayMatchServer(
       include: { items: true },
     })
     if (!po) throw new Error(`Purchase order not found: ${input.purchaseOrderId}`)
+    const prepaid = await orderIsPrepaid(tx, po.id)
     if (input.vendorId && po.clientId && input.vendorId !== po.clientId) {
       throw matchError(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
     }
@@ -191,9 +199,9 @@ export async function assertVendorBillThreeWayMatchServer(
     }
     for (const [poItemId, qty] of requested) {
       const poItem = po.items.find(x => x.id === poItemId)!
-      const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + (ownQtyByPoItem.get(poItemId) || 0)
+      const remaining = cover(poItem, prepaid) - n(poItem.qtyBilled) + (ownQtyByPoItem.get(poItemId) || 0)
       if (qty <= 0 || qty > remaining) {
-        throw matchError(`${po.poNumber}: the bill has quantity ${qty} on a line, but only ${remaining} has been received and not yet billed. Receive the rest first, or lower the quantity on the bill.`)
+        throw matchError(`${po.poNumber}: the bill has quantity ${qty} on a line, but only ${remaining} has been ${shortMsg(prepaid)}`)
       }
     }
     return { ok: true as const, poRef: po.poNumber }
