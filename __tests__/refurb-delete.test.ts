@@ -12,11 +12,11 @@ const jobs = [
 ]
 
 describe('planRefurbDelete', () => {
-  it('job only: removes open and written-off jobs, refuses transferred, harvested and ready', () => {
+  it('job only: removes open, ready, transferred and written-off jobs; refuses harvested', () => {
     const plan = planRefurbDelete({ jobs, serials, jobIds: ['j1', 'j2', 'j3', 'j4', 'j6'], serialIds: [], mode: 'job_only' })
-    expect(plan.jobIds).toEqual(['j1', 'j6'])
+    expect(plan.jobIds).toEqual(['j1', 'j2', 'j4', 'j6'])
     expect(plan.serialIds).toEqual([])
-    expect(plan.refused.map(r => r.id)).toEqual(['j2', 'j3', 'j4'])
+    expect(plan.refused.map(r => r.id)).toEqual(['j3'])
   })
 
   it('job only: a machine with no job is refused', () => {
@@ -31,10 +31,17 @@ describe('planRefurbDelete', () => {
     expect(plan.refused).toEqual([])
   })
 
-  it('job and machine: an earlier transferred job on the same machine keeps it', () => {
+  it('job and machine: a transferred job goes with its machine', () => {
     const plan = planRefurbDelete({ jobs, serials, jobIds: ['j6'], serialIds: [], mode: 'job_and_unit' })
+    expect(plan.serialIds).toEqual(['s2'])
+    expect(plan.refused).toEqual([])
+  })
+
+  it('job and machine: an earlier harvested job on the same machine keeps it', () => {
+    const extra = [...jobs, { id: 'j7', ref: 'REF/0007', serialId: 's3', status: 'queued', partsNeeded: [] }]
+    const plan = planRefurbDelete({ jobs: extra, serials, jobIds: ['j7'], serialIds: [], mode: 'job_and_unit' })
     expect(plan.serialIds).toEqual([])
-    expect(plan.refused[0].why).toMatch(/REF\/0002: Transferred/)
+    expect(plan.refused[0].why).toMatch(/REF\/0003: Stripped for parts/)
   })
 
   it('job and machine: With Issues machines with no job are deleted', () => {

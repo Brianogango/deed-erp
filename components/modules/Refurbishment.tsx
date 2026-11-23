@@ -179,6 +179,23 @@ function RefurbishmentContent() {
     void printLabelsForSerialUnits({ serials: list, products, forSale })
   }
   // One toast for the batch; each machine keeps its own intake issue unless one is given here.
+  // What is already known about a machine's fault: noted when it came in, its
+  // condition notes, or the issue on its last job. The lead is not asked again.
+  const knownIssueFor = (s: SerialNumber): string => {
+    const own = unitInfo(s).intakeIssue?.trim() || s.accessoryNotes?.trim()
+    if (own) return own
+    const last = [...refurbishmentJobs].filter(j => j.serialId === s.id && j.intakeIssueDescription?.trim())
+      .sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0]
+    return last?.intakeIssueDescription?.trim() ?? ''
+  }
+
+  // A machine already in the repair unit: open its job straight away.
+  const createJobNow = (s: SerialNumber) => {
+    const issue = knownIssueFor(s)
+    createRefurbishmentJob(s.id, issue, { silent: true })
+    showToast(issue ? `Job created · issue: ${issue.length > 60 ? `${issue.slice(0, 60)}…` : issue}` : 'Job created · the technician adds what they find')
+  }
+
   const sendToRefurbishment = (list: SerialNumber[], issue: string) => {
     list.forEach(s => createRefurbishmentJob(s.id, issue, { silent: true }))
     showToast(`${list.length} machine${list.length === 1 ? '' : 's'} sent to refurbishment`)
@@ -288,7 +305,7 @@ function RefurbishmentContent() {
           </fieldset>
         )}
         <p className="refurb-delete__note">
-          Kept and listed instead: jobs transferred to stock, stripped for parts or marked ready
+          Kept and listed instead: jobs stripped for parts
           {mode === 'job_and_unit' ? ', and machines a sale, invoice, delivery, purchase receipt or warranty names (write those off)' : ''}.
           Parts taken from stock and not fitted go back to stock.
         </p>
@@ -1136,7 +1153,7 @@ function RefurbishmentContent() {
                   style={{ background: 'var(--warning)', color: '#fff', border: 'none', cursor: 'pointer' }}
                   onClick={() => setPendingConfirm({
                     msg: `Create a refurbishment job for each of the ${orphanedSerials.length} machines? Each keeps the issue noted when it came in; technicians add what they find.`,
-                    action: () => sendToRefurbishment(orphanedSerials, ''),
+                    action: () => { orphanedSerials.forEach(s => createRefurbishmentJob(s.id, knownIssueFor(s), { silent: true })); showToast(`${orphanedSerials.length} jobs created`) },
                   })}
                 >
                   Create all {orphanedSerials.length} jobs
@@ -1153,7 +1170,7 @@ function RefurbishmentContent() {
                   </div>
                   {isLeadTech && (
                     <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--warning)', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                      onClick={() => { setCreateJobSerial(s); setCreateJobIssue(''); setShowCreateJobModal(true) }}>
+                      onClick={() => createJobNow(s)}>
                       + Create Job
                     </button>
                   )}
