@@ -31,6 +31,7 @@ import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRela
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, RecordPager, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
+import DocumentCheques from '@/components/finance/DocumentCheques'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
@@ -494,6 +495,40 @@ export default function InvoiceDetail() {
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
     const applied = financePaymentPreview(payAmount, balance).applied
     const reference = payReference.trim() || (byCheque ? `Cheque ${chequeNumber.trim()}` : payReference)
+    // A post-dated cheque pays on its own date (lib/cheques/cheque-schedule.server.ts):
+    // it goes into the register now and the document is reduced on that day.
+    const nairobiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    if (receiving && byCheque && chequeDate && chequeDate > nairobiToday) {
+      if (!payBankAccountId) { showToast('Pick the bank account the cheque goes through', 'error'); return }
+      const direction = chequeDirectionForDoc(invoice.type)!
+      const ourBank = activeBanks.find(b => b.id === payBankAccountId)
+      try {
+        const res = await fetch('/api/cheques', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            direction,
+            chequeNumber: chequeNumber.trim(),
+            bankName: direction === 'given' ? (ourBank?.bankName || ourBank?.name || chequeBank.trim()) : chequeBank.trim(),
+            partyName: invoice.partnerName,
+            amount: applied,
+            chequeDate,
+            receivedDate: payDate || nairobiToday,
+            linkedType: chequeLinkedType(invoice.type),
+            linkedRef: invoice.ref,
+            scheduleInvoiceId: invoice.id,
+            bankAccountId: payBankAccountId,
+          }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(d.error || 'Could not add the cheque')
+        showToast(`Cheque ${chequeNumber.trim()} added — it pays ${displayDocRef(invoice.ref)} on ${chequeDate}`, 'success')
+        setShowPayModal(false)
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Could not add the cheque', 'error')
+      }
+      return
+    }
     const paid = receiving ? await registerPayment(invoice.id, applied, payMethod, payBankAccountId || undefined, reference, payDate) : true
     if (paid && withheld > 0 && wht.kind) {
       const recorded = await registerPayment(invoice.id, withheld, wht.kind, undefined, wht.certificate.trim(), payDate)
@@ -1291,6 +1326,11 @@ export default function InvoiceDetail() {
           </article>
           </section>
         </details>
+
+        {/* Cheques on this document: photos, dates, and post-dated ones still to pay. */}
+        {(invoice.type === 'customer_invoice' || invoice.type === 'vendor_bill') && invoice.status !== 'draft' && (
+          <DocumentCheques invoiceId={invoice.id} docRef={invoice.ref} />
+        )}
 
         <section id="invoice-supporting-details" className="invoice-detail__tabs-card" aria-label="Notes payments and activity">
           <div className="invoice-detail__tabs" role="tablist">

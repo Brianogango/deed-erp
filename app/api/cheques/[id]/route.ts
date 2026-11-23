@@ -3,6 +3,7 @@
  * cancel, reopen) or correct its details. Every status change is recorded in
  * the cheque's history with who and when.
  */
+import { reopenChequeSchedule, undoChequePayment } from '@/lib/cheques/cheque-schedule.server'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission, withApiErrorHandling } from '@/lib/auth/api'
@@ -61,6 +62,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     if (!Object.keys(data).length) return NextResponse.json({ error: 'Nothing to change' }, { status: 400 })
+    // Bounced or stopped after it paid a document on its date: that payment is
+    // reversed, so the invoice / bill owes again.
+    if (data.status === 'bounced' || data.status === 'cancelled') {
+      await undoChequePayment(id, `Cheque ${existing.chequeNumber} ${data.status === 'bounced' ? 'bounced' : 'stopped'}: ${text(body.note, 300)}`, { id: user.id, name: user.name || user.username || 'Finance' })
+    }
+    if (data.status === 'pending' && (existing.status === 'bounced' || existing.status === 'cancelled')) {
+      await reopenChequeSchedule(id)
+    }
     const row = await prisma.cheque.update({ where: { id }, data })
     return NextResponse.json({ cheque: toChequeDto(row) })
   })
