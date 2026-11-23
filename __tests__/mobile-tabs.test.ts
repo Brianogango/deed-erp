@@ -2,24 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { mobileTabModules, mobileTabsHiddenFor } from '@/lib/navigation/mobile-tabs'
 
 describe('phone tab bar modules', () => {
-  it("gives each role its usual pair", () => {
-    expect(mobileTabModules({ role: 'director', modules: [] })).toEqual(['sales', 'accounting'])
-    expect(mobileTabModules({ role: 'sales_rep', modules: ['sales', 'crm', 'contacts'] })).toEqual(['sales', 'crm'])
-    expect(mobileTabModules({ role: 'finance_officer', modules: ['accounting'] })).toEqual(['accounting', 'expenses'])
+  it("gives each role its usual three", () => {
+    expect(mobileTabModules({ role: 'director', modules: [] })).toEqual(['sales', 'accounting', 'inventory'])
+    expect(mobileTabModules({ role: 'sales_rep', modules: ['sales', 'crm', 'contacts'] })).toEqual(['sales', 'crm', 'contacts'])
+    expect(mobileTabModules({ role: 'finance_officer', modules: ['accounting'] })).toEqual(['accounting', 'expenses', 'hr'])
   })
 
   it('lets pinned modules win', () => {
-    expect(mobileTabModules({ role: 'sales_rep', modules: ['sales', 'crm', 'contacts'] }, ['contacts'])).toEqual(['contacts', 'sales'])
+    expect(mobileTabModules({ role: 'sales_rep', modules: ['sales', 'crm', 'contacts'] }, ['contacts'])).toEqual(['contacts', 'sales', 'crm'])
   })
 
   it('never offers a module the person cannot open, and fills the gap', () => {
-    expect(mobileTabModules({ role: 'technician', modules: ['repair', 'refurbishment'] })).toEqual(['repair', 'refurbishment'])
-    expect(mobileTabModules({ role: 'admin_officer', modules: ['sales', 'delivery'] })).toEqual(['sales', 'delivery'])
-    expect(mobileTabModules({ role: 'sales_rep', modules: ['sales'] }, ['accounting'])).toEqual(['sales', 'hr'])
+    expect(mobileTabModules({ role: 'technician', modules: ['repair', 'refurbishment'] })).toEqual(['repair', 'refurbishment', 'hr'])
+    expect(mobileTabModules({ role: 'admin_officer', modules: ['sales', 'delivery'] })).toEqual(['sales', 'delivery', 'hr'])
+    expect(mobileTabModules({ role: 'sales_rep', modules: ['sales'] }, ['accounting'])).toEqual(['sales', 'hr', 'expenses'])
   })
 
   it('ignores pins that are not modules', () => {
-    expect(mobileTabModules({ role: 'director', modules: [] }, ['settings', 'my_work'])).toEqual(['sales', 'accounting'])
+    expect(mobileTabModules({ role: 'director', modules: [] }, ['settings', 'my_work'])).toEqual(['sales', 'accounting', 'inventory'])
   })
 })
 

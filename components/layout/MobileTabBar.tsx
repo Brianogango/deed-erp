@@ -39,9 +39,9 @@ function readPinned(userId: string | null | undefined): string[] {
 }
 
 /**
- * Bottom tab bar on phones: Home, the person's two working modules and My
- * work, as a slim row of icons; the open one shows its name. The full menu is
- * the ☰ at the top left. Hidden from tablet width up, on open records
+ * Bottom tab bar on phones: Home, the person's three working modules and My
+ * work, each with its label; the open one has a pill behind its icon. The
+ * full menu is the ☰ at the top left. Hidden from tablet width up, on open records
  * (they carry their own actions along the bottom) and on the POS till.
  */
 export default function MobileTabBar() {
@@ -73,9 +73,8 @@ export default function MobileTabBar() {
             href={tab.href}
             className={`mobile-tab-bar__tab ${active ? 'is-active' : ''}`}
             aria-current={active ? 'page' : undefined}
-            aria-label={tab.label}
           >
-            <Fa icon={tab.icon} className="mobile-tab-bar__icon" aria-hidden="true" />
+            <span className="mobile-tab-bar__pill"><Fa icon={tab.icon} className="mobile-tab-bar__icon" aria-hidden="true" /></span>
             <span>{tab.label}</span>
           </Link>
         )
