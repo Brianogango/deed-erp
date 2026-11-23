@@ -9,10 +9,11 @@
  *   the repair unit shows again under "no job created yet"; a written-off
  *   machine stays written off.
  *
- * Refused here, before any of that: a job transferred to stock (the machine is
- * on sale now), a job stripped for parts (its parts are in stock), and a job
- * marked ready (transfer it or reopen it first). For job_and_unit the machine's
- * other jobs count too, so no transferred or harvested history is lost.
+ * Refused here, before any of that: a job stripped for parts (its parts are in
+ * stock carrying the machine's cost). A transferred or ready job is only a
+ * record (transfer posts nothing), so it may go; with job_and_unit its machine
+ * then faces the inventory delete's own checks. For job_and_unit the machine's
+ * other jobs count too, so no harvest history is lost.
  *
  * Parts taken from stock for a deleted job and never fitted go back to stock.
  *
@@ -33,8 +34,6 @@ export type RefurbDeletePlan = {
 
 export function refurbJobBlocker(job: Row): string | null {
   if (job?.outcome === 'harvested') return 'Stripped for parts — its parts are in stock'
-  if (job?.status === 'transferred') return 'Transferred to stock — delete it from Inventory or write it off'
-  if (job?.status === 'ready') return 'Ready for sale — transfer it or reopen it first'
   return null
 }
 
