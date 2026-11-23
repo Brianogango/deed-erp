@@ -66,6 +66,8 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@sendgrid/mail": "^8.1.6",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",

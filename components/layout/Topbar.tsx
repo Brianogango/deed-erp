@@ -3,6 +3,7 @@
 import { closeHandledPopups } from '@/lib/notifications/push-popups'
 import { isInstalledApp, isIosDevice, subscribeDeviceToPush } from '@/lib/notifications/push-client'
 import PushNudge from '@/components/layout/PushNudge'
+import PasskeySettings from '@/components/auth/PasskeySettings'
 import { SAVE_FAILED_EVENT } from '@/lib/save-failure'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
@@ -1027,6 +1028,16 @@ function AccountPanel({
                 <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="form-input" />
               </label>
             </div>
+          </section>
+
+          <section className="acct-section">
+            <div className="acct-section-heading">
+              <span className="acct-section-icon" aria-hidden="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 15.5c1.4 1 3.6 1 5 0"/></svg>
+              </span>
+              <span><strong>Face ID &amp; fingerprint</strong><small>Sign in without typing your password</small></span>
+            </div>
+            <PasskeySettings showToast={showToast} />
           </section>
 
           <section className="acct-section">

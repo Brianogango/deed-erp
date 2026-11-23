@@ -173,6 +173,17 @@ export default function Settings() {
     showToast,
   } = useApp()
   const { employees, updateEmployee } = useHrStore()
+  // Lost or changed phone: a Director removes the person's passkeys.
+  const removeUserPasskeys = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}/passkeys`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not remove them')
+      showToast(data.removed ? `${data.removed} Face ID / fingerprint sign-in${data.removed === 1 ? '' : 's'} removed for ${name}` : `${name} had none set up`, 'info')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not remove them', 'error')
+    }
+  }
   const productCategorySettings = normalizeProductCategorySettings((ss as any).invProductCategories)
   const saveProductCategorySettings = (next: ProductCategorySetting[]) =>
     updateSystemSettings({ invProductCategories: next } as any)
@@ -902,6 +913,7 @@ export default function Settings() {
                         <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                       )}
                       <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
+                      <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} title="Remove this person's Face ID / fingerprint sign-ins (lost or changed phone)" onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Remove every Face ID / fingerprint sign-in for ${user.name}? Their password still works; they can add it again.`, action: () => void removeUserPasskeys(user.id, user.name) }) }}>Face ID</button>
                       <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                     </div>
                   )}
