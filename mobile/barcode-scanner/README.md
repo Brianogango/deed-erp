@@ -76,6 +76,10 @@ times slower — the ratios are what matter):
 
 What changed:
 
+- The guide band is sized off the frame's **shorter** side, so it stays a strip
+  when the phone hands over a portrait frame (720×1280 is common). Taking 60% of
+  the height of a portrait frame meant decoding half a megapixel of empty table:
+  508k pixels per frame, against 200k now.
 - The guide band is decoded on **every** frame. The whole-frame sweeps cost about
   as much again, so they now run every fourth frame and only after 1.2 s of
   finding nothing — they exist for vertical barcodes, not for the common case.
@@ -100,9 +104,12 @@ Three defences, all switchable in Settings:
   whole frame (that is how a vertical barcode is read), so without this a label
   on the next carton gets scanned while the guide points at nothing. The symbol's
   centre must fall inside the guide band for the row to count.
-- **Confirm every scan twice.** The same value has to be decoded in two separate
-  frames within 1.5 s. A real barcode repeats every few frames; a false read
-  almost never does.
+- **Confirm every scan twice**, within 4 s, and only for the 1D symbologies with
+  no check digit (Code 39, ITF, Codabar, DataBar). 2D codes carry error
+  correction, so one clean read of a QR, Micro QR, Data Matrix, Aztec or PDF417
+  is trusted. The window was 1.5 s in 1.3.0–1.5.0, which on a phone spending
+  146 ms per frame is only ten frames: a code that decoded once every few frames
+  could never be confirmed, so nothing was ever recorded.
 - **ITF / Codabar / DataBar are on**, but always need the double sighting. They
   were off in 1.3.0 and 1.4.0, which made ITF-14 cartons and DataBar labels
   unreadable while other scanner apps managed them fine — too high a price for

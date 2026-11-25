@@ -12,6 +12,7 @@
   var N = window.Native || null;
 
   var SCAN_INTERVAL_MS = 110;
+  var CONFIRM_WINDOW_MS = 4000;   // a slow phone may only decode every few frames
   var RETRY_MS = 10000;
   var BATCH = 40;
   var SAVED_KEEP = 60;
@@ -231,7 +232,7 @@
     stopCamera();
     showCamMsg('Starting camera\u2026', true);
 
-    var hi = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    var hi = { width: { ideal: 1920 }, height: { ideal: 1080 } };
     var tries = [];
     if (S.settings.camId) {
       tries.push({ audio: false, video: { deviceId: { exact: S.settings.camId }, width: hi.width, height: hi.height } });
@@ -407,12 +408,26 @@
     var vw = video.videoWidth, vh = video.videoHeight;
     var srcW, srcH, maxW, reader;
     if (mode === 'band') {
-      srcW = Math.round(vw * 0.92); srcH = Math.round(vh * 0.60); maxW = 820; reader = readerFast;
+      // A phone held upright hands over a PORTRAIT frame (e.g. 720x1280). Taking
+      // 60% of the height there is half a megapixel of mostly empty table, which
+      // is what made each frame cost 146ms. The strip is sized off the shorter
+      // side instead, so it stays a strip in either orientation.
+      srcW = Math.round(vw * 0.92);
+      srcH = Math.min(vh, Math.round(Math.min(vw, vh) * 0.42));
+      maxW = 760;
+      reader = readerFast;
     } else {
-      srcW = vw; srcH = vh; maxW = 720; reader = readerHard;
+      srcW = vw; srcH = vh; maxW = 0; reader = readerHard;
     }
-    var outW = srcW, outH = srcH;
-    if (outW > maxW) { var k = maxW / outW; outW = Math.round(outW * k); outH = Math.round(outH * k); }
+    var outW = srcW, outH = srcH, k;
+    if (maxW) {
+      if (outW > maxW) { k = maxW / outW; outW = Math.round(outW * k); outH = Math.round(outH * k); }
+    } else {
+      // cap the full-frame passes by their longest side: a portrait frame is
+      // tall, so capping width alone leaves them huge
+      var longest = Math.max(outW, outH);
+      if (longest > 700) { k = 700 / longest; outW = Math.round(outW * k); outH = Math.round(outH * k); }
+    }
     var sx = Math.round((vw - srcW) / 2), sy = Math.round((vh - srcH) / 2);
 
     // The rotation is done while drawing rather than on the decoded bitmap:
@@ -509,7 +524,7 @@
   // these carry their own check digit or CRC, so one clean read is trustworthy
   var SELF_CHECKING = {
     'EAN-13': 1, 'EAN-8': 1, 'UPC-A': 1, 'UPC-E': 1, 'CODE-128': 1, 'CODE-93': 1,
-    'QR-CODE': 1, 'DATA-MATRIX': 1, 'AZTEC': 1, 'PDF-417': 1
+    'QR-CODE': 1, 'MICRO-QR-CODE': 1, 'DATA-MATRIX': 1, 'AZTEC': 1, 'PDF-417': 1
   };
 
   function onDecode(text, format) {
@@ -531,11 +546,12 @@
     // Require the same value twice before accepting it. A false positive almost
     // never repeats - a real barcode in the frame repeats every few frames.
     if (S.settings.confirm && !SELF_CHECKING[format]) {
-      if (sighting.code === code && (t - sighting.at) < 1500) {
+      if (sighting.code === code && (t - sighting.at) < CONFIRM_WINDOW_MS) {
         sighting.n++;
         sighting.at = t;
       } else {
         sighting = { code: code, at: t, n: 1 };
+        rejects++;
         noteDrop(code, format, 'seen once, waiting for a second read');
         return;
       }
