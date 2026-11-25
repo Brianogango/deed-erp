@@ -1134,6 +1134,8 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
         store.setClientExchanges(p => p.map(e => e.id === id ? { ...e, status: 'completed', completedDate: now(), completedByName: user.name } : e))
         store.addAuditLog('exchange_complete', exc.ref, `Completed exchange ${exc.ref} for ${exc.customerName} — returns to ${store.LOCATIONS[returnLocation].name}`)
         store.cancelWarrantiesForTradeIn(exc.returnLines.flatMap(l => l.serialIds), exc.ref, `Handed back by ${exc.customerName} on exchange ${exc.ref}`)
+        // The machines given carry on the warranty of the ones handed back (issued on the server).
+        if (exc.newLines.some(l => l.serialIds.length)) store.requestWarrantySync()
         store.showToast(`Exchange ${exc.ref} completed — returned items moved to ${store.LOCATIONS[returnLocation].name}${settlement}`)
       },
 

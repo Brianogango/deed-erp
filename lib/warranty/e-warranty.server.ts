@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { loadAppState, loadAppStateForWrite, notifyStoreKeysChanged, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
-import { nextWarrantyRefs, warrantiesForDocument, warrantiesToIssue, warrantyPath, type DocWarranty, type WarrantyRow, type WarrantySource } from './e-warranty'
+import { exchangeCancellations, nextWarrantyRefs, warrantiesForDocument, warrantiesToIssue, warrantyPath, type DocWarranty, type ExchangeSource, type WarrantyRow, type WarrantySource } from './e-warranty'
 
 const arr = <T,>(v: unknown) => (Array.isArray(v) ? v as T[] : [])
 
@@ -44,12 +44,20 @@ export async function warrantyByToken(token: string): Promise<WarrantyRow | null
  * number of times.
  */
 export async function syncWarranties(): Promise<{ issued: number; total: number; added: WarrantyRow[] }> {
-  const src = await loadAppState(['deed_deliveries', 'deed_posOrders', 'deed_kilimallOrders', 'deed_serials', 'deed_products', 'deed_systemSettings'])
+  const src = await loadAppState(['deed_deliveries', 'deed_posOrders', 'deed_kilimallOrders', 'deed_serials', 'deed_products', 'deed_systemSettings', 'deed_clientExchanges'])
   const settings = (src.deed_systemSettings && typeof src.deed_systemSettings === 'object') ? src.deed_systemSettings as Record<string, unknown> : {}
   return withAppStateKeyLock('deed_warranties', async () => {
     const state = await loadAppStateForWrite(['deed_warranties'])
-    const existing = arr<WarrantyRow>(state.deed_warranties)
+    const exchanges = arr<ExchangeSource>(src.deed_clientExchanges)
+    // Machines handed back on an exchange no longer carry a warranty.
+    const ending = new Map(exchangeCancellations(arr<WarrantyRow>(state.deed_warranties), exchanges).map(c => [c.id, c]))
+    const cancelledAt = new Date().toISOString()
+    const existing = arr<WarrantyRow>(state.deed_warranties).map(w => {
+      const c = ending.get(w.id)
+      return c ? { ...w, status: 'cancelled' as const, cancelledAt, cancelledReason: `Handed back by ${c.customerName || 'the customer'} on exchange ${c.exchangeRef}`, cancelledByRef: c.exchangeRef } : w
+    })
     const toAdd = warrantiesToIssue(existing, {
+      exchanges,
       deliveries: arr(src.deed_deliveries),
       posOrders: arr(src.deed_posOrders),
       kilimallOrders: arr(src.deed_kilimallOrders),
@@ -57,14 +65,21 @@ export async function syncWarranties(): Promise<{ issued: number; total: number;
       products: arr(src.deed_products),
       defaultMonths: Number(settings.invDefaultWarrantyMonths) || undefined,
     })
-    if (!toAdd.length) return { issued: 0, total: existing.length, added: [] }
+    if (!toAdd.length) {
+      if (ending.size) {
+        await saveStoreKeys({ deed_warranties: JSON.stringify(existing) })
+        await notifyStoreKeysChanged(['deed_warranties']).catch(() => {})
+      }
+      return { issued: 0, total: existing.length, added: existing.filter(w => ending.has(w.id)) }
+    }
     const refs = nextWarrantyRefs(existing, toAdd.length)
     const now = new Date().toISOString()
     const added = toAdd.map((c, i) => ({ ...c, id: randomUUID(), ref: refs[i], issuedAt: now }))
     const next = [...existing, ...added]
     await saveStoreKeys({ deed_warranties: JSON.stringify(next) })
     await notifyStoreKeysChanged(['deed_warranties']).catch(() => {})
-    return { issued: added.length, total: next.length, added }
+    // Closed ones ride along so open screens drop them too (they merge by id).
+    return { issued: added.length, total: next.length, added: [...existing.filter(w => ending.has(w.id)), ...added] }
   })
 }
 
@@ -84,6 +99,7 @@ function toDocWarranty(w: WarrantyRow): DocWarranty {
     productName: w.productName, serialNumber: w.serialNumber,
     startDate: String(w.startDate).slice(0, 10), endDate: String(w.endDate).slice(0, 10), months: w.months,
     status: w.status, path: warrantyPath(warrantyToken(w.id)),
+    ...(w.exchangeRef ? { exchangeRef: w.exchangeRef, replacesSerialNumber: w.replacesSerialNumber || '' } : {}),
   }
 }
 

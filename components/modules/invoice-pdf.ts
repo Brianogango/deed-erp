@@ -18,7 +18,7 @@ async function withWarranties(inv: Invoice, input: CommercialPdfInput): Promise<
   if (inv.type !== 'customer_invoice' || invoiceDocState(inv.status) !== 'posted') return input
   const list = await fetchDocumentWarranties({ invoiceId: inv.id })
   if (!list.length) return input
-  return { ...input, warranties: list.map(w => ({ ref: w.ref, productName: w.productName, serialNumber: w.serialNumber, endDate: w.endDate, months: w.months, url: w.checkUrl })) }
+  return { ...input, warranties: list.map(w => ({ ref: w.ref, productName: w.productName, serialNumber: w.serialNumber, endDate: w.endDate, months: w.months, url: w.checkUrl, exchangeRef: w.exchangeRef, replacesSerialNumber: w.replacesSerialNumber })) }
 }
 
 const isCustomerInvoice = (inv: Invoice) => inv.type === 'customer_invoice'
