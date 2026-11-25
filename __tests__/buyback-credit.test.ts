@@ -44,3 +44,22 @@ describe('a device given for free (KSh 0 buy-back)', () => {
     expect(canReceiveFreeBuyBack({ status: 'paid', total: 0 }).ok).toBe(false)
   })
 })
+
+import { buyBackSettledByBill } from '@/lib/buyback-credit'
+describe('a buy-back settles when Finance pays its bill', () => {
+  const bb = { status: 'approved', billId: 'b1' }
+  const bill = { id: 'b1', status: 'posted', total: 70000, amountPaid: 0, payments: [] as Array<{ date: string; method: string; reference?: string }> }
+  it('waits while money is owed', () => {
+    expect(buyBackSettledByBill(bb, bill)).toBeNull()
+    expect(buyBackSettledByBill(bb, { ...bill, amountPaid: 30000 })).toBeNull()
+  })
+  it('settles in full, with the method and reference Finance entered', () => {
+    const paid = { ...bill, status: 'paid', amountPaid: 70000, payments: [{ date: '2026-11-26T08:00:00Z', method: 'mpesa', reference: 'SKD7H2K9P1' }] }
+    expect(buyBackSettledByBill(bb, paid)).toEqual({ paidDate: '2026-11-26T08:00:00Z', paymentMethod: 'mpesa', reference: 'SKD7H2K9P1' })
+    expect(buyBackSettledByBill(bb, { ...paid, payments: [{ date: 'x', method: 'bank_transfer' }] })?.paymentMethod).toBe('bank_transfer')
+  })
+  it('ignores cancelled bills and settled buy-backs', () => {
+    expect(buyBackSettledByBill(bb, { ...bill, status: 'cancelled', amountPaid: 70000 })).toBeNull()
+    expect(buyBackSettledByBill({ ...bb, status: 'paid' }, { ...bill, amountPaid: 70000 })).toBeNull()
+  })
+})

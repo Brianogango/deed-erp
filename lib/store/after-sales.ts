@@ -68,6 +68,8 @@ export interface BuyBack {
   creditRef?: string
   /** Cash / M-Pesa / bank payout: the vendor bill (to the customer) that booked and paid it. */
   billId?: string; billRef?: string
+  /** The reference Finance entered when paying the bill (M-Pesa code, transfer ref). */
+  paymentReference?: string
   stockedDate?: string; stockedByName?: string
 }
 
