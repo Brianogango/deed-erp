@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { mockRequireRole, mockPrisma, mockAttendance } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
-  mockAttendance: { dailyPayForMonth: vi.fn(), recordAttendancePay: vi.fn(), attendancePayForPayslips: vi.fn() },
+  mockAttendance: { dailyPayForMonth: vi.fn(), recordAttendancePay: vi.fn(), attendancePayForPayslips: vi.fn(), unpaidLeaveForMonth: vi.fn() },
   mockPrisma: {
     payrollRun: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     payslip: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
@@ -51,6 +51,7 @@ beforeEach(() => {
   mockAttendance.dailyPayForMonth.mockResolvedValue(new Map())
   mockAttendance.recordAttendancePay.mockResolvedValue(undefined)
   mockAttendance.attendancePayForPayslips.mockResolvedValue(new Map())
+  mockAttendance.unpaidLeaveForMonth.mockResolvedValue({ leave: new Map(), holidays: [] })
 })
 
 describe('GET /api/payroll', () => {
@@ -113,6 +114,18 @@ describe('POST /api/payroll', () => {
     expect(mockAttendance.dailyPayForMonth).toHaveBeenCalledWith('2026-07', ['emp1'])
     expect(mockPrisma.payslip.create.mock.calls[0][0].data.basicSalary).toBe(16400)
     expect(mockAttendance.recordAttendancePay).toHaveBeenCalledWith([expect.objectContaining({ payslipId: 'ps1', days: 20.5, rate: 800, amount: 16400, period: '2026-07' })])
+  })
+  it('takes approved unpaid leave off a monthly salary', async () => {
+    // July 2026: 23 working days; 2 days unpaid leave (Thu 9 – Fri 10).
+    mockAttendance.unpaidLeaveForMonth.mockResolvedValue({ leave: new Map([['emp1', [{ startDate: '2026-07-09', endDate: '2026-07-10' }]]]), holidays: [] })
+    mockPrisma.payslip.create.mockResolvedValue({ id: 'ps1' })
+    const res = await POST(postReq({
+      run: { id: 'run1', ref: 'PAY/2026/07', month: '07', year: 2026, lines: [{ employeeId: 'emp1', employeeName: 'Jane', basicSalary: 46000, allowances: 0, deductions: 0, netPay: 0 }] },
+      payslips: [{ id: 'ps1', ref: 'PS/2026/07/001', employeeId: 'emp1', employeeName: 'Jane', grossPay: 46000, salaryAdvanceDeductions: [] }],
+    }))
+    expect(res.status).toBe(200)
+    expect(mockPrisma.payslip.create.mock.calls[0][0].data.basicSalary).toBe(42000)
+    expect(mockAttendance.recordAttendancePay).toHaveBeenCalledWith([expect.objectContaining({ kind: 'unpaid_leave', days: 2, rate: 2000, amount: 4000 })])
   })
   it('does not duplicate a run that already exists', async () => {
     mockPrisma.payrollRun.findUnique.mockResolvedValue({ id: 'run1', runReference: 'PAY/2026/07' })

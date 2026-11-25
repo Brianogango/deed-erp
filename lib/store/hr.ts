@@ -23,6 +23,7 @@ export interface Employee {
   gender?: 'male' | 'female' | ''
   departmentId: string
   jobTitle: string
+  /** Holds the SHA / SHIF number (stored in the old `shift` column; nothing uses it as a work shift). */
   shift?: string
   managerEmployeeId?: string
   startDate: string
@@ -199,6 +200,8 @@ export interface PayrollLine {
   /** Daily-rate staff: the approved days and the rate the basic was built from. */
   daysWorked?: number
   dailyRate?: number
+  /** Monthly staff: approved unpaid leave days taken off the basic. */
+  unpaidLeaveDays?: number
 }
 
 export interface PayrollRun {

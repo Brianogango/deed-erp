@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { faUsers, faLaptop, faUserPlus, faCalendarPlus, faMoneyBill, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faUserPlus, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
@@ -15,7 +15,9 @@ import HRAssetsTab from './hr/HRAssetsTab'
 import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
 import HRPerformanceTab from './hr/HRPerformanceTab'
 import HRAttendanceTab from './hr/HRAttendanceTab'
-import ClockCard from '@/components/hr/ClockCard'
+import HRMyPortal from './hr/HRMyPortal'
+import HRDepartments from './hr/HRDepartments'
+import HREmployeeSummary from './hr/HREmployeeSummary'
 import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
 import { Badge, Confirm, Field, Input, Modal, Select, ModuleSkeleton, useMounted, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
@@ -24,9 +26,6 @@ import { type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
-import { MyPolicies } from './hr/HRPolicies'
-import HRMyDocuments from './hr/HRMyDocuments'
-import AppraisalsPanel from './hr/HRAppraisals'
 import { documentExpiry } from '@/lib/hr/document-status'
 import { userCan } from '@/lib/auth/can'
 import { OperationalSummary } from '@/components/erp/OperationalSummary'
@@ -42,6 +41,7 @@ type HRTab =
   | 'leave'
   | 'payroll'
   | 'attendance'
+  | 'departments'
   | 'salary_advances'
   | 'documents'
   | 'assets'
@@ -52,8 +52,19 @@ type HRTab =
   | 'org_chart'
   | 'system_users'
 
-const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
-const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'departments', 'assets', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll']
+
+/** HR's sections, grouped the way the work is: who people are, their time, their pay, their growth. */
+const TAB_GROUPS: Array<{ id: string; label: string; tabs: Array<{ id: HRTab; label: string }> }> = [
+  { id: 'portal', label: 'My portal', tabs: [{ id: 'self_service', label: 'My portal' }] },
+  { id: 'people', label: 'People', tabs: [{ id: 'employees', label: 'Employees' }, { id: 'org_chart', label: 'Org chart' }, { id: 'departments', label: 'Departments' }, { id: 'documents', label: 'Documents' }, { id: 'assets', label: 'Equipment' }] },
+  { id: 'time', label: 'Time', tabs: [{ id: 'attendance', label: 'Attendance' }, { id: 'leave', label: 'Leave' }] },
+  { id: 'pay', label: 'Pay', tabs: [{ id: 'payroll', label: 'Payroll' }, { id: 'salary_advances', label: 'Salary advances' }] },
+  { id: 'growth', label: 'Growth', tabs: [{ id: 'performance', label: 'Performance' }, { id: 'training', label: 'Training' }, { id: 'recruitment', label: 'Recruitment' }] },
+  { id: 'reports', label: 'Reports', tabs: [{ id: 'reports', label: 'Reports' }] },
+]
+const STAFF_TAB_LABELS: Partial<Record<HRTab, string>> = { self_service: 'My portal', leave: 'My leave', salary_advances: 'Salary advance', payroll: 'Payslips' }
 
 
 
@@ -110,21 +121,28 @@ function HRContent() {
   }
 
   const myEmployee = employees.find(userMatchesEmployee) ?? null
-  const myDepartment = departments.find(d => d.id === myEmployee?.departmentId)
+  // Employees carry their department's name (see /api/employees); older screens kept ids.
+  const departmentName = (value?: string) => (value ? departments.find(d => d.id === value || d.name === value)?.name ?? value : '')
+  const myDepartmentName = departmentName(myEmployee?.departmentId)
   const myPayslips = payslips.filter(p => p.employeeId === myEmployee?.id && p.status === 'published')
   const myAssets = employeeAssetAssignments.filter(
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
 
+  const leaveOn = systemSettings?.hrLeaves !== false
   const allowedTabs = useMemo<HRTab[]>(
-    () => canManageHR ? [...MANAGEMENT_TABS, ...SELF_SERVICE_TABS] : SELF_SERVICE_TABS,
-    [canManageHR],
+    () => (canManageHR ? [...MANAGEMENT_TABS, ...SELF_SERVICE_TABS] : SELF_SERVICE_TABS).filter(t => leaveOn || t !== 'leave'),
+    [canManageHR, leaveOn],
   )
   const defaultTab: HRTab = canManageHR ? 'employees' : 'self_service'
   const queryTab = searchParams.get('tab') as HRTab | null
   const initialTab = queryTab && allowedTabs.includes(queryTab) ? queryTab : defaultTab
 
   const [tab, setLocalTab] = useState<HRTab>(initialTab)
+  const visibleGroups = TAB_GROUPS
+    .map(g => ({ ...g, tabs: g.tabs.filter(t => allowedTabs.includes(t.id)) }))
+    .filter(g => g.tabs.length > 0)
+  const activeGroup = visibleGroups.find(g => g.tabs.some(t => t.id === tab)) ?? visibleGroups[0]
 
   const setTab = (newTab: HRTab) => {
     if (!allowedTabs.includes(newTab)) {
@@ -159,24 +177,16 @@ function HRContent() {
   const [viewEmpId, setViewEmpId] = useUrlRecordId({ param: 'emp' })
   const [editEmpId, setEditEmpId] = useState<string | null>(null)
 
-  const DEPARTMENTS = [
-    { value: 'HR', label: 'HR' },
-    { value: 'Sales', label: 'Sales' },
-    { value: 'Marketing', label: 'Marketing' },
-    { value: 'Finance', label: 'Finance' },
-    { value: 'Engineering', label: 'Engineering' },
-    { value: 'Logistics & Supply Chain Management', label: 'Logistics & Supply Chain Management' },
-    { value: 'Strategy & R&D', label: 'Strategy & R&D' },
-    { value: 'Administration', label: 'Administration' },
-    { value: 'Circular Computing Centre', label: 'Circular Computing Centre' },
-    { value: 'Managed IT Services', label: 'Managed IT Services' },
-    { value: 'AI & Automation', label: 'AI & Automation' },
-    { value: 'Training & Certification', label: 'Training & Certification' },
-    { value: 'ESG & Sustainability', label: 'ESG & Sustainability' },
-    { value: 'Investor Relations & Capital Raising', label: 'Investor Relations & Capital Raising' },
-    { value: 'Regional Expansion / New Markets', label: 'Regional Expansion / New Markets' },
-    { value: 'Deed Foundation', label: 'Deed Foundation' },
-  ]
+  // The department list HR edits (People → Departments); the employee's own one stays listed even if switched off.
+  const [deptNames, setDeptNames] = useState<string[]>([])
+  const loadDepartments = async () => {
+    try {
+      const r = await fetch('/api/departments', { cache: 'no-store' })
+      const d = await r.json()
+      if (Array.isArray(d.departments)) setDeptNames(d.departments.filter((x: { active: boolean }) => x.active).map((x: { name: string }) => x.name))
+    } catch { /* keep what is shown */ }
+  }
+  useEffect(() => { void loadDepartments() }, [])
 
   type EmpFormState = {
     fullName: string; employeeNo: string; email: string; workEmail: string; phone: string
@@ -196,6 +206,35 @@ function HRContent() {
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
+  // Monthly salary or a daily rate (kept with attendance, see /api/attendance/pay-basis).
+  const canSetPayBasis = userCan(currentUser, 'managePayroll')
+  const [payBasis, setPayBasis] = useState<{ basis: 'monthly' | 'daily'; rate: string; loaded: { basis: 'monthly' | 'daily'; rate: number } }>({ basis: 'monthly', rate: '', loaded: { basis: 'monthly', rate: 0 } })
+  const loadPayBasis = async (employeeId: string | null) => {
+    const none = { basis: 'monthly' as const, rate: '', loaded: { basis: 'monthly' as const, rate: 0 } }
+    setPayBasis(none)
+    if (!employeeId || !canSetPayBasis) return
+    try {
+      const res = await fetch('/api/attendance/pay-basis', { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      const row = Array.isArray(data.payBasis) ? data.payBasis.find((r: { employeeId: string }) => r.employeeId === employeeId) : null
+      if (row) setPayBasis({ basis: row.basis, rate: row.dailyRate ? String(row.dailyRate) : '', loaded: { basis: row.basis, rate: Number(row.dailyRate) || 0 } })
+    } catch { /* keep monthly */ }
+  }
+  /** Save the pay type when it changed. Returns false (and says why) when it could not be saved. */
+  const savePayBasis = async (employeeId: string): Promise<boolean> => {
+    if (!canSetPayBasis) return true
+    const rate = Number(payBasis.rate) || 0
+    if (payBasis.basis === payBasis.loaded.basis && (payBasis.basis === 'monthly' || rate === payBasis.loaded.rate)) return true
+    try {
+      const res = await fetch('/api/attendance/pay-basis', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId, basis: payBasis.basis, dailyRate: rate }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save how they are paid')
+      return true
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not save how they are paid', 'error')
+      return false
+    }
+  }
   const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
 
   /** The employee form as the add / update calls expect it. */
@@ -232,6 +271,7 @@ function HRContent() {
     const missingEmp: string[] = []
     if (!empForm.departmentId) missingEmp.push('Department')
     if (!empForm.startDate) missingEmp.push('Start Date')
+    if (payBasis.basis === 'daily' && !(Number(payBasis.rate) > 0)) missingEmp.push('Daily rate')
     if (missingEmp.length) {
       showToast(`Please fill in: ${missingEmp.join(', ')}`, 'error')
       return
@@ -239,7 +279,8 @@ function HRContent() {
     if (saving) return
     setSaving(true)
     try {
-      await addEmployee(employeePayload())
+      const saved = await addEmployee(employeePayload())
+      await savePayBasis(saved.id)
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
     } catch {
@@ -257,9 +298,14 @@ function HRContent() {
       showToast('Department is required', 'error')
       return
     }
+    if (payBasis.basis === 'daily' && !(Number(payBasis.rate) > 0)) {
+      showToast('Enter the daily rate', 'error')
+      return
+    }
     if (saving) return
     setSaving(true)
     try {
+      if (!(await savePayBasis(editEmpId))) return
       await updateEmployee(editEmpId, employeePayload())
       setEditEmpId(null)
       setViewEmpId(null)
@@ -393,120 +439,101 @@ function HRContent() {
     },
   ].filter(group => group.items.length > 0)
 
-  /** Employee form fields, shared by the Add and Edit modals. */
+  /** One-tap choices (pay type, payment method, gender, status). */
+  const seg = <T extends string>(label: string, value: T, onChange: (v: T) => void, options: Array<[T, string]>) => (
+    <div className="emp-form__seg" role="radiogroup" aria-label={label}>
+      {options.map(([v, text]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? 'is-active' : ''} onClick={() => onChange(v)}>{text}</button>
+      ))}
+    </div>
+  )
+
+  /** Employee form, shared by the Add and Edit modals: grouped the way HR thinks about a person. */
   const employeeFormFields = (isNew: boolean) => (
-    <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Full Name" required>
-          <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
-        </Field>
-        <Field label="Employee No." required>
-          <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Personal email">
-          <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
-        </Field>
-        <Field label="Work email">
-          <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
-        </Field>
-        <Field label="Phone">
-          <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="National ID">
-          <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
-        </Field>
-        <Field label="KRA PIN">
-          <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
-        </Field>
-        <Field label="NSSF Number">
-          <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
-        </Field>
-        <Field label="SHIF Number">
-          <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Gender">
-          <Select
-            value={empForm.gender}
-            onChange={setEF('gender')}
-            options={[
-              { value: '', label: 'Not specified' },
-              { value: 'male', label: 'Male' },
-              { value: 'female', label: 'Female' },
-            ]}
-          />
-        </Field>
-        <Field label="Department" required>
-          <Select
-            value={empForm.departmentId}
-            onChange={setEF('departmentId')}
-            options={isNew ? [{ value: '', label: 'Select department…' }, ...DEPARTMENTS] : DEPARTMENTS}
-          />
-        </Field>
-        <Field label="Job Title">
-          <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Start Date" required={isNew}>
-          <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
-        </Field>
-        <Field label="Status">
-          <Select
-            value={empForm.status}
-            onChange={setEF('status')}
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'on_leave', label: 'On Leave' },
-              { value: 'exited', label: 'Exited' },
-            ]}
-          />
-        </Field>
-      </div>
-      <div className="pt-2 border-t border-[var(--border-lt)]">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Basic Salary (KES)">
-            <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
-          </Field>
-          <Field label="Housing Allowance">
-            <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
-          </Field>
-          <Field label="Transport Allowance">
-            <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
-          </Field>
+    <div className="emp-form">
+      <section className="emp-form__section">
+        <h3>Person</h3>
+        <div className="emp-form__grid">
+          <Field label="Full name" required><Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" /></Field>
+          <Field label="Employee no." required><Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" /></Field>
+          <Field label="Phone"><Input value={empForm.phone} onChange={setEF('phone')} type="tel" placeholder="07xx xxx xxx" /></Field>
+          <Field label="Gender">{seg('Gender', empForm.gender as '' | 'male' | 'female', setEF('gender'), [['female', 'Female'], ['male', 'Male'], ['', 'Not set']])}</Field>
+          <Field label="Personal email"><Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" /></Field>
+          <Field label="Work email"><Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" /></Field>
         </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Reports to">
-          <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
-            { value: '', label: 'No one (top of the chart)' },
-            ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
-          ]} />
-        </Field>
-        <Field label="Salary paid by">
-          <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
-            { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
-          ]} />
-        </Field>
-        <Field label="M-Pesa number">
-          <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Bank Name">
-          <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
-        </Field>
-        <Field label="Bank Account Number">
-          <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" />
-        </Field>
-      </div>
-    </>
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Job</h3>
+        <div className="emp-form__grid">
+          <Field label="Department" required>
+            <Select value={empForm.departmentId} onChange={setEF('departmentId')} options={[...(isNew || !empForm.departmentId ? [{ value: '', label: 'Select department…' }] : []), ...[...new Set([...deptNames, ...(empForm.departmentId ? [empForm.departmentId] : [])])].map(n => ({ value: n, label: n }))]} />
+          </Field>
+          <Field label="Job title"><Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" /></Field>
+          <Field label="Start date" required={isNew}>
+            <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
+          </Field>
+          <Field label="Reports to">
+            <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
+              { value: '', label: 'No one (top of the chart)' },
+              ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
+            ]} />
+          </Field>
+          {!isNew && (
+            <div className="emp-form__wide">
+              <Field label="Status">{seg('Status', empForm.status, v => setEmpForm(p => ({ ...p, status: v })), [['active', 'Active'], ['on_leave', 'On leave'], ['exited', 'Exited']])}</Field>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Pay</h3>
+        {canSetPayBasis ? (
+          <>
+            {seg('How they are paid', payBasis.basis, v => setPayBasis(b => ({ ...b, basis: v })), [['monthly', 'Monthly salary'], ['daily', 'By the day']])}
+            <p className="emp-form__hint">
+              {payBasis.basis === 'daily'
+                ? 'Payroll pays the approved attendance days of the month × the daily rate.'
+                : 'Payroll pays the same basic salary every month.'}
+            </p>
+          </>
+        ) : payBasis.basis === 'daily' ? <p className="emp-form__hint">Paid by the day ({fmtKes(Number(payBasis.rate) || 0)} a day).</p> : null}
+        <div className="emp-form__grid emp-form__grid--3">
+          {payBasis.basis === 'daily'
+            ? <Field label="Daily rate (KES)" required><Input type="number" value={payBasis.rate} onChange={v => setPayBasis(b => ({ ...b, rate: String(v) }))} placeholder="e.g. 800" disabled={!canSetPayBasis} /></Field>
+            : <Field label="Basic salary / month (KES)"><Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" /></Field>}
+          <Field label="Housing allowance"><Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" /></Field>
+          <Field label="Transport allowance"><Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" /></Field>
+        </div>
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Paid by</h3>
+        {seg('Salary paid by', empForm.paymentMode as 'mpesa' | 'bank' | 'cash', setEF('paymentMode'), [['mpesa', 'M-Pesa'], ['bank', 'Bank'], ['cash', 'Cash']])}
+        {empForm.paymentMode === 'mpesa' && (
+          <div className="emp-form__grid">
+            <Field label="M-Pesa number"><Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} type="tel" placeholder={empForm.phone || '07xx xxx xxx'} /></Field>
+          </div>
+        )}
+        {empForm.paymentMode === 'bank' && (
+          <div className="emp-form__grid">
+            <Field label="Bank"><Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" /></Field>
+            <Field label="Account number"><Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" /></Field>
+          </div>
+        )}
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Statutory numbers</h3>
+        <div className="emp-form__grid">
+          <Field label="National ID"><Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="ID number" /></Field>
+          <Field label="KRA PIN"><Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" /></Field>
+          <Field label="NSSF number"><Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" /></Field>
+          <Field label="SHIF number"><Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" /></Field>
+        </div>
+      </section>
+    </div>
   )
 
   return (
@@ -520,7 +547,7 @@ function HRContent() {
         primaryAction={isAdmin ? (
           <PrimaryActionButton
             icon={<Fa icon={faUserPlus} />}
-            onClick={() => { setTab('employees'); setShowEmployeeModal(true) }}
+            onClick={() => { setTab('employees'); void loadPayBasis(null); setShowEmployeeModal(true) }}
           >
             Add employee
           </PrimaryActionButton>
@@ -534,29 +561,36 @@ function HRContent() {
         ) : undefined}
       />
 
-      <TabBar
-        tabs={[
-          { id: 'self_service', label: 'My portal' },
-          { id: 'salary_advances', label: 'Salary advance' },
-          { id: 'employees', label: 'Employees' },
-          { id: 'attendance', label: 'Attendance' },
-          { id: 'leave', label: 'Leave' },
-          { id: 'payroll', label: 'Payroll' },
-          { id: 'recruitment', label: 'Recruitment' },
-          { id: 'org_chart', label: 'Org chart' },
-          { id: 'training', label: 'Training' },
-          { id: 'documents', label: 'Documents' },
-          { id: 'performance', label: 'Performance' },
-          { id: 'reports', label: 'Reports' },
-          { id: 'assets', label: 'Assets' },
-        ].filter(t => allowedTabs.includes(t.id as HRTab))}
-        active={tab}
-        onChange={id => setTab(id as HRTab)}
-        maxVisibleMobile={4}
-        maxVisibleTablet={6}
-        maxVisibleDesktop={6}
-        ariaLabel="HR sections"
-      />
+      {canManageHR ? (
+        <>
+          <TabBar
+            tabs={visibleGroups.map(g => ({ id: g.id, label: g.label }))}
+            active={activeGroup.id}
+            onChange={id => { const g = visibleGroups.find(x => x.id === id); if (g) setTab(g.tabs[0].id) }}
+            maxVisibleMobile={6}
+            maxVisibleTablet={6}
+            maxVisibleDesktop={6}
+            ariaLabel="HR sections"
+          />
+          {activeGroup.tabs.length > 1 && (
+            <nav className="hr-subnav" aria-label={`${activeGroup.label} sections`}>
+              {activeGroup.tabs.map(t => (
+                <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+              ))}
+            </nav>
+          )}
+        </>
+      ) : (
+        <TabBar
+          tabs={allowedTabs.map(id => ({ id, label: STAFF_TAB_LABELS[id] ?? id }))}
+          active={tab}
+          onChange={id => setTab(id as HRTab)}
+          maxVisibleMobile={4}
+          maxVisibleTablet={6}
+          maxVisibleDesktop={6}
+          ariaLabel="HR sections"
+        />
+      )}
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="mod-body">
@@ -585,7 +619,7 @@ function HRContent() {
               onPageChange={setEmpPage}
               searchPlaceholder="Search employees…"
               emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
-              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
+              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => { void loadPayBasis(null); setShowEmployeeModal(true) }}>+ Add Employee</button> : undefined}
               onRowClick={e => setViewEmpId(e.id)}
               rowActions={e => (
                 <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
@@ -656,93 +690,23 @@ function HRContent() {
           <HRReportsTab />
         ) : tab === 'assets' ? (
           <HRAssetsTab />
+        ) : tab === 'departments' && canManageHR ? (
+          <HRDepartments canManage={isAdmin} showToast={showToast} onChanged={() => void loadDepartments()} />
         ) : tab === 'self_service' ? (
-          <div className="hr-self-service p-6 flex flex-col gap-8">
-            {systemSettings?.hrAttendance && <ClockCard showToast={showToast} />}
-            <MyPolicies />
-            <HRMyDocuments />
-            <AppraisalsPanel manage={false} />
-            <div className="hr-self-service__hero flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="hr-self-service__identity flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-2xl font-bold border border-primary-500/20">
-                  {currentUser?.name?.slice(0, 1).toUpperCase()}
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--text-1)]">{currentUser?.name}</h2>
-                  <p className="text-xs text-[var(--text-3)]">
-                    {myEmployee?.jobTitle} · {myDepartment?.name}
-                  </p>
-                </div>
-              </div>
-              <div className="hr-self-service__actions flex items-center gap-2">
-                <button className="btn-secondary flex items-center gap-2" onClick={() => setTab('salary_advances')}>
-                  <Fa icon={faMoneyBill} />
-                  <span>Salary Advance</span>
-                </button>
-                <button className="btn-primary flex items-center gap-2" onClick={() => setTab('leave')}>
-                  <Fa icon={faCalendarPlus} />
-                  <span>Request Leave</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="hr-self-service__grid grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Leave Balance</h3>
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--text-3)]">Annual Leave</span>
-                    <span className="font-bold">12 / 21 days</span>
-                  </div>
-                  <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full" style={{ width: '60%' }} />
-                  </div>
-                </div>
-              </div>
-              <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Recent Payslips</h3>
-                <div className="flex flex-col gap-2">
-                  {myPayslips.slice(0, 3).map(p => (
-                    <div key={p.id} className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--text-2)]">{p.month} {p.year}</span>
-                      <button className="text-primary-600 hover:underline" onClick={() => downloadPayslipPdf(p.id)}>Download</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTab('salary_advances')}
-                className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)] text-left transition-all hover:shadow-lg active:scale-[0.99]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-[var(--text-1)] mb-1">Salary Advance</h3>
-                    <p className="text-xs text-[var(--text-3)] leading-relaxed">Apply for an advance and track approval, payout, and payroll deductions.</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-primary-500/10 text-primary-600 flex items-center justify-center">
-                    <Fa icon={faMoneyBill} />
-                  </div>
-                </div>
-                <span className="btn-primary mt-4 text-[11px] inline-flex">Apply / View</span>
-              </button>
-              <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">My Assets</h3>
-                <div className="flex flex-col gap-2">
-                  {myAssets.length > 0 ? (
-                    myAssets.map(a => (
-                      <div key={a.id} className="flex items-center gap-2 text-xs">
-                        <Fa icon={faLaptop} className="text-[var(--text-4)]" />
-                        <span className="text-[var(--text-2)]">{a.productName}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-[var(--text-4)]">No assets assigned</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <HRMyPortal
+            name={currentUser?.name ?? ''}
+            employee={myEmployee}
+            department={myDepartmentName}
+            payslips={myPayslips}
+            assets={myAssets.map(a => ({ id: a.id, productName: a.productName, serial: (a as { serialNumber?: string }).serialNumber }))}
+            attendanceOn={!!systemSettings?.hrAttendance}
+            leaveOn={leaveOn}
+            onRequestLeave={() => setTab('leave')}
+            onSalaryAdvance={() => setTab('salary_advances')}
+            onPayslips={() => setTab('payroll')}
+            downloadPayslip={id => void downloadPayslipPdf(id)}
+            showToast={showToast}
+          />
         ) : (
           <div className="p-20 text-center">
             <p className="text-sm text-[var(--text-4)]">This section is coming soon</p>
@@ -753,36 +717,40 @@ function HRContent() {
       {/* ── Add Employee Modal ── */}
       {showEmployeeModal && (
         <Modal
-          title="Add Employee"
+          title="Add employee"
+          variant="enterprise"
           onClose={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}
-          width={580}
+          width={680}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={handleAddEmployee} disabled={saving}>{saving ? 'Saving…' : 'Add employee'}</button>
+            </>
+          )}
         >
-          <div className="flex flex-col gap-4">
-            {employeeFormFields(true)}
-            <div className="flex gap-3 justify-end pt-2">
-              <button className="btn-secondary px-6" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
-              <button className="btn-primary px-8" onClick={handleAddEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Employee'}</button>
-            </div>
-          </div>
+          {employeeFormFields(true)}
         </Modal>
       )}
 
       {/* ── View Employee Modal ── */}
       {viewEmployee && (
         <Modal 
-          title={editEmpId === viewEmployee.id ? "Edit Employee" : "Employee Details"} 
+          title={editEmpId === viewEmployee.id ? `Edit ${viewEmployee.fullName}` : "Employee Details"} 
+          variant={editEmpId === viewEmployee.id ? 'enterprise' : 'default'}
           onClose={() => { setViewEmpId(null); setEditEmpId(null); setEmpForm(blankEmp()) }} 
-          width={editEmpId === viewEmployee.id ? 580 : 520}
+          width={editEmpId === viewEmployee.id ? 680 : 520}
+          footer={editEmpId === viewEmployee.id ? (
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={handleUpdateEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+            </>
+          ) : undefined}
         >
           <div className="hr-employee-detail flex flex-col gap-4">
             {editEmpId === viewEmployee.id ? (
               // Edit Mode
               <>
                 {employeeFormFields(false)}
-                <div className="flex gap-3 justify-end pt-2">
-                  <button className="btn-secondary px-6" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
-                  <button className="btn-primary px-8" onClick={handleUpdateEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
-                </div>
               </>
             ) : (
               // View Mode
@@ -797,8 +765,9 @@ function HRContent() {
                     <p className="text-xs text-[var(--text-4)]">{viewEmployee.employeeNo}</p>
                   </div>
                 </div>
+                <HREmployeeSummary employee={viewEmployee} documents={hrDocuments} canSeePay={canSetPayBasis} />
                 <div className="hr-employee-profile__facts grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                  <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold">{departmentName(viewEmployee.departmentId) || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
                   <div><span className="text-[var(--text-4)]">Work email</span><p className="font-semibold">{viewEmployee.workEmail || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Personal email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
@@ -814,7 +783,7 @@ function HRContent() {
                 <EmployeeLifecyclePanel key={viewEmployee.id} employee={viewEmployee} canManage={canManageHR} />
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '', managerEmployeeId: viewEmployee.managerEmployeeId || '' }); setEditEmpId(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '', managerEmployeeId: viewEmployee.managerEmployeeId || '' }); setEditEmpId(viewEmployee.id); void loadPayBasis(viewEmployee.id) }}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>

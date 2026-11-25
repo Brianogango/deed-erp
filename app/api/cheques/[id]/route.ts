@@ -3,7 +3,7 @@
  * cancel, reopen) or correct its details. Every status change is recorded in
  * the cheque's history with who and when.
  */
-import { reopenChequeSchedule, undoChequePayment } from '@/lib/cheques/cheque-schedule.server'
+import { applyMaturedCheques, reopenChequeSchedule, undoChequePayment } from '@/lib/cheques/cheque-schedule.server'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission, withApiErrorHandling } from '@/lib/auth/api'
@@ -70,7 +70,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (data.status === 'pending' && (existing.status === 'bounced' || existing.status === 'cancelled')) {
       await reopenChequeSchedule(id)
     }
-    const row = await prisma.cheque.update({ where: { id }, data })
+    let row = await prisma.cheque.update({ where: { id }, data })
+    // Marked cleared before its clearing day: the money is there, so a scheduled payment is recorded now.
+    if (data.status === 'cleared') {
+      const applied = await applyMaturedCheques({ onlyChequeIds: [id], force: true }).catch(() => [])
+      if (applied.some(a => a.result === 'applied')) row = (await prisma.cheque.findUnique({ where: { id } })) ?? row
+    }
     return NextResponse.json({ cheque: toChequeDto(row) })
   })
 }

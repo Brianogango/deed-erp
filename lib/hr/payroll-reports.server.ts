@@ -176,7 +176,9 @@ export async function loadPayslipDetail(payslipId: string): Promise<PayslipDetai
   const advanceSum = r2(advances.reduce((s, a) => s + a.amount, 0))
   // Daily-rate staff: say how the basic was worked out.
   const att = (await attendancePayForPayslips([p.id]).catch(() => new Map())).get(p.id)
-  const basicLabel = att ? `Basic (${att.days} day${att.days === 1 ? '' : 's'} × ${att.rate.toLocaleString('en-KE')})` : 'Basic salary'
+  const basicLabel = !att ? 'Basic salary'
+    : att.kind === 'unpaid_leave' ? `Basic salary (less ${att.days} unpaid leave day${att.days === 1 ? '' : 's'})`
+    : `Basic (${att.days} day${att.days === 1 ? '' : 's'} × ${att.rate.toLocaleString('en-KE')})`
 
   return {
     id: p.id,

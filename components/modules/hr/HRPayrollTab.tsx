@@ -110,7 +110,7 @@ export default function HRPayrollTab() {
     return {
       fileName: `Payslip-${payslip.ref.replaceAll('/', '-')}.pdf`,
       lines: [
-        { text: 'DEED TECHNOLOGIES LIMITED',             x: 40, y: 800, size: 18, bold: true },
+        { text: (companySettings?.legalName || companySettings?.name || '').toUpperCase(), x: 40, y: 800, size: 18, bold: true },
         { text: 'Official Payslip',                      x: 40, y: 782, size: 11 },
         { text: `Ref: ${payslip.ref}`,                   x: 40, y: 754 },
         { text: `Employee: ${payslip.employeeName}`,     x: 40, y: 736 },

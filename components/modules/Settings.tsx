@@ -1310,6 +1310,9 @@ export default function Settings() {
                 <SettingRow label="Customer Invoices" desc="Issue invoices to customers for sales"><Toggle on={ss.accCustomerInvoices} onChange={v => updateSystemSettings({ accCustomerInvoices: v })} /></SettingRow>
                 <SettingRow label="Vendor Bills" desc="Record supplier invoices as accounts payable"><Toggle on={ss.accVendorBills} onChange={v => updateSystemSettings({ accVendorBills: v })} /></SettingRow>
                 <SettingRow label="Credit Notes" desc="Issue and receive credit notes for returns and adjustments"><Toggle on={ss.accCreditNotes} onChange={v => updateSystemSettings({ accCreditNotes: v })} /></SettingRow>
+                <SettingRow label="Cheque clearing days" desc="Working days after its date before a cheque's money is there (weekends and public holidays skipped). A post-dated cheque pays its invoice or bill on that day.">
+                  <Input type="number" value={String(ss.chequeClearingDays ?? 2)} onChange={v => updateSystemSettings({ chequeClearingDays: Math.min(10, Math.max(0, Math.floor(Number(v) || 0))) })} />
+                </SettingRow>
               </SectionCard>
               <SectionCard title="Taxes">
                 <SettingRow label="Enable VAT" desc="Apply VAT on sales and purchases"><Toggle on={ss.accVatEnabled} onChange={v => updateSystemSettings({ accVatEnabled: v })} /></SettingRow>
@@ -1338,11 +1341,10 @@ export default function Settings() {
             <>
               <SectionCard title="Enable">
                 <SettingRow label="Attendance Tracking" desc="Staff clock in and out from My work (office connection + Face ID / fingerprint); daily-rate staff are paid their approved days"><Toggle on={ss.hrAttendance} onChange={v => updateSystemSettings({ hrAttendance: v })} /></SettingRow>
-                <SettingRow label="Leave Management" desc="Employees apply for leave via Self Service; HR approves here"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></SettingRow>
+                <SettingRow label="Leave Management" desc="Employees apply for leave from My portal; HR approves it. Off: the Leave section and leave requests are hidden"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Access Controls">
                 <SettingRow label="Restrict Salary Information" desc="Only HR Admin and Finance can view salary, deductions, and payslip data"><Toggle on={ss.hrRestrictSalaryInfo} onChange={v => updateSystemSettings({ hrRestrictSalaryInfo: v })} /></SettingRow>
-                <SettingRow label="Role-Based Visibility" desc="Employees in Self Service only see their own records — not company-wide data"><Toggle on={ss.hrRoleBasedVisibility} onChange={v => updateSystemSettings({ hrRoleBasedVisibility: v })} /></SettingRow>
               </SectionCard>
             </>
           )}
