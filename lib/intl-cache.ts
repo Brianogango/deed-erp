@@ -34,15 +34,24 @@ function numberFormatter(locale: string | undefined, options: Intl.NumberFormatO
 const KE_DATE = { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' } as const
 const KE_DATE_TIME = { ...KE_DATE, hour: '2-digit', minute: '2-digit', hour12: false } as const
 
+/**
+ * CLDR gives September four letters ("Sept") and every other month three, in
+ * en-KE and en-GB alike. One month out of twelve then sat a character wider
+ * than the rest, which broke the alignment of every date column and read as a
+ * typo next to "Oct". Three letters everywhere, as this function has always
+ * documented.
+ */
+const shortMonth = (formatted: string) => formatted.replace('Sept', 'Sep')
+
 /** "05 Oct 2026" in Nairobi time; the input back unchanged when it is not a date. */
 export function formatKeDate(value: string | number | Date): string {
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)
-  return dateFormatter('en-KE', KE_DATE).format(d)
+  return shortMonth(dateFormatter('en-KE', KE_DATE).format(d))
 }
 
 export function formatKeDateTime(d: Date): string {
-  return dateFormatter('en-KE', KE_DATE_TIME).format(d)
+  return shortMonth(dateFormatter('en-KE', KE_DATE_TIME).format(d))
 }
 
 /** Whole number with en-KE grouping: 1,234,567. */

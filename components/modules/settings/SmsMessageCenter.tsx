@@ -12,6 +12,7 @@ import {
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons'
 import { startVisiblePoll } from '@/lib/visible-poll'
+import { initials } from '@/lib/utils'
 
 type MessageRow = {
   id: string
@@ -77,13 +78,6 @@ const when = (value?: string | null) => {
   return Number.isNaN(date.getTime())
     ? '—'
     : date.toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', dateStyle: 'medium', timeStyle: 'short' })
-}
-
-function initials(name: string | null, phone: string) {
-  const source = (name || phone).trim()
-  const parts = source.split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  return source.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || 'SMS'
 }
 
 export default function SmsMessageCenter({
@@ -243,7 +237,7 @@ export default function SmsMessageCenter({
                 >
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-[10px] font-black text-cyan-700">
-                      {initials(thread.participantName, thread.participantPhone)}
+                      {initials(thread.participantName || thread.participantPhone, 'SMS')}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
@@ -299,7 +293,7 @@ export default function SmsMessageCenter({
                     <Fa icon={faChevronLeft} />
                   </button>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-[10px] font-black text-cyan-700">
-                    {initials(selected.participantName, selected.participantPhone)}
+                    {initials(selected.participantName || selected.participantPhone, 'SMS')}
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-[12px] font-black text-[#14213D]">{selected.participantName || selected.participantPhone}</p>

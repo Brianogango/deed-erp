@@ -28,6 +28,7 @@ import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
 import { documentExpiry } from '@/lib/hr/document-status'
 import { userCan } from '@/lib/auth/can'
+import { initials } from '@/lib/utils'
 import { OperationalSummary } from '@/components/erp/OperationalSummary'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -325,8 +326,8 @@ function HRContent() {
       key: 'employee', label: 'Employee', priority: 1, width: '1.4fr',
       render: e => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs">
-            {e.fullName.slice(0, 1)}
+          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-[10px] shrink-0">
+            {initials(e.fullName)}
           </div>
           <div>
             <p className="text-xs font-bold text-[var(--text-1)]">{e.fullName}</p>
@@ -337,32 +338,27 @@ function HRContent() {
       exportValue: e => e.fullName,
     },
     {
-      key: 'status', label: 'Status', priority: 1, width: '110px',
-      render: e => <Badge status={e.status === 'active' ? 'active' : 'cancelled'} label={e.status} />,
+      key: 'status', label: 'Status', priority: 1, width: '90px',
+      render: e => e.status === 'active'
+        ? <span className="text-[var(--text-4)]">—</span>
+        : <Badge status="cancelled" label={e.status} />,
+      // The export is a data file, not a screen: every row keeps its status.
       exportValue: e => e.status,
     },
     {
-      key: 'department', label: 'Department', priority: 2, width: '130px',
+      key: 'department', label: 'Department', priority: 2, width: '150px',
       render: e => <span className="capitalize">{e.departmentId}</span>,
       exportValue: e => e.departmentId,
     },
     {
-      key: 'jobTitle', label: 'Job title', priority: 2, width: '150px',
-      render: e => e.jobTitle,
+      key: 'jobTitle', label: 'Job title', priority: 2, width: '210px',
+      render: e => e.jobTitle || <span className="text-[var(--text-4)]">—</span>,
       exportValue: e => e.jobTitle,
     },
     {
       key: 'startDate', label: 'Start date', priority: 3, width: '105px',
       render: e => <span className="whitespace-nowrap">{fmtDate(e.startDate)}</span>,
       exportValue: e => e.startDate,
-    },
-    {
-      key: 'nextAction', label: 'Next action', priority: 3, width: '115px',
-      render: e => (
-        <button type="button" className="hr-table-link" onClick={event => { event.stopPropagation(); setViewEmpId(e.id) }}>
-          View profile
-        </button>
-      ),
     },
   ]
 
