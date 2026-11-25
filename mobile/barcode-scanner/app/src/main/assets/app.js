@@ -27,12 +27,14 @@
   // ------------------------------------------------------------------- state
   var DEFAULTS = {
     url: '', secret: '', device: '', ref: '', camId: '',
-    dupMs: 3000, beep: true, vib: true, auto: true, read2d: true, diag: false
+    dupMs: 3000, beep: true, vib: true, auto: true, read2d: true, diag: false,
+    confirm: true, weak: false, guideOnly: true
   };
   var S = { settings: copy(DEFAULTS), log: [] };
   var qty = 1, sending = false, lastSend = '', scanning = false;
   var stream = null, track = null, timer = null, frames = 0, hits = 0;
   var lastScan = { code: '', at: 0 };
+  var sighting = { code: '', at: 0, n: 0 }, rejects = 0;
   var cameras = [], camLabel = '', torchOn = false, zoomCap = null, zoomNow = 1;
   var lastMs = 0, fps = 0, fpsCount = 0, fpsAt = 0, lastErr = null;
   // Two decoders: the quick one runs on the guide band every frame, the
@@ -171,8 +173,14 @@
 
   function applyHints() {
     var F = Z.BarcodeFormat;
-    var quick = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.CODE_93, F.ITF, F.CODABAR];
-    var full = quick.concat([F.RSS_14, F.RSS_EXPANDED]);
+    // ITF, Codabar and DataBar carry no mandatory check digit, so ZXing happily
+    // reads them out of shelf edges, fabric and blocks of text. They are off
+    // unless asked for.
+    var quick = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_93, F.CODE_39];
+    var full = quick.slice(0);
+    if (S.settings.weak) {
+      full = full.concat([F.ITF, F.CODABAR, F.RSS_14, F.RSS_EXPANDED]);
+    }
     if (S.settings.read2d) {
       quick = quick.concat([F.QR_CODE]);
       full = full.concat([F.QR_CODE, F.DATA_MATRIX, F.AZTEC, F.PDF_417]);
@@ -428,14 +436,43 @@
     try {
       var result = reader.decode(bmp);
       if (result) {
-        hits++;
-        onDecode(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '');
+        // The full-frame passes see well beyond the guide, which is how a label
+        // on the next carton ends up scanned while the guide is pointed at
+        // nothing. Decode wide, but only accept what sits inside the guide.
+        if (mode === 'full' && S.settings.guideOnly && !insideGuide(result, rotated, outW, outH)) {
+          rejects++;
+        } else {
+          hits++;
+          onDecode(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '');
+        }
       }
     } catch (e) {
       /* NotFoundException on most frames - that is the normal case */
     } finally {
       try { reader.reset(); } catch (e) { }
     }
+  }
+
+  /** Is the decoded symbol's centre inside the on-screen guide band? */
+  function insideGuide(result, rotated, outW, outH) {
+    var pts;
+    try { pts = result.getResultPoints(); } catch (e) { return true; }
+    if (!pts || !pts.length) return true;          // no position info - let it through
+    var sumX = 0, sumY = 0, n = 0;
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i];
+      if (!p) continue;
+      var cx = p.getX(), cy = p.getY();
+      // undo the 90 degree draw: canvas is outH wide by outW tall in that case
+      var u = rotated ? cy : cx;
+      var v = rotated ? (outH - cx) : cy;
+      sumX += u / outW;
+      sumY += v / outH;
+      n++;
+    }
+    if (!n) return true;
+    var fx = sumX / n, fy = sumY / n;
+    return fx > 0.03 && fx < 0.97 && fy > 0.18 && fy < 0.82;   // the 92% x 60% guide
   }
 
   function updateDiag() {
@@ -445,20 +482,43 @@
     var label = camLabel ? camLabel.replace(/\s*\(.*$/, '').slice(0, 26) : 'camera ?';
     el.textContent = res + '  ' + fps + 'fps  ' + lastMs + 'ms/frame\n'
                    + label + (zoomCap ? '  ' + fmtZoom(zoomNow) : '') + '\n'
-                   + 'frames ' + frames + '  reads ' + hits;
+                   + 'frames ' + frames + '  reads ' + hits + '  rejected ' + rejects;
     el.classList.remove('hidden');
   }
 
   // ------------------------------------------------------------------ scans
+  var WEAK = { 'ITF': 1, 'CODABAR': 1, 'CODE-39': 1, 'RSS-14': 1, 'RSS-EXPANDED': 1 };
+
   function onDecode(text, format) {
     var code = String(text == null ? '' : text).trim();
     if (!code) return;
-    var now = Date.now();
-    if (code === lastScan.code && (now - lastScan.at) < Number(S.settings.dupMs || 0)) {
-      lastScan.at = now;
+
+    // a 2-character read from a checksum-less symbology is noise, not a barcode
+    if (code.length < (WEAK[format] ? 6 : 3)) { rejects++; return; }
+
+    var t = Date.now();
+
+    // still looking at the code we just took
+    if (code === lastScan.code && (t - lastScan.at) < Number(S.settings.dupMs || 0)) {
+      lastScan.at = t;
       return;
     }
-    lastScan = { code: code, at: now };
+
+    // Require the same value twice before accepting it. A false positive almost
+    // never repeats - a real barcode in the frame repeats every few frames.
+    if (S.settings.confirm) {
+      if (sighting.code === code && (t - sighting.at) < 1500) {
+        sighting.n++;
+        sighting.at = t;
+      } else {
+        sighting = { code: code, at: t, n: 1 };
+        return;
+      }
+      if (sighting.n < 2) return;
+      sighting = { code: '', at: 0, n: 0 };
+    }
+
+    lastScan = { code: code, at: t };
     addScan(code, format);
   }
 
@@ -664,6 +724,9 @@
     $('setAuto').checked = !!S.settings.auto;
     $('set2d').checked = !!S.settings.read2d;
     $('setDiag').checked = !!S.settings.diag;
+    $('setConfirm').checked = !!S.settings.confirm;
+    $('setGuide').checked = !!S.settings.guideOnly;
+    $('setWeak').checked = !!S.settings.weak;
     fillCameraList(cameras);
     listCameras().then(fillCameraList);
     $('verPill').textContent = 'v' + host.version();
@@ -686,6 +749,9 @@
     S.settings.auto = $('setAuto').checked;
     S.settings.read2d = $('set2d').checked;
     S.settings.diag = $('setDiag').checked;
+    S.settings.confirm = $('setConfirm').checked;
+    S.settings.guideOnly = $('setGuide').checked;
+    S.settings.weak = $('setWeak').checked;
     var prevCam = S.settings.camId;
     S.settings.camId = $('setCam') ? $('setCam').value : '';
     if (S.settings.url && S.settings.url.indexOf('https://') !== 0) {

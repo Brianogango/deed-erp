@@ -64,6 +64,25 @@ Then **Save**.
 Each row in the sheet is: logged-at, scanned-at (device clock), barcode, qty,
 reference, device, barcode format, scan id.
 
+## Scans appearing on their own
+
+Three defences, all switchable in Settings:
+
+- **Only accept codes inside the guide.** The decoder deliberately looks at the
+  whole frame (that is how a vertical barcode is read), so without this a label
+  on the next carton gets scanned while the guide points at nothing. The symbol's
+  centre must fall inside the guide band for the row to count.
+- **Confirm every scan twice.** The same value has to be decoded in two separate
+  frames within 1.5 s. A real barcode repeats every few frames; a false read
+  almost never does.
+- **ITF / Codabar / DataBar are off by default.** They carry no mandatory check
+  digit, so ZXing reads them out of shelf edges, fabric and blocks of text. Turn
+  them on only if your stock actually uses them.
+
+Diagnostics shows a `rejected` counter — reads that were thrown out by these
+rules. If it climbs while you scan normally, the guide gate is too tight for how
+you are holding the phone; turn it off and tell me.
+
 ## When the camera will not read a barcode
 
 In order, the things that actually fix it:
