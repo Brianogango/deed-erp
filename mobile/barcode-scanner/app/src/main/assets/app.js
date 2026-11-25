@@ -535,23 +535,44 @@
   }
 
   function explain(res, parsed) {
-    if (parsed && parsed.error === 'bad_token') return 'Secret rejected — it must match the script';
+    var body = String(res.text || '');
+
+    if (parsed && parsed.error === 'bad_token') return 'Secret rejected \u2014 it must match the script';
     if (parsed && parsed.error) return 'Script error: ' + parsed.error;
+
     if (res.status === 0) {
-      var t = String(res.text || '');
-      if (/UnknownHost|Unable to resolve/i.test(t)) return 'No internet connection — kept offline';
-      if (/timed? out/i.test(t)) return 'Connection timed out — will retry';
-      return (t.replace(/^ERR\s*/, '') || 'Network error') + ' — will retry';
+      if (/UnknownHost|Unable to resolve/i.test(body)) return 'No internet connection \u2014 kept offline';
+      if (/timed? out/i.test(body)) return 'Connection timed out \u2014 will retry';
+      return (body.replace(/^ERR\s*/, '') || 'Network error') + ' \u2014 will retry';
     }
+
+    // Apps Script answers these with a 200 and an HTML error page, so they have
+    // to be recognised by content rather than by status code.
+    if (/Script function not found/i.test(body)) {
+      var m = body.match(/Script function not found:\s*(\w+)/i);
+      return 'The deployment has no ' + (m ? m[1] : 'doPost') + ' in it. In Apps Script: '
+           + 'Deploy \u203a Manage deployments \u203a edit \u203a Version: New version \u203a Deploy';
+    }
+    if (/Authorization is required/i.test(body)) {
+      return 'The script is not authorised yet \u2014 open it in Apps Script and run setup once';
+    }
+    if (/Service invoked too many times|exceeded.{0,20}quota/i.test(body)) {
+      return 'Google daily quota reached \u2014 scans stay queued';
+    }
+    if (/accounts\.google\.com|ServiceLogin|Sign in|Choose an account/i.test(body)) {
+      return 'Got a Google sign-in page \u2014 redeploy with access set to "Anyone"';
+    }
+
     if (res.status === 401 || res.status === 403) {
-      return 'Google refused the request (403) — redeploy with access set to "Anyone"';
+      return 'Google refused the request (403) \u2014 redeploy with access set to "Anyone"';
     }
-    if (res.status === 404) return 'URL not found (404) — check the /exec link';
-    if (/<html|<!DOCTYPE/i.test(res.text || '')) {
-      return 'Got a Google sign-in page — redeploy with access set to "Anyone"';
+    if (res.status === 404) return 'URL not found (404) \u2014 check the /exec link';
+    if (res.status >= 500) return 'Google script error (' + res.status + ') \u2014 will retry';
+    if (/<html|<!DOCTYPE/i.test(body)) {
+      return 'The script sent a web page instead of data (' + res.status
+           + ') \u2014 open the /exec URL in a private browser window to see it';
     }
-    if (res.status >= 500) return 'Google script error (' + res.status + ') — will retry';
-    return 'Unexpected reply (' + res.status + ') — will retry';
+    return 'Unexpected reply (' + res.status + ') \u2014 will retry';
   }
 
   function deviceLabel() {

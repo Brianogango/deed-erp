@@ -86,6 +86,7 @@ In order, the things that actually fix it:
 
 | What you see | What it means |
 |---|---|
+| *The deployment has no doPost in it* | The deployed version predates the code being pasted. Deploy → Manage deployments → ✏️ → **Version: New version** → Deploy. Editing the code does **not** change what a deployment serves. |
 | *Got a Google sign-in page* | The deployment's access is not **Anyone**. Redeploy. |
 | *Google refused the request (403)* | Same as above, or the URL points at an old deployment. |
 | *Secret rejected* | The secret in settings differs from `SHARED_SECRET` in Project Settings → Script properties. |
@@ -111,9 +112,14 @@ For Play Store distribution, create a proper release key instead.
 Notes for whoever maintains this:
 
 - build-tools **34.0.0 will not work** — its `d8` crashes on this code. 35.0.0+ is fine.
-- Uploads go through Java (`MainActivity.Bridge.post`), not `fetch`. Apps Script does
-  not answer CORS preflights, and the page's origin is `file://`; going through Java
-  sidesteps CORS entirely and gives real error messages.
+- Uploads go through Java (`Http.postText`), not `fetch`. Apps Script does not answer
+  CORS preflights, and the page's origin is `file://`; going through Java sidesteps
+  CORS entirely and gives real error messages.
+- `Http` follows redirects itself and never uses fixed-length streaming mode. A
+  successful Apps Script POST answers 302 to `script.googleusercontent.com`, and in
+  streaming mode `HttpURLConnection` cannot replay the body, so it throws
+  `HttpRetryException: cannot retry due to redirection` on every successful upload.
+  That bug shipped in 1.0.0 and 1.1.0.
 - The decoder runs four passes per cycle: two over the centre band (the common
   horizontal case), one over the whole frame rotated 90° (vertical barcodes), one
   over the whole frame. Tested against EAN-13, Code 128, QR and a vertical EAN-13.

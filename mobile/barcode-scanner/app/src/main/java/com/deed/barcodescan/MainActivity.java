@@ -26,12 +26,6 @@ import android.widget.Toast;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -278,30 +272,11 @@ public class MainActivity extends Activity {
             }
             act.net.execute(new Runnable() {
                 @Override public void run() {
-                    HttpURLConnection c = null;
                     try {
-                        c = (HttpURLConnection) new URL(url).openConnection();
-                        c.setRequestMethod("POST");
-                        c.setInstanceFollowRedirects(true);
-                        c.setConnectTimeout(15000);
-                        c.setReadTimeout(45000);
-                        c.setRequestProperty("Content-Type", "text/plain;charset=utf-8");
-                        c.setRequestProperty("Accept", "application/json");
-                        c.setDoOutput(true);
-                        byte[] out = body.getBytes(StandardCharsets.UTF_8);
-                        c.setFixedLengthStreamingMode(out.length);
-                        OutputStream os = c.getOutputStream();
-                        os.write(out);
-                        os.flush();
-                        os.close();
-                        int code = c.getResponseCode();
-                        InputStream in = (code >= 200 && code < 400) ? c.getInputStream() : c.getErrorStream();
-                        String text = readAll(in);
-                        act.deliver(reqId, code, text);
+                        Http.Resp r = Http.postText(url, body, 15000, 45000);
+                        act.deliver(reqId, r.code, r.text);
                     } catch (Exception e) {
                         act.deliver(reqId, 0, "ERR " + e.getClass().getSimpleName() + ": " + e.getMessage());
-                    } finally {
-                        if (c != null) c.disconnect();
                     }
                 }
             });
@@ -315,13 +290,4 @@ public class MainActivity extends Activity {
                 + JSONObject.quote(reqId) + "," + status + "," + JSONObject.quote(text) + ")");
     }
 
-    private static String readAll(InputStream in) throws Exception {
-        if (in == null) return "";
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        byte[] chunk = new byte[8192];
-        int n;
-        while ((n = in.read(chunk)) > 0) buf.write(chunk, 0, n);
-        in.close();
-        return new String(buf.toByteArray(), StandardCharsets.UTF_8);
-    }
 }
