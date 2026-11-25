@@ -30,7 +30,11 @@ function doPost(e) {
     const sh = sheet();
 
     if (body.ping) {
-      return json({ ok: true, pong: true, sheet: SHEET_NAME, rows: Math.max(0, sh.getLastRow() - 1) });
+      return json({
+        ok: true, pong: true, sheet: SHEET_NAME,
+        spreadsheet: sh.getParent().getName(),
+        rows: Math.max(0, sh.getLastRow() - 1)
+      });
     }
 
     const rows = Array.isArray(body.rows) ? body.rows : [];
@@ -77,8 +81,16 @@ function doPost(e) {
 
 /** Opening the /exec URL in a browser should say something useful. */
 function doGet() {
-  const sh = sheet();
-  return json({ ok: true, service: 'Deed Scan receiver', sheet: SHEET_NAME, rows: Math.max(0, sh.getLastRow() - 1) });
+  try {
+    const sh = sheet();
+    return json({
+      ok: true, service: 'Deed Scan receiver', sheet: SHEET_NAME,
+      spreadsheet: sh.getParent().getName(),
+      rows: Math.max(0, sh.getLastRow() - 1)
+    });
+  } catch (err) {
+    return json({ ok: false, service: 'Deed Scan receiver', error: String(err && err.message ? err.message : err) });
+  }
 }
 
 /** Run once from the editor: creates the tab, the header row and a secret. */
@@ -90,14 +102,37 @@ function setup() {
     secret = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
     props.setProperty('SHARED_SECRET', secret);
   }
-  const msg = 'Sheet tab "' + SHEET_NAME + '" is ready.\n\nShared secret (paste into the app):\n' + secret;
+  const msg = 'Writing into: ' + sh.getParent().getName()
+            + '\nTab: ' + SHEET_NAME
+            + '\n\nShared secret (paste into the app):\n' + secret;
   Logger.log(msg);
   try { SpreadsheetApp.getUi().alert(msg); } catch (ignored) { }
   return secret;
 }
 
+/**
+ * The spreadsheet to write into.
+ *
+ * A script created from the sheet (Extensions > Apps Script) is bound to it and
+ * getActiveSpreadsheet() just works. A standalone script created at
+ * script.google.com is attached to nothing, so it needs a SHEET_ID script
+ * property: Project Settings > Script properties, value = the long id in the
+ * spreadsheet's URL between /d/ and /edit.
+ */
+function spreadsheet() {
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) return active;
+  const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+  if (!id) {
+    throw new Error('This script is not attached to a spreadsheet. Either create it from the '
+      + 'sheet with Extensions > Apps Script, or add a script property named SHEET_ID holding '
+      + "the spreadsheet's id (the long part of its URL between /d/ and /edit).");
+  }
+  return SpreadsheetApp.openById(id);
+}
+
 function sheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = spreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
   if (!sh) sh = ss.insertSheet(SHEET_NAME);
   if (sh.getLastRow() === 0) {
