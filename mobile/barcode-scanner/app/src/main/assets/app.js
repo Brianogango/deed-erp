@@ -37,6 +37,7 @@
   var sighting = { code: '', at: 0, n: 0 }, rejects = 0;
   var cameras = [], camLabel = '', torchOn = false, zoomCap = null, zoomNow = 1;
   var lastMs = 0, fps = 0, fpsCount = 0, fpsAt = 0, lastErr = null;
+  var lastHitAt = 0, wideTurn = false;
   // Two decoders: the quick one runs on the guide band every frame, the
   // thorough one (TRY_HARDER, more formats) on the full-frame passes.
   var readerFast = new Z.MultiFormatReader();
@@ -229,7 +230,7 @@
     stopCamera();
     showCamMsg('Starting camera\u2026', true);
 
-    var hi = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    var hi = { width: { ideal: 1280 }, height: { ideal: 720 } };
     var tries = [];
     if (S.settings.camId) {
       tries.push({ audio: false, video: { deviceId: { exact: S.settings.camId }, width: hi.width, height: hi.height } });
@@ -382,14 +383,15 @@
     try {
       if (video.readyState >= 2 && video.videoWidth > 0) {
         frames++;
-        // Most barcodes are held horizontally across the guide, so two of every
-        // four frames decode just that band (fast). The other two look at the
-        // whole frame, one of them rotated, which is what catches a barcode
-        // printed vertically or sitting outside the guide.
-        var phase = frames & 3;
-        if (phase === 2) decodeFrame('full', true);
-        else if (phase === 3) decodeFrame('full', false);
-        else decodeFrame('band', false);
+        // The guide band is the case that happens almost every time, so it gets
+        // every frame. The whole-frame sweeps - which is what reads a vertical
+        // barcode - cost as much again, so they only run every fourth frame and
+        // only while nothing is being found.
+        var got = decodeFrame('band', false);
+        if (!got && (frames % 4) === 0 && (now() - lastHitAt) > 1200) {
+          wideTurn = !wideTurn;
+          decodeFrame('full', wideTurn);
+        }
       }
     } catch (e) { }
     lastMs = Math.round(now() - t0);
@@ -404,9 +406,9 @@
     var vw = video.videoWidth, vh = video.videoHeight;
     var srcW, srcH, maxW, reader;
     if (mode === 'band') {
-      srcW = Math.round(vw * 0.92); srcH = Math.round(vh * 0.60); maxW = 1100; reader = readerFast;
+      srcW = Math.round(vw * 0.92); srcH = Math.round(vh * 0.60); maxW = 820; reader = readerFast;
     } else {
-      srcW = vw; srcH = vh; maxW = 900; reader = readerHard;
+      srcW = vw; srcH = vh; maxW = 720; reader = readerHard;
     }
     var outW = srcW, outH = srcH;
     if (outW > maxW) { var k = maxW / outW; outW = Math.round(outW * k); outH = Math.round(outH * k); }
@@ -436,6 +438,7 @@
     try {
       var result = reader.decode(bmp);
       if (result) {
+        lastHitAt = now();
         // The full-frame passes see well beyond the guide, which is how a label
         // on the next carton ends up scanned while the guide is pointed at
         // nothing. Decode wide, but only accept what sits inside the guide.
@@ -445,12 +448,14 @@
           hits++;
           onDecode(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '');
         }
+        return true;
       }
     } catch (e) {
       /* NotFoundException on most frames - that is the normal case */
     } finally {
       try { reader.reset(); } catch (e) { }
     }
+    return false;
   }
 
   /** Is the decoded symbol's centre inside the on-screen guide band? */
@@ -488,6 +493,11 @@
 
   // ------------------------------------------------------------------ scans
   var WEAK = { 'ITF': 1, 'CODABAR': 1, 'CODE-39': 1, 'RSS-14': 1, 'RSS-EXPANDED': 1 };
+  // these carry their own check digit or CRC, so one clean read is trustworthy
+  var SELF_CHECKING = {
+    'EAN-13': 1, 'EAN-8': 1, 'UPC-A': 1, 'UPC-E': 1, 'CODE-128': 1, 'CODE-93': 1,
+    'QR-CODE': 1, 'DATA-MATRIX': 1, 'AZTEC': 1, 'PDF-417': 1
+  };
 
   function onDecode(text, format) {
     var code = String(text == null ? '' : text).trim();
@@ -506,7 +516,7 @@
 
     // Require the same value twice before accepting it. A false positive almost
     // never repeats - a real barcode in the frame repeats every few frames.
-    if (S.settings.confirm) {
+    if (S.settings.confirm && !SELF_CHECKING[format]) {
       if (sighting.code === code && (t - sighting.at) < 1500) {
         sighting.n++;
         sighting.at = t;
@@ -891,5 +901,9 @@
   } catch (bootErr) {
     setStatus('Startup problem: ' + (bootErr && bootErr.message ? bootErr.message : bootErr), 'err');
   }
-  window.__deedscan = { state: function () { return S; }, flush: flush, add: addScan };
+  window.__deedscan = {
+    state: function () { return S; }, flush: flush, add: addScan,
+    decodeFrame: function (mode, rotated) { return decodeFrame(mode, rotated); },
+    video: function () { return video; }
+  };
 })();

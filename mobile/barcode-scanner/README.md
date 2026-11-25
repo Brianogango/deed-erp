@@ -64,6 +64,34 @@ Then **Save**.
 Each row in the sheet is: logged-at, scanned-at (device clock), barcode, qty,
 reference, device, barcode format, scan id.
 
+## Scanning speed
+
+Measured in Chromium against a fake camera (desktop CPU, so phones are several
+times slower — the ratios are what matter):
+
+| | before 1.4.0 | 1.4.0 |
+|---|---|---|
+| page load → first row, 1080p feed | 1210 ms | ~300 ms |
+| guide-band attempts per second @720p | ~14 | ~24 |
+
+What changed:
+
+- The guide band is decoded on **every** frame. The whole-frame sweeps cost about
+  as much again, so they now run every fourth frame and only after 1.2 s of
+  finding nothing — they exist for vertical barcodes, not for the common case.
+- Capture is requested at 1280×720, not 1920×1080. Every pass downscales below
+  720p anyway, so the larger frame only added scaling cost.
+- Decode canvases capped at 820 px (band) and 720 px (full) rather than 1100/900.
+  Decode cost scales with pixel count; 820 px across is still ~8 px per module
+  on an EAN-13 filling the guide.
+- Barcodes that carry their own check digit or CRC (EAN, UPC, Code 128, Code 93,
+  QR, Data Matrix, Aztec, PDF417) are accepted on the first clean read. Only the
+  checksum-less ones pay for the two-sighting confirmation.
+
+If it is still slow on a particular phone, turn on diagnostics and read
+`ms/frame`: much over ~120 ms means the decode itself is the bottleneck and the
+caps above want lowering further.
+
 ## Scans appearing on their own
 
 Three defences, all switchable in Settings:
