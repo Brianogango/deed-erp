@@ -1,9 +1,10 @@
 'use client'
+import Link from 'next/link'
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { useAfterSalesStore, BuyBack, Donation, ClientExchange, LocationId, LOCATIONS, fmtKes, fmtDate } from '@/lib/store'
+import { useAfterSalesStore, useFinanceStore, BuyBack, Donation, ClientExchange, LocationId, LOCATIONS, fmtKes, fmtDate } from '@/lib/store'
 import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
 import { clearFormDraft, loadFormDraft, saveFormDraft } from '@/lib/form-draft'
 import { Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
@@ -14,6 +15,7 @@ import { StatusBadge } from '@/components/erp'
 import { Fa, faBox, faCheck, faCreditCard, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
 import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { userCan } from '@/lib/auth/can'
+import { financeInvoicePath } from '@/lib/finance-invoice'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -24,11 +26,6 @@ const CONDITION_OPTS = [
   { value: 'poor',  label: 'Poor — needs refurbishment' },
 ]
 
-const PAY_OPTS = [
-  { value: 'cash',          label: 'Cash' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'mpesa',         label: 'M-Pesa' },
-]
 
 const norm = (value: unknown) => String(value ?? '').trim().toLowerCase()
 const fileCell = (row: Record<string, unknown>, ...keys: string[]) => {
@@ -245,6 +242,7 @@ function downloadBuyBackBulkTemplate() {
 function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, creditBuyBack, receiveFreeBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
+  const { invoices } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canApprove = userCan(currentUser, 'sales.buyback.approve')
@@ -261,7 +259,6 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const [notes, setNotes]             = useState('')
   const [lines, setLines]             = useState<BBLine[]>([])
   const [payModal, setPayModal]       = useState<string | null>(null)
-  const [payMethod, setPayMethod]     = useState('')
   const [creditModal, setCreditModal] = useState<string | null>(null)
   const [crediting, setCrediting]     = useState(false)
   const [paying, setPaying]           = useState(false)
@@ -440,21 +437,18 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const settleModals = (
     <>
         {payModal && (
-          <Modal title="Pay customer" onClose={() => { if (!paying) setPayModal(null) }}>
+          <Modal title="Send to Finance to pay" onClose={() => { if (!paying) setPayModal(null) }}>
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-              Cash leaves the till or bank. A bill to the customer (6114 Trade-in Purchases) is posted and paid. This buy-back cannot also be added as store credit.
+              A bill to the customer (6114 Trade-in Purchases) goes to Finance, who pays it like any other bill: how, from which account, and the reference (M-Pesa code or transfer ref).
+              This buy-back is marked paid, and can go into stock, once that bill is paid. It can then no longer be added as store credit.
             </p>
-            <Field label="Payment Method *">
-              <Select value={payMethod} onChange={setPayMethod} options={[{ value: '', label: 'Select…' }, ...PAY_OPTS]} />
-            </Field>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button className="btn-secondary text-[11px]" disabled={paying} onClick={() => setPayModal(null)}>Cancel</button>
               <button className="btn-primary text-[11px]" disabled={paying} onClick={async () => {
-                if (!payMethod) { showToast('Select a payment method', 'error'); return }
                 setPaying(true)
-                try { await payBuyBack(payModal, payMethod as BuyBack['paymentMethod']) } finally { setPaying(false) }
+                try { await payBuyBack(payModal) } finally { setPaying(false) }
                 setPayModal(null)
-              }}>{paying ? 'Paying…' : 'Confirm Payment'}</button>
+              }}>{paying ? 'Sending…' : 'Send bill to Finance'}</button>
             </div>
           </Modal>
         )}
@@ -495,6 +489,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
 
   if (detail) {
     const bb = detail
+    // The bill sent to Finance for this buy-back, while it is still to be paid.
+    const liveBill = bb.billId ? (invoices ?? []).find(i => i.id === bb.billId && i.status !== 'cancelled') : undefined
     const STEPS = ['draft', 'approved', 'paid', 'stocked']
     const si = STEPS.indexOf(bb.status)
     return (
@@ -553,8 +549,15 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
               Settled as store credit {bb.creditRef} — no cash left the till. Apply this credit on the customer&apos;s next invoice.
             </p>
           )}
+          {bb.status === 'approved' && liveBill && (
+            <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)' }}>
+              {liveBill.status === 'draft'
+                ? `Bill ${liveBill.ref} is waiting for Finance to confirm and pay it.`
+                : `Bill ${liveBill.ref} is with Finance to pay${liveBill.amountPaid > 0 ? ` — ${fmtKes(liveBill.amountPaid)} of ${fmtKes(liveBill.total)} paid so far` : ''}. This buy-back is marked paid once it is.`}
+            </p>
+          )}
           {bb.status === 'paid' && bb.paymentMethod && bb.paymentMethod !== 'store_credit' && (
-            <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Paid to customer by {bb.paymentMethod.replace('_', ' ')} on {fmtDate(bb.paidDate!)}</p>
+            <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Paid to customer by {bb.paymentMethod.replace('_', ' ')} on {fmtDate(bb.paidDate!)}{bb.paymentReference ? ` · ref ${bb.paymentReference}` : ''}{bb.billRef ? ` · bill ${bb.billRef}` : ''}</p>
           )}
           {bb.stockedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
 
@@ -570,13 +573,18 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
                 <Fa icon={faCheck} aria-hidden="true" /> Receive at no cost
               </button>
             )}
-            {bb.status === 'approved' && bb.total > 0 && (
-              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => { setPayMethod(''); setPayModal(bb.id) }}>
+            {bb.status === 'approved' && bb.total > 0 && !liveBill && (
+              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => setPayModal(bb.id)}>
                 <Fa icon={faMoneyBillWave} aria-hidden="true" /> Pay
               </button>
             )}
+            {bb.status === 'approved' && liveBill && (
+              <Link href={financeInvoicePath(liveBill.id)} className="btn-secondary text-[11px] flex items-center gap-1.5">
+                <Fa icon={faMoneyBillWave} aria-hidden="true" /> Open bill {liveBill.ref}
+              </Link>
+            )}
             {/* Same approved state: Add as credit instead of Pay. Choosing one settles the BBK. */}
-            {bb.status === 'approved' && bb.total > 0 && (
+            {bb.status === 'approved' && bb.total > 0 && !liveBill && (
               <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setCreditModal(bb.id)}>
                 <Fa icon={faCreditCard} aria-hidden="true" /> Add as credit
               </button>
@@ -588,7 +596,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
             )}
             {/* Cancel before anything is paid or credited. One made from a repair
                 frees the repair to be converted again (e.g. to a donation). */}
-            {(bb.status === 'draft' || (bb.status === 'approved' && !bb.billId && !bb.creditId)) && (
+            {(bb.status === 'draft' || (bb.status === 'approved' && !liveBill && !bb.creditId)) && (
               <button
                 type="button"
                 className="btn-secondary text-[11px] flex items-center gap-1.5"

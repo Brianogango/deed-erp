@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { type User, type ModuleId, type AuditLog, type LocationId } from './core'
+import { buyBackSettledByBill } from '@/lib/buyback-credit'
 import { DATA_VERSION, saveHoldoverToServer, draftInvoiceRef, addDays, saveInvoiceToServer, upsertBulkStock, calcStockByLocation, postSystemJournal, isDraftInvoiceRef, saveAccountToServer, applyLocalDraftSaleOrder, applySaleOrderPersistResult, calcSO, confirmingSaleOrderIds, fetchNextKilimallRef, patchSaleOrderPersist, requestWarrantySync, findProductIdentityDuplicate, productCreateLockKey, REPAIR_TERMINAL_STATUSES, repairInvoiceInFlight, calcPO, fetchNextDeliveryRef, LOCATIONS, fmtKes, seesCustomerInvoices, syncOrWarn } from './helpers'
 import { getDirtyKeys, _pendingSync, _inFlightSyncKeys, useLS, sync, SESSION_AUDIT_LOG_LIMIT } from './sync'
 import { appStateKeysForRoute } from '@/lib/app-state-hydration'
@@ -301,6 +302,23 @@ export function useStoreCore({
 
   // Buy-backs / Donations / Exchanges
   const [buyBacks, setBuyBacks]           = useLS<BuyBack[]>('deed_buyBacks', [])
+  // A buy-back waiting on its bill settles once Finance has paid that bill in
+  // full (any screen, any user): status paid, with the method and date of the payment.
+  useEffect(() => {
+    const settled = new Map<string, NonNullable<ReturnType<typeof buyBackSettledByBill>>>()
+    for (const bb of buyBacks) {
+      if (bb.status !== 'approved' || !bb.billId) continue
+      const s = buyBackSettledByBill(bb, invoices.find(i => i.id === bb.billId))
+      if (s) settled.set(bb.id, s)
+    }
+    if (!settled.size) return
+    setBuyBacks(prev => prev.map(b => {
+      const s = settled.get(b.id)
+      return s && b.status === 'approved'
+        ? { ...b, status: 'paid' as const, paymentMethod: s.paymentMethod, paidDate: s.paidDate, ...(s.reference ? { paymentReference: s.reference } : {}) }
+        : b
+    }))
+  }, [buyBacks, invoices, setBuyBacks])
   const [donations, setDonations]         = useLS<Donation[]>('deed_donations', [])
   const [clientExchanges, setClientExchanges] = useLS<ClientExchange[]>('deed_clientExchanges', [])
 

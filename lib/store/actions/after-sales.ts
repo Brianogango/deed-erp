@@ -13,7 +13,7 @@ import { bankAccountIdForMethod, bankAccountLabel, accountLine } from '../journa
 import { userCan } from '@/lib/auth/can'
 import { donationAccount, donationOutJournalLines, exchangeSettlement, exchangeCreditJournalLines } from '@/lib/after-sales/value-journals'
 import { resolveProductAccounts } from '@/lib/product-accounts'
-import { canPayBuyBackCash, buildBuyBackPayoutBillLines, canCreditBuyBack, canReceiveFreeBuyBack, buyBackStoreCreditAmount, buildBuyBackStoreCreditJournalLines, BUYBACK_STORE_CREDIT_METHOD, resolveBuyBackProduct } from '@/lib/buyback-credit'
+import { canSettleApprovedBuyBack, buildBuyBackPayoutBillLines, canCreditBuyBack, canReceiveFreeBuyBack, buyBackStoreCreditAmount, buildBuyBackStoreCreditJournalLines, BUYBACK_STORE_CREDIT_METHOD, resolveBuyBackProduct } from '@/lib/buyback-credit'
 import { canManageFinance } from '../permissions'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
@@ -608,20 +608,19 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
         store.showToast('Buy-back approved')
       },
 
-    // Pay path: a vendor bill to the customer (Trade-in Purchases 6114),
-    // posted and paid from the till / M-Pesa / bank. It used to record only a
-    // refund-list row, so the payout never reached the books. A second click
-    // (e.g. by another Finance user, when separation of duties stops the
-    // poster paying) reuses the same bill.
-    payBuyBack: async (id, paymentMethod) => {
+    // Pay path: a bill to the customer (Trade-in Purchases 6114) is sent to
+    // Finance, who pays it like any other bill (method, account, reference).
+    // When that bill is paid in full the buy-back settles by itself (see the
+    // buyBackSettledByBill sync in use-store-core). A second press reuses the bill.
+    payBuyBack: async (id) => {
         const user = store.currentUser(); if (!user) return
         const bb = store.buyBacks.find(b => b.id === id)
-        const allowed = canPayBuyBackCash(bb, paymentMethod)
-        if (!allowed.ok || !bb) { store.showToast(allowed.error || 'Cannot record buy-back payment', 'error'); return }
-        if (!canManageFinance(user)) {
-          store.showToast('Paying out a buy-back posts and pays a bill — ask Finance, an Admin Officer or the Director', 'error'); return
+        const allowed = canSettleApprovedBuyBack(bb)
+        if (!allowed.ok || !bb) { store.showToast(allowed.error || 'Cannot bill this buy-back', 'error'); return }
+        if (!(Math.round(Number(bb.total) || 0) > 0)) { store.showToast('Nothing to pay on a KSh 0 buy-back — use Receive at no cost', 'error'); return }
+        if (!userCan(user, 'sales.buyback.approve') && !canManageFinance(user)) {
+          store.showToast('Only Director or Finance can send a buy-back for payment', 'error'); return
         }
-        const method = paymentMethod ?? 'cash'
         let bill = bb.billId ? store.invRef.current.find(i => i.id === bb.billId && i.status !== 'cancelled') : undefined
         if (!bill) {
           const lines: InvoiceLine[] = buildBuyBackPayoutBillLines(bb, sid => store.serialRef.current.find(x => x.id === sid)?.serial ?? sid)
@@ -641,33 +640,28 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
             taxTotal: 0,
             total,
             amountPaid: 0,
-            notes: `Buy-back ${bb.ref} — payout to ${bb.customerName}`,
+            subject: `Buy-back ${bb.ref}`,
+            customerPoNumber: bb.ref,
+            notes: `Buy-back ${bb.ref} — pay ${bb.customerName} for the device(s) bought back. Approved by ${bb.approvedByName ?? '—'}.`,
           }
           store.invRef.current = [draft, ...store.invRef.current]
           store.setInvoices(prev => [draft, ...prev])
           if (!(await store.saveInvoiceToServer(draft, msg => store.showToast(msg, 'error')))) return
           bill = draft
-          store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, billId: draft.id } : b))
+          store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, billId: draft.id, billRef: draft.ref } : b))
         }
-        if (invoiceDocState(bill.status) !== 'posted') {
+        // Confirm it so it shows in Finance as a bill to pay. Someone without
+        // that right leaves it as a draft for Finance to confirm.
+        if (invoiceDocState(bill.status) !== 'posted' && canManageFinance(user)) {
           await store.storeCtxRef.current!.postInvoice(bill.id)
-          bill = store.invRef.current.find(i => i.id === bill!.id)
-          if (!bill || invoiceDocState(bill.status) !== 'posted') {
-            store.showToast(`The payout bill for ${bb.ref} was saved but not posted — post it in Purchases › Bills, then press Pay again`, 'error'); return
-          }
+          bill = store.invRef.current.find(i => i.id === bill!.id) ?? bill
         }
-        const posted = bill
-        store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, billId: posted.id, billRef: posted.ref } : b))
-        const balance = posted.total - posted.amountPaid
-        if (balance > 0) {
-          const paid = await store.storeCtxRef.current!.registerPayment(posted.id, balance, method, bankAccountIdForMethod(method), bb.ref, now())
-          if (!paid) {
-            store.showToast(`${posted.ref} is posted but not paid yet. Pay it here again (another Finance user, if asked) or in Purchases › Bills`, 'error'); return
-          }
-        }
-        store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now(), billId: posted.id, billRef: posted.ref } : b))
-        store.addAuditLog('buyback_payout', bb.ref, `Paid out via bill ${posted.ref} (${method}) — ${bb.customerName}`)
-        store.showToast(`Payment recorded — bill ${posted.ref} posted and paid`)
+        const sent = bill
+        store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, billId: sent.id, billRef: sent.ref } : b))
+        store.addAuditLog('buyback_billed', bb.ref, `Bill ${sent.ref} sent to Finance to pay ${bb.customerName} ${store.fmtKes(sent.total)}`)
+        store.showToast(invoiceDocState(sent.status) === 'posted'
+          ? `Bill ${sent.ref} is in Finance to pay — it settles ${bb.ref} once paid`
+          : `Bill ${sent.ref} saved as a draft — Finance confirms and pays it`)
       },
 
     // Free path: a KSh 0 buy-back (the customer gave the device away) is
@@ -691,6 +685,8 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
         const bb = store.buyBacks.find(b => b.id === id)
         const allowed = canCreditBuyBack(bb)
         if (!allowed.ok || !bb) { store.showToast(allowed.error || 'Cannot add buy-back as credit', 'error'); return }
+        const openBill = bb.billId ? store.invRef.current.find(i => i.id === bb.billId && i.status !== 'cancelled') : undefined
+        if (openBill) { store.showToast(`Bill ${openBill.ref} is already with Finance for this buy-back — cancel that bill first to give credit instead`, 'error'); return }
         const amount = buyBackStoreCreditAmount(bb)
         const at = now()
         let creditRef: string
