@@ -12,10 +12,10 @@
 
 ## Index
 
-| ID | Severity | Module | Title | Changes business logic? |
-|---|---|---|---|---|
-| KI-01 | High | Platform | Multiple sources of truth; dual-writes are fire-and-forget; default store backend is the legacy `app_state` | No (architecture) |
-| KI-02 | High | Finance | Invoice GL posting is best-effort after commit — posted invoice can have no journal | Yes (changes failure behaviour) |
+| ID | Severity | Module | Title | Changes business logic? | Status |
+|---|---|---|---|---|---|
+| KI-01 | High | Platform | Multiple sources of truth; dual-writes are fire-and-forget; default store backend is the legacy `app_state` | No (architecture) | **Partly remediated 2026-11-25:** dual-writes are no longer fire-and-forget (durable retry + drift alerting, see below). The remaining work is the production cutover itself. |
+| KI-02 | High | Finance | Invoice GL posting is best-effort after commit — posted invoice can have no journal | Yes (changes failure behaviour) | **Remediated 2026-11-25:** posting stays after the commit by design, but a failure now enqueues an idempotent durable retry instead of only logging. |
 | KI-03 | High | Finance / Purchase | Vendor-bill payments post Dr cash / Cr AR (no AP branch) | Yes (corrects posting) |
 | KI-04 | High | Delivery / Inventory | Delivery validation has no role gate; valuation failure after stock deduction is swallowed | Yes |
 | KI-05 | High | Delivery / Repair | `PATCH /api/outbound-releases/[id]` writes the raw body to the release | No (security) |
@@ -35,9 +35,9 @@
 | KI-19 | Medium | Security | CSRF relies on SameSite + Origin heuristics; CSP allows `unsafe-inline` | No |
 | KI-20 | Medium | Security | MFA enforcement is an env flag; production value unverifiable | No |
 | KI-21 | Medium | Security | Rate limiting falls back to per-process memory | No |
-| KI-22 | Medium | Repository | Stray/dead files incl. a hard-coded-credential handler, tarballs, 676 KB dev log | No |
+| KI-22 | Medium | Repository | Stray/dead files incl. a hard-coded-credential handler, tarballs, 676 KB dev log | No | **Remediated 2026-11-25:** log + 3 tarballs untracked and git-ignored. |
 | KI-23 | Medium | Operations | No Prisma migration history; migrations applied after deploy; `db push --accept-data-loss` in CI | No |
-| KI-24 | Medium | Build | `npm ci` fails; two lockfiles; dependency pulled from a CDN tarball | No |
+| KI-24 | Medium | Build | `npm ci` fails; two lockfiles; dependency pulled from a CDN tarball | No | **Remediated 2026-11-25:** pnpm is the single lockfile and is pinned via `packageManager`; `package-lock.json` removed. The CDN tarball is kept deliberately — it is integrity-pinned, and the npm-registry `xlsx` is a deprecated downgrade. |
 | KI-25 | Medium | Data model | 25 schema models with no ORM usage | No |
 | KI-26 | Medium | Platform | Dead or disconnected endpoints (49 with no in-repo caller; `/api/pos/charge` cannot work) | No |
 | KI-27 | Medium | Finance | Two integrity gates cannot fail; gate labels cite superseded accounts | Yes |

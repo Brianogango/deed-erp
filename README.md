@@ -5,11 +5,11 @@ A full Odoo-18-inspired ERP built with Next.js 14, TypeScript, and Tailwind CSS.
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
-npm install
+# 1. Install dependencies (pnpm is the only supported package manager)
+pnpm install --frozen-lockfile
 
 # 2. Run development server
-npm run dev
+pnpm dev
 
 # 3. Open in browser
 http://localhost:3000

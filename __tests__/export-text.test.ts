@@ -8,7 +8,7 @@ const row: Row = { ref: 'OUT/0081', vendorName: 'Fastech', status: 'sent' }
 
 describe('export values from columns with only render()', () => {
   it('reads the text out of rendered elements, never "[object Object]"', () => {
-    const col: ColumnDef<Row> = { key: 'ref', label: 'Ref', render: r => createElement('span', { className: 'x' }, r.ref) }
+    const col: ColumnDef<Row> = { key: 'ref', label: 'Ref', priority: 1, render: r => createElement('span', { className: 'x' }, r.ref) }
     expect(getColumnValue(col, row, 'export')).toBe('OUT/0081')
   })
   it('joins nested children', () => {
@@ -16,9 +16,9 @@ describe('export values from columns with only render()', () => {
   })
   it('falls back to the field of the same name when a badge draws no text', () => {
     const Badge = (props: { status: string }) => createElement('i', null, props.status)
-    const col: ColumnDef<Row> = { key: 'status', label: 'Status', render: r => createElement(Badge, { status: r.status }) }
+    const col: ColumnDef<Row> = { key: 'status', label: 'Status', priority: 1, render: r => createElement(Badge, { status: r.status }) }
     expect(getColumnValue(col, row, 'export')).toBe('sent')
-    const col2: ColumnDef<Row> = { key: 'vendorName', label: 'Vendor', render: () => createElement('img', { alt: '' }) }
+    const col2: ColumnDef<Row> = { key: 'vendorName', label: 'Vendor', priority: 1, render: () => createElement('img', { alt: '' }) }
     expect(getColumnValue(col2, row, 'export')).toBe('Fastech')
   })
 })

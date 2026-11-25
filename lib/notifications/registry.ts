@@ -152,6 +152,14 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'system.sms_reply': POLICY(['sms'], 'info'),
   // A provider (email, SMS, WhatsApp) failing to deliver: one alert per channel per day.
   'system.integration_failure': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director', 'admin_officer'], mandatory: true }),
+  // The Prisma projection and the legacy app_state copy hold different record
+  // counts (lib/store-parity.ts). Until this is clear the cutover to
+  // STORE_BACKEND=prisma must not be certified, so it is mandatory and
+  // acknowledged rather than a passive warning.
+  'store_parity_drift': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 240, mandatory: true, cooldownHours: 12 }),
+  // A Prisma mirror write that failed during a save and has now exhausted its
+  // retries (lib/store-mirror-jobs.ts): that key needs manual repair.
+  'store_mirror_exhausted': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director'], mandatory: true, cooldownHours: 6 }),
 }
 
 export const defaultNotificationPolicy = (eventType: string): NotificationPolicy =>

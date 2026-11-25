@@ -2,6 +2,7 @@
   "name": "deed-erp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.28.0",
   "scripts": {
     "prisma:generate": "prisma generate",
     "dev": "npm run prisma:generate && next dev",

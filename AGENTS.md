@@ -2,8 +2,14 @@
 
 ## Cursor Cloud specific instructions
 
-- Install the locked dependencies with `npm ci`. `prisma generate` runs during postinstall and does not require a database.
-- Build and most unit tests run without `DATABASE_URL`. Use `npm run build` and focused `npm test -- --run <test-file>`.
+- Install the locked dependencies with `pnpm install --frozen-lockfile`. pnpm is the only
+  supported package manager: `pnpm-lock.yaml` is the single lockfile, CI and the
+  Contabo deploy both use it, and `packageManager` in `package.json` pins the
+  version. Do not run `npm install` — it would create a second lockfile that
+  silently drifts from the one CI installs from (that drift broke a deploy once).
+  `prisma generate` runs during postinstall and does not require a database.
+- Build and most unit tests run without `DATABASE_URL`. Use `pnpm build` and focused
+  `pnpm test -- --run <test-file>`.
 - For UI work that does not require persisted records, start the real application shell with:
 
   ```bash

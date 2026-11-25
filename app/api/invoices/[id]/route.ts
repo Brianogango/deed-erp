@@ -20,6 +20,7 @@ import { invoiceEditChanges } from '@/lib/finance/invoice-history'
 import { INVOICE_STATUS_MAP } from '@/lib/api-shared/invoices'
 import { restoreFromCancelledGuard } from '@/lib/finance/restore-cancelled-invoice'
 import { canCancelOrResetInvoice } from '@/lib/finance-controls'
+import { enqueueInvoicePostingRetry } from '@/lib/invoice-posting-jobs'
 
 const VALID_STATUSES = new Set([
   'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
@@ -514,12 +515,25 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
           where: { id },
           data: { postingStatus: 'unposted', documentType: postingInvoiceType },
         }).catch(() => {})
+        // The document is confirmed but has no journal. Queue the posting so a
+        // transient failure (deadlock, period briefly locked, concurrent Chart
+        // of Accounts edit) heals itself instead of waiting for someone to
+        // read an integrity report (KI-02). A permanent failure exhausts its
+        // retries and stays visible as `unposted`.
+        await enqueueInvoicePostingRetry(id, err)
       }
     } else if (willPostNow) {
       await prisma.invoice.update({
         where: { id },
         data: { postingStatus: 'unposted', documentType: postingInvoiceType },
       }).catch(() => {})
+      // The journal could not even be built (see the catch around
+      // buildInvoiceJournalInput above). Queue it anyway: the retry rebuilds
+      // the input from the invoice as it then stands, so a transient build
+      // failure clears itself, and a genuine data problem — no positive
+      // posting amount, an unselected tax category — exhausts its retries and
+      // stays `unposted` for the integrity suite to report.
+      await enqueueInvoicePostingRetry(id, ledgerWarning || 'journal could not be built')
     }
 
     const mirror = await resolveBlobInvoiceMirror(invoice.id)

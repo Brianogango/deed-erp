@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { runInfraWorker } from '@/lib/infra/worker'
+import { runStoreParityJob } from '@/lib/store-parity'
 import { refreshCoreReportSnapshots } from '@/lib/infra/report-snapshots'
 import { infraRedisBackend } from '@/lib/infra/redis'
 import { objectStoreDriver } from '@/lib/infra/object-store'
@@ -22,6 +23,12 @@ export async function POST(request: NextRequest) {
     if (!secretOk(request)) await requirePermission('admin.jobs')
     const refresh = await refreshCoreReportSnapshots()
     const worker = await runInfraWorker()
+    // Store parity (KI-01): compares the Prisma projection against the legacy
+    // copy and alerts on drift. Never fails the cron run — a parity check that
+    // cannot read must not stop snapshot refresh or the job worker.
+    const parity = await runStoreParityJob().catch(err => ({
+      error: err instanceof Error ? err.message : String(err),
+    }))
     return NextResponse.json({
       ok: true,
       redis: await infraRedisBackend(),
@@ -29,6 +36,7 @@ export async function POST(request: NextRequest) {
       reportingReplica: Boolean(reportingDatabaseUrl()),
       refresh,
       worker,
+      parity,
     })
   })
 }

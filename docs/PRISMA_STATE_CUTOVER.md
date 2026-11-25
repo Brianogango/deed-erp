@@ -51,7 +51,17 @@ never moves production to Prisma on its own** — only setting
    ```
 6. Set `STORE_BACKEND=dual`, `pm2 reload`, and run for at least one full
    business day. Every save now lands in both layers.
-7. Compare counts per key — they must match exactly:
+7. Compare counts per key — they must match exactly. This is now an endpoint
+   rather than a manual eyeball (`lib/store-parity.ts`):
+   ```bash
+   # Read-only: 200 when every key matches, 409 with the drifted keys when not.
+   curl -s -H "x-cron-secret: $CRON_SECRET" https://<host>/api/admin/store-parity | jq
+   ```
+   The same comparison runs automatically on every `/api/cron/infra` tick and
+   raises a `store_parity_drift` notification to Directors when a key drifts,
+   so a soak is certified from a check that has been running continuously
+   rather than from one command typed at the end. The underlying SQL, if you
+   want to run it by hand:
    ```sql
    SELECT key, json_array_length(value::json) AS n
      FROM app_state
@@ -59,6 +69,8 @@ never moves production to Prisma on its own** — only setting
     ORDER BY key;
    SELECT key, COUNT(*) AS n FROM erp_state_records GROUP BY key ORDER BY key;
    ```
+   Note that before the step-5 backfill the projection is legitimately empty;
+   the check reports that as "not yet backfilled", not as drift on every key.
 8. Verify create/edit flows in Sales, Purchases, Inventory, Repair, Finance,
    POS, Delivery, HR, CRM, Expenses, Deposits, Holdovers, and Settings.
 9. Take a fresh backup, then set `STORE_BACKEND=prisma` and `pm2 reload`.
@@ -70,6 +82,14 @@ never moves production to Prisma on its own** — only setting
 
 - Never delete `app_state` during the migration.
 - A runtime save failure is propagated; the API must not claim success.
+- A **mirror** failure does not fail the save (the authoritative row is already
+  committed by then) but is no longer dropped either. Every mirror is attempted
+  inline and a failure enqueues a `BackgroundJob` that the infra worker retries
+  with backoff (`lib/store-mirror-jobs.ts`); when a key exhausts its retries a
+  `store_mirror_exhausted` alert goes to Directors. The retry carries only the
+  store key, never the value that failed — it re-reads whatever the store holds
+  at retry time, because replaying a stale snapshot would resurrect rows that
+  later saves had already superseded.
 - **Absence is not deletion.** A whole-collection save that would remove more
   than 5 stored records is not applied as a replace:
   - `POST /api/store` merges the payload by id with the stored collection and

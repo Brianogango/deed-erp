@@ -38,3 +38,10 @@ backups/
 
 # Graphify knowledge-graph output (local, per machine)
 graphify-out/
+
+# Dev server logs and ad-hoc source snapshots: never tracked. These were
+# committed once (676 KB log + three tarballs of files already in git) and
+# removed in the KI-22 cleanup; history still has them if ever needed.
+dev_server.log
+*.log
+*.tar.gz

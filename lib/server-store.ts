@@ -722,7 +722,10 @@ export async function saveStoreKeys(
       if (repairs && process.env.NODE_ENV !== 'test') {
         await import('./repair-mirror')
           .then(m => m.mirrorRepairsToPrisma(repairs))
-          .catch(err => console.error('[repair-mirror] save failed:', err))
+          .catch(async err => {
+            const { enqueueMirrorRetry } = await import('./store-mirror-jobs')
+            await enqueueMirrorRetry({ key: 'deed_repairs_v2', error: err })
+          })
       }
       await notifyStoreKeysChanged(frozen)
     }
@@ -754,7 +757,10 @@ export async function saveStoreKeys(
         if (await storeRecordsTableExists()) {
           await import('./prisma-store')
             .then(m => m.writeStoreRecords(structuredEntries))
-            .catch(err => console.error('[server-store] store_records write failed:', err))
+            .catch(async err => {
+              const { enqueueMirrorRetry, STORE_RECORDS_SENTINEL } = await import('./store-mirror-jobs')
+              await enqueueMirrorRetry({ key: STORE_RECORDS_SENTINEL, keys, error: err })
+            })
         }
       }
       // Wake SSE listeners on the existing LISTEN channel.
@@ -762,25 +768,37 @@ export async function saveStoreKeys(
     }
 
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
+    //
+    // These used to be `void import(...)`: the save returned before the mirror
+    // ran, and a rejection was logged and forgotten, so Prisma could silently
+    // fall behind the copy (KI-01). They are now awaited like the table-fed
+    // mirrors above, and a failure enqueues a durable retry instead of being
+    // dropped. The mirror is still supplementary — it never fails the save,
+    // because the authoritative row is already committed by this point.
     if (process.env.NODE_ENV !== 'test') {
+      const { enqueueMirrorRetry } = await import('./store-mirror-jobs')
       if (entries['deed_deliveries']) {
-        void import('./delivery-mirror')
-          .then(async m => {
-            const parsed = JSON.parse(entries['deed_deliveries'] || '[]')
-            if (!Array.isArray(parsed)) return
+        try {
+          const parsed = JSON.parse(entries['deed_deliveries'] || '[]')
+          if (Array.isArray(parsed)) {
+            const m = await import('./delivery-mirror')
             await m.mirrorDeliveriesToPrisma(parsed)
-          })
-          .catch(err => console.error('[delivery-mirror] sync write failed:', err))
+          }
+        } catch (err) {
+          await enqueueMirrorRetry({ key: 'deed_deliveries', error: err })
+        }
       }
       const extraMirrors = ['deed_purchaseOrders'] as const
-      if (extraMirrors.some(key => entries[key])) {
-        void import('./blob-transfer')
-          .then(async m => {
-            for (const key of extraMirrors) {
-              if (entries[key]) await m.mirrorKnownDomain(key, entries[key], null)
-            }
-          })
-          .catch(err => console.error('[blob-transfer] mirror write failed:', err))
+      for (const key of extraMirrors) {
+        if (!entries[key]) continue
+        try {
+          const m = await import('./blob-transfer')
+          const result = await m.mirrorKnownDomain(key, entries[key], null)
+          const skipped = Number((result as { skipped?: number } | null)?.skipped ?? 0)
+          if (skipped > 0) throw new Error(`${skipped} row(s) the table could not hold`)
+        } catch (err) {
+          await enqueueMirrorRetry({ key, error: err })
+        }
       }
     }
   } catch (err) {
