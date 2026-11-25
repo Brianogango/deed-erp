@@ -1,11 +1,12 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "mode": "undo",
-  "customer": "Tica Health",
-  "order": "SO/2026/0006",
-  "delivery": "DN/2026/0014",
-  "cancelOpen": true,
+  "customer": "",
+  "order": "",
+  "delivery": "",
+  "cancelOpen": false,
   "force": false,
-  "dryRun": false,
-  "requestedAt": "2026-08-03T10:40:00Z",
-  "reason": "Cancel Tica Health DN/2026/0014 (ready) so delivery can be redone; release reserved stock. Does not touch posted INV/2026/0015 Dell lines."
+  "dryRun": true,
+  "reason": ""
 }

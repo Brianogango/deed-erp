@@ -1,10 +1,11 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "serials": [
     "FVFDJB00MNHP",
     "LR0AWKD",
     "LR0AWBMC"
   ],
-  "dryRun": false,
-  "requestedAt": "2026-08-02T19:15:00Z",
-  "note": "Follow-up: 8/11 already marked sold. Diagnose + mark remaining three if present under a near match."
+  "dryRun": true,
+  "note": ""
 }

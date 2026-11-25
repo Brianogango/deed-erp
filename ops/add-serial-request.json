@@ -1,6 +1,7 @@
 {
-  "name": "Lenovo ThinkPad 13 - 7th Gen Intel Core i7, 16GB RAM, 256GB SSD",
-  "serial": "LR0AWKL5",
-  "location": "warehouse",
-  "requestedAt": "2026-08-01T09:30:00Z"
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "name": "",
+  "serial": "",
+  "location": ""
 }

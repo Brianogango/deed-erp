@@ -1,11 +1,12 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "refs": [
     "REP-861745"
   ],
   "contactIds": [
     "234cae43-202e-4f94-934c-120cdf2217bd"
   ],
-  "apply": true,
-  "requestedAt": "2026-08-04T08:25:35Z",
-  "note": "Re-delete sample \u2014 previous delete was overwritten by stale client sync"
+  "apply": false,
+  "note": ""
 }

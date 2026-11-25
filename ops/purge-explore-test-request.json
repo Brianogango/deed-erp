@@ -1,6 +1,11 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "action": "purge_explore_test",
   "apply": false,
-  "match": ["explore", "test"],
-  "note": "Verify no explore/test identity matches remain."
+  "match": [
+    "explore",
+    "test"
+  ],
+  "note": ""
 }

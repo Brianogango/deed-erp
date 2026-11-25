@@ -1,5 +1,6 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "logs": true,
-  "requestedAt": "2026-08-04T08:50:00Z",
-  "note": "Diagnose quote/invoice email failures — SMTP From vs auth mismatch"
+  "note": ""
 }

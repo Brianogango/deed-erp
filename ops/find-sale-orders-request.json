@@ -1,5 +1,6 @@
 {
-  "queries": ["Moses Gitonga", "moses", "gitonga"],
-  "requestedAt": "2026-08-04T08:35:00Z",
-  "note": "Inspect Moses Gitonga SO delivery/reservation blockage"
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "queries": [],
+  "note": ""
 }

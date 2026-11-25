@@ -1,4 +1,6 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "salesUser": "sales@deed.co.ke",
   "salesPass": "",
   "salesEmail": "sales@deed.co.ke",
@@ -7,6 +9,5 @@
   "accountsEmail": "accounts@deed.co.ke",
   "restart": true,
   "envPath": "/var/www/deed-erp/.env",
-  "requestedAt": "2026-08-04T09:08:00Z",
-  "note": "SCRUBBED — passwords cleared after Contabo apply. Fill salesPass/accountsPass only for a new one-shot run."
+  "note": ""
 }

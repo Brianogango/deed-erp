@@ -14,7 +14,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # An ops request only runs when it is explicitly armed. Without this, any
+      # commit that touches the request file — a merge, a revert, a rebase, a
+      # conflict resolution — re-runs whatever payload the file happens to hold
+      # against production. Arming is a deliberate edit: set "armed": true.
+      - name: Guard — request must be armed
+        id: guard
+        run: |
+          set -euo pipefail
+          REQUEST=ops/diagnose-email-request.json
+          ARMED=$(jq -r '.armed // false' "$REQUEST")
+          if [ "$ARMED" != "true" ]; then
+            echo "::notice::$REQUEST is disarmed (armed != true) — nothing was run."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Copy script + request to server
+        if: steps.guard.outputs.armed == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -24,6 +42,7 @@ jobs:
           target: /tmp/deed-ops/
 
       - name: Run diagnose-email script
+        if: steps.guard.outputs.armed == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}

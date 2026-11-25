@@ -1,7 +1,11 @@
 {
-  "to": "hello@deed.co.ke",
-  "mailboxes": ["sales", "accounts"],
-  "dryRun": false,
-  "requestedAt": "2026-08-04T09:00:00Z",
-  "note": "Verify From+Reply-To are sales@/accounts@ with department SMTP auth"
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "to": "",
+  "mailboxes": [
+    "sales",
+    "accounts"
+  ],
+  "dryRun": true,
+  "note": ""
 }

@@ -1,8 +1,9 @@
 {
-  "since": "2026-08-01",
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "since": "",
   "excludeSamples": true,
   "skipBackups": true,
   "apply": false,
-  "requestedAt": "2026-08-04T12:20:30Z",
-  "note": "Reset apply=false after successful restore of 14 August repairs"
+  "note": ""
 }

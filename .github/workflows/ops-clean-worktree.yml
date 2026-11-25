@@ -11,7 +11,28 @@ jobs:
     name: Clean Contabo app worktree
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # An ops request only runs when it is explicitly armed. Without this, any
+      # commit that touches the request file — a merge, a revert, a rebase, a
+      # conflict resolution — re-runs whatever payload the file happens to hold
+      # against production. Arming is a deliberate edit: set "armed": true.
+      - name: Guard — request must be armed
+        id: guard
+        run: |
+          set -euo pipefail
+          REQUEST=ops/clean-worktree-request.json
+          ARMED=$(jq -r '.armed // false' "$REQUEST")
+          if [ "$ARMED" != "true" ]; then
+            echo "::notice::$REQUEST is disarmed (armed != true) — nothing was run."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Reset dirty ops-copied scripts only
+        if: steps.guard.outputs.armed == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -44,6 +65,8 @@ jobs:
               scripts/undo-sale-delivery.mjs
               scripts/set-mailbox-smtp.mjs
               scripts/test-mailbox-email.mjs
+              scripts/enrich-restored-repairs-from-backup.mjs
+              scripts/heal-restored-repair-assignments.mjs
               ops/mark-serials-sold-request.json
               ops/find-serials-request.json
               ops/find-repairs-request.json
@@ -63,6 +86,8 @@ jobs:
               ops/set-mailbox-smtp-request.json
               ops/test-mailbox-email-request.json
               ops/clean-worktree-request.json
+              ops/enrich-restored-repairs-request.json
+              ops/heal-restored-repair-assignments-request.json
             )
             for f in "${OPS_PATHS[@]}"; do
               if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then

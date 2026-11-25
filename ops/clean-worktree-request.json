@@ -1,4 +1,5 @@
 {
-  "reason": "Clear mailbox SMTP ops leftovers (.env.bak-mailbox-*, set/test-mailbox scripts) blocking Contabo production deploy",
-  "requestedAt": "2026-08-04T11:45:00Z"
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "reason": ""
 }

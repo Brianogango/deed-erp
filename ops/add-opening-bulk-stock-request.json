@@ -1,10 +1,15 @@
 {
-  "location": "warehouse",
-  "apply": true,
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "location": "",
+  "apply": false,
   "documentRef": "STOCK-IN-256GB-NVME-2280-20260831-1PC",
-  "reason": "Stock in — 1 pc 256GB NVMe SSD - M.2 2280 PCIe",
-  "note": "Brian requested 1 piece of 256GB NVMe SSD - M.2 2280 PCIe added to warehouse.",
+  "reason": "",
+  "note": "",
   "items": [
-    { "name": "256GB NVMe SSD - M.2 2280 PCIe", "qty": 1 }
+    {
+      "name": "256GB NVMe SSD - M.2 2280 PCIe",
+      "qty": 1
+    }
   ]
 }

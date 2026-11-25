@@ -1,12 +1,6 @@
 {
-  "queries": [
-    "FVFDJB00MNHP",
-    "LR0AWKD",
-    "LR0AWBMC",
-    "FVFDJB",
-    "LR0AWK",
-    "LR0AWB"
-  ],
-  "requestedAt": "2026-08-02T19:16:30Z",
-  "note": "Locate 3 sold serials not found in deed_serials exact match"
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
+  "queries": [],
+  "note": ""
 }

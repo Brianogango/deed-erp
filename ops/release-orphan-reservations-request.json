@@ -1,9 +1,10 @@
 {
+  "armed": false,
+  "_comment": "Disarmed. The workflow refuses to run unless \"armed\" is true. To run this op: fill in the fields, set the safety flags you intend, set \"armed\": true, and commit to master. Set it back to false afterwards.",
   "mode": "release",
-  "order": "SO/2026/0014",
-  "customer": "Moses Gitonga",
+  "order": "",
+  "customer": "",
   "cancelOpenQuoteDeliveries": true,
-  "dryRun": false,
-  "requestedAt": "2026-08-04T09:00:00Z",
-  "note": "Release orphan SO reservation blocking Prepare Delivery for Moses Gitonga laptop stands; cancel competing open quote DNs"
+  "dryRun": true,
+  "note": ""
 }
