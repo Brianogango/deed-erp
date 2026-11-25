@@ -14,6 +14,8 @@ import HRRecruitmentTab from './hr/HRRecruitmentTab'
 import HRAssetsTab from './hr/HRAssetsTab'
 import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
 import HRPerformanceTab from './hr/HRPerformanceTab'
+import HRAttendanceTab from './hr/HRAttendanceTab'
+import ClockCard from '@/components/hr/ClockCard'
 import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
 import { Badge, Confirm, Field, Input, Modal, Select, ModuleSkeleton, useMounted, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
@@ -39,6 +41,7 @@ type HRTab =
   | 'training'
   | 'leave'
   | 'payroll'
+  | 'attendance'
   | 'salary_advances'
   | 'documents'
   | 'assets'
@@ -49,7 +52,7 @@ type HRTab =
   | 'org_chart'
   | 'system_users'
 
-const MANAGEMENT_TABS: HRTab[] = ['employees', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
 const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
 
 
@@ -80,6 +83,7 @@ function HRContent() {
     payslips,
     employeeAssetAssignments,
     showToast,
+    systemSettings,
   } = useApp()
 
   const {
@@ -535,6 +539,7 @@ function HRContent() {
           { id: 'self_service', label: 'My portal' },
           { id: 'salary_advances', label: 'Salary advance' },
           { id: 'employees', label: 'Employees' },
+          { id: 'attendance', label: 'Attendance' },
           { id: 'leave', label: 'Leave' },
           { id: 'payroll', label: 'Payroll' },
           { id: 'recruitment', label: 'Recruitment' },
@@ -629,6 +634,8 @@ function HRContent() {
               )}
             </div>
           </div>
+        ) : tab === 'attendance' && canManageHR ? (
+          <HRAttendanceTab />
         ) : tab === 'leave' ? (
           <HRLeaveTab />
         ) : tab === 'salary_advances' ? (
@@ -651,6 +658,7 @@ function HRContent() {
           <HRAssetsTab />
         ) : tab === 'self_service' ? (
           <div className="hr-self-service p-6 flex flex-col gap-8">
+            {systemSettings?.hrAttendance && <ClockCard showToast={showToast} />}
             <MyPolicies />
             <HRMyDocuments />
             <AppraisalsPanel manage={false} />

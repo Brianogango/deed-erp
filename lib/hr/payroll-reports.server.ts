@@ -1,5 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
+import { attendancePayForPayslips } from '@/lib/hr/attendance.server'
 
 import type { StatutoryRow, StatutoryReport, AnnualEmployeeRow, PayslipDetail } from '@/lib/hr/payroll-report-types'
 export type { StatutoryRow, StatutoryReport, AnnualEmployeeRow, PayslipDetail }
@@ -173,6 +174,9 @@ export async function loadPayslipDetail(payslipId: string): Promise<PayslipDetai
       }))
     : []
   const advanceSum = r2(advances.reduce((s, a) => s + a.amount, 0))
+  // Daily-rate staff: say how the basic was worked out.
+  const att = (await attendancePayForPayslips([p.id]).catch(() => new Map())).get(p.id)
+  const basicLabel = att ? `Basic (${att.days} day${att.days === 1 ? '' : 's'} × ${att.rate.toLocaleString('en-KE')})` : 'Basic salary'
 
   return {
     id: p.id,
@@ -202,13 +206,13 @@ export async function loadPayslipDetail(payslipId: string): Promise<PayslipDetai
       mpesaNumber: p.employee.mpesaNumber ?? p.employee.phone ?? '',
     },
     earnings: keep([
-      line('Basic salary', num(p.basicSalary)),
+      line(basicLabel, num(p.basicSalary)),
       line('House allowance', num(p.houseAllowance)),
       line('Transport allowance', num(p.transportAllowance)),
       line('Commission', num(p.commission)),
       line('Overtime', num(p.overtimePay)),
       line('Other additions', num(p.otherAdditions)),
-    ], ['Basic salary']),
+    ], [basicLabel]),
     deductions: keep([
       line('PAYE', num(p.paye)),
       line('NSSF', num(p.nssf)),

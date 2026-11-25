@@ -45,6 +45,9 @@ const OPEN_PREFIXES: Array<[string, string]> = [
 
 /** Open by design, one by one. */
 const OPEN_ROUTES: Record<string, string> = {
+  'attendance/me': 'Any signed-in person sees their own clock for today (getRequiredSession).',
+  'attendance/clock': 'Any signed-in person clocks in/out for their own employee record only (getRequiredSession).',
+  'attendance/clock/options': 'Any signed-in person starts the Face ID / fingerprint check against their own passkeys (getRequiredSession).',
   'agents/list': 'agent names for pickers',
   chatter: 'comments shown with a record the person already has open',
   'contact-persons': 'contact people for pickers (writes are retired)',

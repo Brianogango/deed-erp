@@ -7,7 +7,8 @@
  */
 import crypto from 'crypto'
 
-export type PasskeyChallengeMode = 'register' | 'login'
+/** 'clock': a Face ID / fingerprint check when clocking in or out (attendance). */
+export type PasskeyChallengeMode = 'register' | 'login' | 'clock'
 export type PasskeyChallenge = { c: string; m: PasskeyChallengeMode; u?: string; exp: number }
 
 export const PASSKEY_CHALLENGE_COOKIE = 'deed-passkey-challenge'
@@ -70,7 +71,7 @@ export function openPasskeyChallenge(value: string | undefined | null, secret: s
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
   try {
     const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as PasskeyChallenge
-    if (!parsed || typeof parsed.c !== 'string' || (parsed.m !== 'register' && parsed.m !== 'login')) return null
+    if (!parsed || typeof parsed.c !== 'string' || (parsed.m !== 'register' && parsed.m !== 'login' && parsed.m !== 'clock')) return null
     if (typeof parsed.exp !== 'number' || parsed.exp <= now) return null
     return parsed
   } catch {

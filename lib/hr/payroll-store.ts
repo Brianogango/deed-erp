@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma'
 import type { PayrollRun, Payslip, PayrollLine } from '@/lib/store'
 import { calculateKenyaPayrollCapped, KENYA_PAYROLL_RULES_2026_02, money } from '@/lib/hr/kenya-payroll'
 import { plannedLoanDeduction } from '@/lib/hr/loans'
+import { dailyPayForMonth, recordAttendancePay } from '@/lib/hr/attendance.server'
+import { dailyPay } from '@/lib/hr/attendance-core'
 
 // Map the relational payroll_runs / payslips rows to the client PayrollRun /
 // Payslip shapes. The client's PayrollRun.lines are reconstructed from the
@@ -34,8 +36,9 @@ export function payslipToClient(p: any): Payslip {
   }
 }
 
-function lineFromPayslip(p: any): PayrollLine {
+function lineFromPayslip(p: any, att?: { days: number; rate: number }): PayrollLine {
   return {
+    ...(att ? { daysWorked: att.days, dailyRate: att.rate } : {}),
     employeeId: p.employeeId,
     employeeName: p.employeeName ?? '',
     basicSalary: num(p.basicSalary),
@@ -46,7 +49,7 @@ function lineFromPayslip(p: any): PayrollLine {
   }
 }
 
-export function runToClient(run: any, payslips: any[]): PayrollRun {
+export function runToClient(run: any, payslips: any[], attendance?: Map<string, { days: number; rate: number }>): PayrollRun {
   const mine = payslips.filter(p => p.payrollRunId === run.id)
   return {
     id: run.id,
@@ -54,7 +57,7 @@ export function runToClient(run: any, payslips: any[]): PayrollRun {
     month: run.periodMonth ?? String(new Date(run.periodStart).getMonth() + 1),
     year: run.periodYear ?? new Date(run.periodStart).getFullYear(),
     status: (run.status as PayrollRun['status']) ?? 'pending_approval',
-    lines: mine.map(lineFromPayslip),
+    lines: mine.map(p => lineFromPayslip(p, attendance?.get(p.id))),
     totalGross: num(run.totalGross),
     totalDeductions: num(run.totalDeductions),
     totalNet: num(run.totalNet),
@@ -95,10 +98,15 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
     }),
   ])
   const adjustmentIds: string[] = []
+  // Daily-rate staff are paid the days they attended (approved days only).
+  const period = `${run.year}-${String(periodMonthNumber).padStart(2, '0')}`
+  const daily = await dailyPayForMonth(period, employeeIds)
+  const attendancePay: { payslipId: string; payrollRunId: string; employeeId: string; period: string; days: number; rate: number; amount: number }[] = []
 
   const computed = payslips.map(ps => {
     const runLine = run.lines.find(l => l.employeeId === ps.employeeId)
-    const basic = num(runLine?.basicSalary) || num(ps.grossPay)
+    const att = daily.get(ps.employeeId)
+    const basic = att ? dailyPay(att.days, att.rate) : num(runLine?.basicSalary) || num(ps.grossPay)
     const allowances = num(runLine?.allowances)
     const advanceRows = ps.salaryAdvanceDeductions ?? []
     const advanceTotal = money(advanceRows.reduce((sum, item: any) => sum + num(item?.amount), 0))
@@ -199,6 +207,9 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
         },
       })
 
+      const att = daily.get(ps.employeeId)
+      if (att) attendancePay.push({ payslipId: payslip.id, payrollRunId: payrollRun.id, employeeId: ps.employeeId, period, days: att.days, rate: att.rate, amount: calc.basicSalary })
+
       const components = [
         ['BASIC', 'earning', calc.basicSalary, 0, true],
         ['HOUSING_ALLOWANCE', 'earning', calc.houseAllowance, 0, true],
@@ -241,5 +252,6 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
     return payrollRun
   }, { isolationLevel: 'Serializable' })
 
+  await recordAttendancePay(attendancePay)
   return created
 }

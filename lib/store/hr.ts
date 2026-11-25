@@ -196,6 +196,9 @@ export interface PayrollLine {
   statutoryDeductions?: number
   salaryAdvanceDeductions?: Array<{ advanceId: string; ref: string; amount: number; remainingAfter: number }>
   netPay: number
+  /** Daily-rate staff: the approved days and the rate the basic was built from. */
+  daysWorked?: number
+  dailyRate?: number
 }
 
 export interface PayrollRun {

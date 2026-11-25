@@ -1337,7 +1337,7 @@ export default function Settings() {
           {section === 'hr_config' && (
             <>
               <SectionCard title="Enable">
-                <SettingRow label="Attendance Tracking" desc="Clock-in / clock-out tracking per employee shift"><Toggle on={ss.hrAttendance} onChange={v => updateSystemSettings({ hrAttendance: v })} /></SettingRow>
+                <SettingRow label="Attendance Tracking" desc="Staff clock in and out from My work (office connection + Face ID / fingerprint); daily-rate staff are paid their approved days"><Toggle on={ss.hrAttendance} onChange={v => updateSystemSettings({ hrAttendance: v })} /></SettingRow>
                 <SettingRow label="Leave Management" desc="Employees apply for leave via Self Service; HR approves here"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Access Controls">

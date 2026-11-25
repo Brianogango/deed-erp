@@ -3,6 +3,7 @@ import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { runToClient, payslipToClient, createRunFromClient } from '@/lib/hr/payroll-store'
+import { attendancePayForPayslips } from '@/lib/hr/attendance.server'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
@@ -11,8 +12,9 @@ export async function GET() {
       prisma.payrollRun.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.payslip.findMany({ include: { payrollRun: { select: { periodMonth: true, periodYear: true } } } }),
     ])
+    const attendance = await attendancePayForPayslips(payslips.map(p => p.id)).catch(() => new Map<string, { days: number; rate: number }>())
     return NextResponse.json({
-      runs: runs.map(r => runToClient(r, payslips)),
+      runs: runs.map(r => runToClient(r, payslips, attendance)),
       payslips: payslips.map(payslipToClient),
     })
   })
