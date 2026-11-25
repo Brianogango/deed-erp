@@ -133,6 +133,13 @@ describe('warranty at the point of sale', () => {
     expect((await documentWarranties({ invoiceId: 'inv-so' })).map(w => w.ref)).toEqual(['WAR/0002'])
   })
 
+  it('the invoice PDF says which machines were swapped on an exchange', () => {
+    const doc = buildDeedDocumentPdf({ title: 'Invoice', ref: 'INV/1', customerName: 'Jane', lines: [{ description: 'Laptop', qty: 1, unitPrice: 1, subtotal: 1 }], subtotal: 1, taxTotal: 0, total: 1,
+      warranties: [{ ref: 'WAR/0002', productName: 'HP EliteBook 840 G5', serialNumber: '5CGNEW1', endDate: '2027-06-10', months: 12, url: 'https://erp.example/portal/warranty/a.b/check', exchangeRef: 'EXC/0004', replacesSerialNumber: '5CGOLD1' }] } as any, { name: 'Deed', currency: 'KES' } as any)
+    const text = Buffer.from(doc.output('arraybuffer')).toString('latin1')
+    expect(text).toContain('Exchanged on EXC/0004: serial 5CGOLD1 replaced by 5CGNEW1')
+  })
+
   it('the invoice PDF carries a warranty section', () => {
     const doc = buildDeedDocumentPdf({ title: 'Invoice', ref: 'INV/1', customerName: 'Jane', lines: [{ description: 'Laptop', qty: 1, unitPrice: 1, subtotal: 1 }], subtotal: 1, taxTotal: 0, total: 1,
       warranties: [{ ref: 'WAR/0001', productName: 'HP EliteBook 840 G5', serialNumber: 'NEW111', endDate: '2027-05-07', months: 6, url: 'https://erp.example/portal/warranty/a.b/check' }] } as any, { name: 'Deed', currency: 'KES' } as any)

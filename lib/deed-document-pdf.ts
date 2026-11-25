@@ -112,6 +112,9 @@ export interface DeedPdfWarranty {
   months?: number
   /** Opened by the QR: the warranty check page. */
   url: string
+  /** Given on an exchange in place of this serial. */
+  exchangeRef?: string
+  replacesSerialNumber?: string
 }
 
 export const MARGIN = 34
@@ -424,6 +427,19 @@ function drawWarranties(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput
       }
     })
     y += qr + caption + 8
+  }
+  // Machines swapped after the sale: the codes above are the machines the customer has now.
+  const swaps = list.filter(w => w.exchangeRef)
+  if (swaps.length) {
+    doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+    for (const w of swaps) {
+      y = ensureRoom(doc, company, input, y, 12)
+      const text = w.replacesSerialNumber
+        ? `Exchanged on ${w.exchangeRef}: serial ${w.replacesSerialNumber} replaced by ${w.serialNumber}`
+        : `Exchanged on ${w.exchangeRef}: serial ${w.serialNumber} given`
+      doc.text((doc.splitTextToSize(text, contentW(doc)) as string[])[0] ?? '', MARGIN, y + 6)
+      y += 10
+    }
   }
   return y + 4
 }

@@ -10,7 +10,7 @@
  */
 import { addWarrantyMonths, resolveWarrantyMonths } from '@/lib/warranty-period'
 
-export type WarrantySource = 'delivery' | 'pos' | 'kilimall'
+export type WarrantySource = 'delivery' | 'pos' | 'kilimall' | 'exchange'
 
 export type WarrantyRow = {
   id: string; ref: string
@@ -26,6 +26,12 @@ export type WarrantyRow = {
   sourceKey?: string
   issuedAt?: string
   specs?: string
+  /** Issued for a machine given on an exchange: the exchange and the machine it replaced. */
+  exchangeRef?: string
+  replacesSerialNumber?: string
+  replacesRef?: string
+  /** For an exchange warranty: the source key of the original sale (so a POS receipt still finds it). */
+  originKey?: string
 }
 
 type Line = { productId: string; productName?: string; serialId?: string; serialIds?: string[] }
@@ -36,6 +42,50 @@ export type SaleSources = {
   serials: Array<{ id: string; serial: string; productId: string; productName?: string; status: string; soldDate?: string; specs?: string }>
   products: Array<{ id: string; name?: string; warrantyMonths?: number }>
   defaultMonths?: number
+  /** Completed exchanges: the machines handed back and the ones given in their place. */
+  exchanges?: ExchangeSource[]
+}
+
+export type ExchangeSource = {
+  id: string; ref: string; status: string
+  customerId?: string; customerName?: string
+  originalSORef?: string
+  date?: string; completedDate?: string
+  returnLines?: Line[]; newLines?: Line[]
+}
+
+/**
+ * Which returned machine each given machine replaces: same product first,
+ * then in the order they were entered.
+ */
+export function pairExchangeSerials(exc: Pick<ExchangeSource, 'returnLines' | 'newLines'>): Array<{ given: string; returned: string | null }> {
+  const returned = (exc.returnLines ?? []).flatMap(l => (l.serialIds ?? []).map(id => ({ id, productId: l.productId })))
+  const given = (exc.newLines ?? []).flatMap(l => (l.serialIds ?? []).map(id => ({ id, productId: l.productId })))
+  const used = new Set<string>()
+  const take = (pick: (r: { id: string; productId: string }) => boolean) => {
+    const r = returned.find(x => !used.has(x.id) && pick(x))
+    if (r) used.add(r.id)
+    return r?.id ?? null
+  }
+  const out = given.map(g => ({ given: g.id, returned: take(r => r.productId === g.productId) }))
+  return out.map(o => (o.returned ? o : { ...o, returned: take(() => true) }))
+}
+
+/** Warranties still open on machines a completed exchange took back (exchanges made before they were cancelled there). */
+export function exchangeCancellations(existing: WarrantyRow[], exchanges: ExchangeSource[] = []): Array<{ id: string; exchangeRef: string; customerName: string }> {
+  const out: Array<{ id: string; exchangeRef: string; customerName: string }> = []
+  for (const exc of exchanges) {
+    if (exc.status !== 'completed') continue
+    const back = new Set((exc.returnLines ?? []).flatMap(l => l.serialIds ?? []))
+    for (const w of existing) {
+      if (w.status === 'cancelled' || !back.has(w.serialId)) continue
+      // A later sale of the same machine has its own, newer warranty: leave that one.
+      const at = day(exc.completedDate || exc.date)
+      if (at && w.startDate > at) continue
+      out.push({ id: w.id, exchangeRef: exc.ref, customerName: exc.customerName || '' })
+    }
+  }
+  return out
 }
 
 /** One warranty to issue (no id, ref or token yet). */
@@ -96,6 +146,49 @@ export function warrantiesToIssue(existing: WarrantyRow[], src: SaleSources): Wa
   for (const k of src.kilimallOrders) {
     if (!['dispatched', 'delivered'].includes(k.status)) continue
     add('kilimall', k.id, k.kilimallRef ? `Kilimall ${k.kilimallRef}` : k.ref, k.serialId, k.fulfilledProductId || k.productId, k.fulfilledProductName || k.productName, (k.serialId && serialById.get(k.serialId)?.soldDate) || k.dispatchedAt || k.orderDate || '', '', k.customerName)
+  }
+
+  // A machine given on an exchange carries on the warranty of the one it
+  // replaced (same dates, same sale), so the original invoice shows it in
+  // place of the machine handed back.
+  const all = [...existing, ...out as WarrantyRow[]]
+  // Oldest first, so a machine exchanged twice follows the chain back to the sale.
+  const exchanges = [...(src.exchanges ?? [])].sort((a, b) => day(a.completedDate || a.date).localeCompare(day(b.completedDate || b.date)))
+  for (const exc of exchanges) {
+    if (exc.status !== 'completed') continue
+    const at = day(exc.completedDate || exc.date) || day(new Date().toISOString())
+    const productOfGiven = new Map((exc.newLines ?? []).flatMap(l => (l.serialIds ?? []).map(id => [id, l] as const)))
+    for (const { given, returned } of pairExchangeSerials(exc)) {
+      const serial = serialById.get(given)
+      if (!serial || serial.status !== 'sold') continue
+      const sourceKey = `exchange:${exc.id}`
+      if (haveKey.has(`${sourceKey}|${given}`) || open.has(given)) continue
+      const line = productOfGiven.get(given)
+      const pid = line?.productId || serial.productId
+      const product = productById.get(pid)
+      const before = returned
+        ? all.filter(w => w.serialId === returned && (!w.startDate || w.startDate <= at)).sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)))[0]
+        : undefined
+      const months = before?.months ?? resolveWarrantyMonths(product?.warrantyMonths, src.defaultMonths)
+      const startDate = before?.startDate || at
+      out.push({
+        customerId: before?.customerId || exc.customerId || '',
+        customerName: (before?.customerName || exc.customerName || '').trim() || 'Walk-in customer',
+        productId: pid, productName: line?.productName || product?.name || serial.productName || '',
+        serialId: given, serialNumber: serial.serial,
+        deliveryId: before?.deliveryId || '', saleOrderRef: before?.saleOrderRef || exc.originalSORef || exc.ref,
+        startDate, endDate: before?.endDate || addWarrantyMonths(startDate, months), months,
+        status: 'active', source: 'exchange', sourceKey,
+        exchangeRef: exc.ref,
+        ...(returned ? { replacesSerialNumber: serialById.get(returned)?.serial || before?.serialNumber || '' } : {}),
+        ...(before ? { replacesRef: before.ref } : {}),
+        ...(before && (before.originKey || sourceKeyOf(before)) ? { originKey: before.originKey || sourceKeyOf(before) } : {}),
+        ...(serial.specs ? { specs: serial.specs } : {}),
+      })
+      all.push(out[out.length - 1] as WarrantyRow)
+      haveKey.add(`${sourceKey}|${given}`)
+      open.add(given)
+    }
   }
   return out
 }
@@ -193,6 +286,9 @@ export type DocWarranty = {
   status: WarrantyRow['status']
   /** Certificate link (path); the QR opens `${path}/check`. */
   path: string
+  /** Given on an exchange in place of this serial. */
+  exchangeRef?: string
+  replacesSerialNumber?: string
 }
 
 /**
@@ -212,7 +308,7 @@ export function warrantiesForDocument(
   const seen = new Set<string>()
   return warranties.filter(w => {
     if (w.status === 'cancelled' || seen.has(w.id)) return false
-    const hit = pos.has(sourceKeyOf(w)) || (w.deliveryId && dels.has(w.deliveryId)) || (w.saleOrderRef && refs.has(w.saleOrderRef))
+    const hit = pos.has(sourceKeyOf(w)) || (w.originKey && pos.has(w.originKey)) || (w.deliveryId && dels.has(w.deliveryId)) || (w.saleOrderRef && refs.has(w.saleOrderRef))
       || sids.has(w.serialId) || sns.has(String(w.serialNumber).trim().toLowerCase())
     if (hit) seen.add(w.id)
     return Boolean(hit)

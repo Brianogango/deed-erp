@@ -312,7 +312,11 @@ export function useStoreCore({
       setWarranties(prev => {
         const have = new Set(prev.map(w => w.id))
         const fresh = rows.filter(w => w && !have.has(w.id))
-        return fresh.length ? [...prev, ...fresh] : prev
+        // Warranties the server closed (machines handed back on an exchange) replace the copy held here.
+        const closed = new Map(rows.filter(w => w && have.has(w.id) && w.status === 'cancelled').map(w => [w.id, w]))
+        if (!fresh.length && !closed.size) return prev
+        const kept = closed.size ? prev.map(w => (closed.has(w.id) && w.status !== 'cancelled' ? { ...w, ...closed.get(w.id)! } : w)) : prev
+        return fresh.length ? [...kept, ...fresh] : kept
       })
     }
     window.addEventListener('deed:warranties-issued', onIssued)
