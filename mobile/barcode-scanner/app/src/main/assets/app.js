@@ -13,6 +13,8 @@
 
   var SCAN_INTERVAL_MS = 110;
   var CONFIRM_WINDOW_MS = 4000;   // a slow phone may only decode every few frames
+  var DETAIL_AFTER_MS = 2500;     // give up speed for detail when nothing is reading
+  var CAP_FAST = 760, CAP_DETAIL = 1200;
   var RETRY_MS = 10000;
   var BATCH = 40;
   var SAVED_KEEP = 60;
@@ -389,8 +391,13 @@
         // every frame. The whole-frame sweeps - which is what reads a vertical
         // barcode - cost as much again, so they only run every fourth frame and
         // only while nothing is being found.
-        var got = decodeFrame('band', false);
-        if (!got && (frames % 4) === 0 && (now() - lastHitAt) > 1200) {
+        // ZXing's 1D readers only scan horizontal lines, so a barcode printed
+        // across a label's short edge is invisible to a horizontal strip. The
+        // strip alternates orientation every frame: each way round gets half
+        // the frames, instead of a vertical code waiting for the rare
+        // full-frame rotated pass.
+        var got = (frames & 1) ? decodeFrame('band', false) : decodeFrame('vband', false);
+        if (!got && (frames % 8) === 0 && (now() - lastHitAt) > 1500) {
           wideTurn = !wideTurn;
           decodeFrame('full', wideTurn);
         }
@@ -404,30 +411,40 @@
     timer = setTimeout(tick, Math.max(25, 110 - lastMs));
   }
 
+  /**
+   * How far the strip may be downscaled before decoding. Shrinking costs
+   * pixels-per-bar, and a dense 16-digit label on a small sticker only has
+   * 2-4 of those to start with: below about 3 it will not decode at all. So
+   * while scans are coming in, stay small and quick; once nothing has read for
+   * a couple of seconds, hand the decoder every pixel the camera gave us.
+   */
+  function detailCap() {
+    return (now() - lastHitAt > DETAIL_AFTER_MS) ? CAP_DETAIL : CAP_FAST;
+  }
+
   function decodeFrame(mode, rotated) {
     var vw = video.videoWidth, vh = video.videoHeight;
     var srcW, srcH, maxW, reader;
+    var shortSide = Math.min(vw, vh);
+    var cap;
     if (mode === 'band') {
-      // A phone held upright hands over a PORTRAIT frame (e.g. 720x1280). Taking
-      // 60% of the height there is half a megapixel of mostly empty table, which
-      // is what made each frame cost 146ms. The strip is sized off the shorter
-      // side instead, so it stays a strip in either orientation.
+      // A phone held upright hands over a PORTRAIT frame (e.g. 720x1280), so the
+      // strip is sized off the shorter side and stays a strip either way up.
       srcW = Math.round(vw * 0.92);
-      srcH = Math.min(vh, Math.round(Math.min(vw, vh) * 0.42));
-      maxW = 760;
-      reader = readerFast;
+      srcH = Math.min(vh, Math.round(shortSide * 0.42));
+      cap = detailCap(); reader = readerFast; rotated = false;
+    } else if (mode === 'vband') {
+      // the same strip stood on end, drawn rotated, for a barcode running up
+      // and down the frame
+      srcW = Math.min(vw, Math.round(shortSide * 0.42));
+      srcH = Math.round(vh * 0.92);
+      cap = detailCap(); reader = readerFast; rotated = true;
     } else {
-      srcW = vw; srcH = vh; maxW = 0; reader = readerHard;
+      srcW = vw; srcH = vh; cap = 700; reader = readerHard;
     }
     var outW = srcW, outH = srcH, k;
-    if (maxW) {
-      if (outW > maxW) { k = maxW / outW; outW = Math.round(outW * k); outH = Math.round(outH * k); }
-    } else {
-      // cap the full-frame passes by their longest side: a portrait frame is
-      // tall, so capping width alone leaves them huge
-      var longest = Math.max(outW, outH);
-      if (longest > 700) { k = 700 / longest; outW = Math.round(outW * k); outH = Math.round(outH * k); }
-    }
+    var longest = Math.max(outW, outH);
+    if (longest > cap) { k = cap / longest; outW = Math.round(outW * k); outH = Math.round(outH * k); }
     var sx = Math.round((vw - srcW) / 2), sy = Math.round((vh - srcH) / 2);
 
     // The rotation is done while drawing rather than on the decoded bitmap:
@@ -509,7 +526,8 @@
   function updateDiag() {
     var el = $('diag');
     if (!S.settings.diag) { el.classList.add('hidden'); return; }
-    var res = (video.videoWidth || 0) + '\u00d7' + (video.videoHeight || 0);
+    var res = (video.videoWidth || 0) + '\u00d7' + (video.videoHeight || 0)
+            + (detailCap() === CAP_DETAIL ? ' detail' : '');
     var label = camLabel ? camLabel.replace(/\s*\(.*$/, '').slice(0, 26) : 'camera ?';
     el.textContent = res + '  ' + fps + 'fps  ' + lastMs + 'ms/frame\n'
                    + label + (zoomCap ? '  ' + fmtZoom(zoomNow) : '') + '\n'
@@ -524,7 +542,7 @@
   // these carry their own check digit or CRC, so one clean read is trustworthy
   var SELF_CHECKING = {
     'EAN-13': 1, 'EAN-8': 1, 'UPC-A': 1, 'UPC-E': 1, 'CODE-128': 1, 'CODE-93': 1,
-    'QR-CODE': 1, 'MICRO-QR-CODE': 1, 'DATA-MATRIX': 1, 'AZTEC': 1, 'PDF-417': 1
+    'QR-CODE': 1, 'DATA-MATRIX': 1, 'AZTEC': 1, 'PDF-417': 1
   };
 
   function onDecode(text, format) {

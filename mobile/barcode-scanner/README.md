@@ -64,6 +64,27 @@ Then **Save**.
 Each row in the sheet is: logged-at, scanned-at (device clock), barcode, qty,
 reference, device, barcode format, scan id.
 
+## Small, dense labels
+
+A 16-digit Code 128 on a small asset sticker is the hardest case. Measured
+against a fixture of one:
+
+| pixels per narrow bar | result |
+|---|---|
+| ~2.2 | never decodes, at any speed |
+| ~3.5 | decodes in ~400 ms |
+
+So it is arithmetic, not luck: fill the guide with the barcode, or use the zoom
+button. The app helps by capturing at the highest resolution the camera offers
+and, once nothing has read for 2.5 s, switching the strip to full detail
+(`detail` appears in the diagnostics line) — slower per frame, but it stops
+throwing away the pixels such a label needs.
+
+The strip also alternates orientation every frame, so a barcode printed across
+a label's short edge reads without turning the phone. ZXing's 1D readers only
+scan horizontal lines, so before 1.7.0 a vertical code depended on the rare
+full-frame rotated pass: a vertical EAN-13 now reads in ~400 ms.
+
 ## Scanning speed
 
 Measured in Chromium against a fake camera (desktop CPU, so phones are several
