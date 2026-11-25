@@ -28,13 +28,14 @@
   var DEFAULTS = {
     url: '', secret: '', device: '', ref: '', camId: '',
     dupMs: 3000, beep: true, vib: true, auto: true, read2d: true, diag: false,
-    confirm: true, weak: false, guideOnly: true
+    confirm: true, weak: true, guideOnly: true
   };
   var S = { settings: copy(DEFAULTS), log: [] };
   var qty = 1, sending = false, lastSend = '', scanning = false;
   var stream = null, track = null, timer = null, frames = 0, hits = 0;
   var lastScan = { code: '', at: 0 };
   var sighting = { code: '', at: 0, n: 0 }, rejects = 0;
+  var lastSeen = null;
   var cameras = [], camLabel = '', torchOn = false, zoomCap = null, zoomNow = 1;
   var lastMs = 0, fps = 0, fpsCount = 0, fpsAt = 0, lastErr = null;
   var lastHitAt = 0, wideTurn = false;
@@ -444,6 +445,7 @@
         // nothing. Decode wide, but only accept what sits inside the guide.
         if (mode === 'full' && S.settings.guideOnly && !insideGuide(result, rotated, outW, outH)) {
           rejects++;
+          noteDrop(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '', 'outside the guide');
         } else {
           hits++;
           onDecode(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '');
@@ -477,7 +479,16 @@
     }
     if (!n) return true;
     var fx = sumX / n, fy = sumY / n;
-    return fx > 0.03 && fx < 0.97 && fy > 0.18 && fy < 0.82;   // the 92% x 60% guide
+    return fx > 0.02 && fx < 0.98 && fy > 0.10 && fy < 0.90;   // generous around the guide
+  }
+
+  /** Record (and, with diagnostics on, announce) a read that was not accepted. */
+  function noteDrop(code, fmt, why) {
+    lastSeen = { code: String(code == null ? '' : code), fmt: fmt || '?', why: why };
+    if (S.settings.diag) {
+      setStatus('Saw ' + lastSeen.fmt + ' \u201c' + lastSeen.code.slice(0, 24) + '\u201d \u2014 ' + why);
+      updateDiag();
+    }
   }
 
   function updateDiag() {
@@ -487,7 +498,9 @@
     var label = camLabel ? camLabel.replace(/\s*\(.*$/, '').slice(0, 26) : 'camera ?';
     el.textContent = res + '  ' + fps + 'fps  ' + lastMs + 'ms/frame\n'
                    + label + (zoomCap ? '  ' + fmtZoom(zoomNow) : '') + '\n'
-                   + 'frames ' + frames + '  reads ' + hits + '  rejected ' + rejects;
+                   + 'frames ' + frames + '  reads ' + hits + '  rejected ' + rejects
+                   + (lastSeen ? '\nlast ' + lastSeen.fmt + ' ' + lastSeen.code.slice(0, 18)
+                                 + ' (' + lastSeen.why + ')' : '');
     el.classList.remove('hidden');
   }
 
@@ -504,7 +517,8 @@
     if (!code) return;
 
     // a 2-character read from a checksum-less symbology is noise, not a barcode
-    if (code.length < (WEAK[format] ? 6 : 3)) { rejects++; return; }
+    var minLen = (format === 'ITF') ? 6 : 3;
+    if (code.length < minLen) { rejects++; noteDrop(code, format, 'too short to trust'); return; }
 
     var t = Date.now();
 
@@ -522,6 +536,7 @@
         sighting.at = t;
       } else {
         sighting = { code: code, at: t, n: 1 };
+        noteDrop(code, format, 'seen once, waiting for a second read');
         return;
       }
       if (sighting.n < 2) return;
@@ -529,6 +544,7 @@
     }
 
     lastScan = { code: code, at: t };
+    lastSeen = { code: code, fmt: format || '?', why: 'accepted' };
     addScan(code, format);
   }
 

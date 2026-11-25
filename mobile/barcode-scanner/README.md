@@ -103,9 +103,14 @@ Three defences, all switchable in Settings:
 - **Confirm every scan twice.** The same value has to be decoded in two separate
   frames within 1.5 s. A real barcode repeats every few frames; a false read
   almost never does.
-- **ITF / Codabar / DataBar are off by default.** They carry no mandatory check
-  digit, so ZXing reads them out of shelf edges, fabric and blocks of text. Turn
-  them on only if your stock actually uses them.
+- **ITF / Codabar / DataBar are on**, but always need the double sighting. They
+  were off in 1.3.0 and 1.4.0, which made ITF-14 cartons and DataBar labels
+  unreadable while other scanner apps managed them fine — too high a price for
+  phantom protection that the other two rules already provide.
+
+With diagnostics on, every read that is *not* accepted is announced in the
+status bar and in the overlay's `last` line, with the reason — so a code that
+looks ignored can be told apart from a code that was never decoded at all.
 
 Diagnostics shows a `rejected` counter — reads that were thrown out by these
 rules. If it climbs while you scan normally, the guide gate is too tight for how
