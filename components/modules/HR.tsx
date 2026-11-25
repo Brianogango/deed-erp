@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { faUsers, faLaptop, faUserPlus, faCalendarPlus, faMoneyBill, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faUserPlus, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
@@ -15,7 +15,9 @@ import HRAssetsTab from './hr/HRAssetsTab'
 import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
 import HRPerformanceTab from './hr/HRPerformanceTab'
 import HRAttendanceTab from './hr/HRAttendanceTab'
-import ClockCard from '@/components/hr/ClockCard'
+import HRMyPortal from './hr/HRMyPortal'
+import HRDepartments from './hr/HRDepartments'
+import HREmployeeSummary from './hr/HREmployeeSummary'
 import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
 import { Badge, Confirm, Field, Input, Modal, Select, ModuleSkeleton, useMounted, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
@@ -24,9 +26,6 @@ import { type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
-import { MyPolicies } from './hr/HRPolicies'
-import HRMyDocuments from './hr/HRMyDocuments'
-import AppraisalsPanel from './hr/HRAppraisals'
 import { documentExpiry } from '@/lib/hr/document-status'
 import { userCan } from '@/lib/auth/can'
 import { OperationalSummary } from '@/components/erp/OperationalSummary'
@@ -42,6 +41,7 @@ type HRTab =
   | 'leave'
   | 'payroll'
   | 'attendance'
+  | 'departments'
   | 'salary_advances'
   | 'documents'
   | 'assets'
@@ -52,8 +52,19 @@ type HRTab =
   | 'org_chart'
   | 'system_users'
 
-const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
-const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'departments', 'assets', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll']
+
+/** HR's sections, grouped the way the work is: who people are, their time, their pay, their growth. */
+const TAB_GROUPS: Array<{ id: string; label: string; tabs: Array<{ id: HRTab; label: string }> }> = [
+  { id: 'portal', label: 'My portal', tabs: [{ id: 'self_service', label: 'My portal' }] },
+  { id: 'people', label: 'People', tabs: [{ id: 'employees', label: 'Employees' }, { id: 'org_chart', label: 'Org chart' }, { id: 'departments', label: 'Departments' }, { id: 'documents', label: 'Documents' }, { id: 'assets', label: 'Equipment' }] },
+  { id: 'time', label: 'Time', tabs: [{ id: 'attendance', label: 'Attendance' }, { id: 'leave', label: 'Leave' }] },
+  { id: 'pay', label: 'Pay', tabs: [{ id: 'payroll', label: 'Payroll' }, { id: 'salary_advances', label: 'Salary advances' }] },
+  { id: 'growth', label: 'Growth', tabs: [{ id: 'performance', label: 'Performance' }, { id: 'training', label: 'Training' }, { id: 'recruitment', label: 'Recruitment' }] },
+  { id: 'reports', label: 'Reports', tabs: [{ id: 'reports', label: 'Reports' }] },
+]
+const STAFF_TAB_LABELS: Partial<Record<HRTab, string>> = { self_service: 'My portal', leave: 'My leave', salary_advances: 'Salary advance', payroll: 'Payslips' }
 
 
 
@@ -110,21 +121,28 @@ function HRContent() {
   }
 
   const myEmployee = employees.find(userMatchesEmployee) ?? null
-  const myDepartment = departments.find(d => d.id === myEmployee?.departmentId)
+  // Employees carry their department's name (see /api/employees); older screens kept ids.
+  const departmentName = (value?: string) => (value ? departments.find(d => d.id === value || d.name === value)?.name ?? value : '')
+  const myDepartmentName = departmentName(myEmployee?.departmentId)
   const myPayslips = payslips.filter(p => p.employeeId === myEmployee?.id && p.status === 'published')
   const myAssets = employeeAssetAssignments.filter(
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
 
+  const leaveOn = systemSettings?.hrLeaves !== false
   const allowedTabs = useMemo<HRTab[]>(
-    () => canManageHR ? [...MANAGEMENT_TABS, ...SELF_SERVICE_TABS] : SELF_SERVICE_TABS,
-    [canManageHR],
+    () => (canManageHR ? [...MANAGEMENT_TABS, ...SELF_SERVICE_TABS] : SELF_SERVICE_TABS).filter(t => leaveOn || t !== 'leave'),
+    [canManageHR, leaveOn],
   )
   const defaultTab: HRTab = canManageHR ? 'employees' : 'self_service'
   const queryTab = searchParams.get('tab') as HRTab | null
   const initialTab = queryTab && allowedTabs.includes(queryTab) ? queryTab : defaultTab
 
   const [tab, setLocalTab] = useState<HRTab>(initialTab)
+  const visibleGroups = TAB_GROUPS
+    .map(g => ({ ...g, tabs: g.tabs.filter(t => allowedTabs.includes(t.id)) }))
+    .filter(g => g.tabs.length > 0)
+  const activeGroup = visibleGroups.find(g => g.tabs.some(t => t.id === tab)) ?? visibleGroups[0]
 
   const setTab = (newTab: HRTab) => {
     if (!allowedTabs.includes(newTab)) {
@@ -159,24 +177,16 @@ function HRContent() {
   const [viewEmpId, setViewEmpId] = useUrlRecordId({ param: 'emp' })
   const [editEmpId, setEditEmpId] = useState<string | null>(null)
 
-  const DEPARTMENTS = [
-    { value: 'HR', label: 'HR' },
-    { value: 'Sales', label: 'Sales' },
-    { value: 'Marketing', label: 'Marketing' },
-    { value: 'Finance', label: 'Finance' },
-    { value: 'Engineering', label: 'Engineering' },
-    { value: 'Logistics & Supply Chain Management', label: 'Logistics & Supply Chain Management' },
-    { value: 'Strategy & R&D', label: 'Strategy & R&D' },
-    { value: 'Administration', label: 'Administration' },
-    { value: 'Circular Computing Centre', label: 'Circular Computing Centre' },
-    { value: 'Managed IT Services', label: 'Managed IT Services' },
-    { value: 'AI & Automation', label: 'AI & Automation' },
-    { value: 'Training & Certification', label: 'Training & Certification' },
-    { value: 'ESG & Sustainability', label: 'ESG & Sustainability' },
-    { value: 'Investor Relations & Capital Raising', label: 'Investor Relations & Capital Raising' },
-    { value: 'Regional Expansion / New Markets', label: 'Regional Expansion / New Markets' },
-    { value: 'Deed Foundation', label: 'Deed Foundation' },
-  ]
+  // The department list HR edits (People → Departments); the employee's own one stays listed even if switched off.
+  const [deptNames, setDeptNames] = useState<string[]>([])
+  const loadDepartments = async () => {
+    try {
+      const r = await fetch('/api/departments', { cache: 'no-store' })
+      const d = await r.json()
+      if (Array.isArray(d.departments)) setDeptNames(d.departments.filter((x: { active: boolean }) => x.active).map((x: { name: string }) => x.name))
+    } catch { /* keep what is shown */ }
+  }
+  useEffect(() => { void loadDepartments() }, [])
 
   type EmpFormState = {
     fullName: string; employeeNo: string; email: string; workEmail: string; phone: string
@@ -457,7 +467,7 @@ function HRContent() {
         <h3>Job</h3>
         <div className="emp-form__grid">
           <Field label="Department" required>
-            <Select value={empForm.departmentId} onChange={setEF('departmentId')} options={isNew || !empForm.departmentId ? [{ value: '', label: 'Select department…' }, ...DEPARTMENTS] : DEPARTMENTS} />
+            <Select value={empForm.departmentId} onChange={setEF('departmentId')} options={[...(isNew || !empForm.departmentId ? [{ value: '', label: 'Select department…' }] : []), ...[...new Set([...deptNames, ...(empForm.departmentId ? [empForm.departmentId] : [])])].map(n => ({ value: n, label: n }))]} />
           </Field>
           <Field label="Job title"><Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" /></Field>
           <Field label="Start date" required={isNew}>
@@ -551,29 +561,36 @@ function HRContent() {
         ) : undefined}
       />
 
-      <TabBar
-        tabs={[
-          { id: 'self_service', label: 'My portal' },
-          { id: 'salary_advances', label: 'Salary advance' },
-          { id: 'employees', label: 'Employees' },
-          { id: 'attendance', label: 'Attendance' },
-          { id: 'leave', label: 'Leave' },
-          { id: 'payroll', label: 'Payroll' },
-          { id: 'recruitment', label: 'Recruitment' },
-          { id: 'org_chart', label: 'Org chart' },
-          { id: 'training', label: 'Training' },
-          { id: 'documents', label: 'Documents' },
-          { id: 'performance', label: 'Performance' },
-          { id: 'reports', label: 'Reports' },
-          { id: 'assets', label: 'Assets' },
-        ].filter(t => allowedTabs.includes(t.id as HRTab))}
-        active={tab}
-        onChange={id => setTab(id as HRTab)}
-        maxVisibleMobile={4}
-        maxVisibleTablet={6}
-        maxVisibleDesktop={6}
-        ariaLabel="HR sections"
-      />
+      {canManageHR ? (
+        <>
+          <TabBar
+            tabs={visibleGroups.map(g => ({ id: g.id, label: g.label }))}
+            active={activeGroup.id}
+            onChange={id => { const g = visibleGroups.find(x => x.id === id); if (g) setTab(g.tabs[0].id) }}
+            maxVisibleMobile={6}
+            maxVisibleTablet={6}
+            maxVisibleDesktop={6}
+            ariaLabel="HR sections"
+          />
+          {activeGroup.tabs.length > 1 && (
+            <nav className="hr-subnav" aria-label={`${activeGroup.label} sections`}>
+              {activeGroup.tabs.map(t => (
+                <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+              ))}
+            </nav>
+          )}
+        </>
+      ) : (
+        <TabBar
+          tabs={allowedTabs.map(id => ({ id, label: STAFF_TAB_LABELS[id] ?? id }))}
+          active={tab}
+          onChange={id => setTab(id as HRTab)}
+          maxVisibleMobile={4}
+          maxVisibleTablet={6}
+          maxVisibleDesktop={6}
+          ariaLabel="HR sections"
+        />
+      )}
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="mod-body">
@@ -673,93 +690,23 @@ function HRContent() {
           <HRReportsTab />
         ) : tab === 'assets' ? (
           <HRAssetsTab />
+        ) : tab === 'departments' && canManageHR ? (
+          <HRDepartments canManage={isAdmin} showToast={showToast} onChanged={() => void loadDepartments()} />
         ) : tab === 'self_service' ? (
-          <div className="hr-self-service p-6 flex flex-col gap-8">
-            {systemSettings?.hrAttendance && <ClockCard showToast={showToast} />}
-            <MyPolicies />
-            <HRMyDocuments />
-            <AppraisalsPanel manage={false} />
-            <div className="hr-self-service__hero flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="hr-self-service__identity flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-2xl font-bold border border-primary-500/20">
-                  {currentUser?.name?.slice(0, 1).toUpperCase()}
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--text-1)]">{currentUser?.name}</h2>
-                  <p className="text-xs text-[var(--text-3)]">
-                    {myEmployee?.jobTitle} · {myDepartment?.name}
-                  </p>
-                </div>
-              </div>
-              <div className="hr-self-service__actions flex items-center gap-2">
-                <button className="btn-secondary flex items-center gap-2" onClick={() => setTab('salary_advances')}>
-                  <Fa icon={faMoneyBill} />
-                  <span>Salary Advance</span>
-                </button>
-                <button className="btn-primary flex items-center gap-2" onClick={() => setTab('leave')}>
-                  <Fa icon={faCalendarPlus} />
-                  <span>Request Leave</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="hr-self-service__grid grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Leave Balance</h3>
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--text-3)]">Annual Leave</span>
-                    <span className="font-bold">12 / 21 days</span>
-                  </div>
-                  <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full" style={{ width: '60%' }} />
-                  </div>
-                </div>
-              </div>
-              <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Recent Payslips</h3>
-                <div className="flex flex-col gap-2">
-                  {myPayslips.slice(0, 3).map(p => (
-                    <div key={p.id} className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--text-2)]">{p.month} {p.year}</span>
-                      <button className="text-primary-600 hover:underline" onClick={() => downloadPayslipPdf(p.id)}>Download</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTab('salary_advances')}
-                className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)] text-left transition-all hover:shadow-lg active:scale-[0.99]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-[var(--text-1)] mb-1">Salary Advance</h3>
-                    <p className="text-xs text-[var(--text-3)] leading-relaxed">Apply for an advance and track approval, payout, and payroll deductions.</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-primary-500/10 text-primary-600 flex items-center justify-center">
-                    <Fa icon={faMoneyBill} />
-                  </div>
-                </div>
-                <span className="btn-primary mt-4 text-[11px] inline-flex">Apply / View</span>
-              </button>
-              <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">My Assets</h3>
-                <div className="flex flex-col gap-2">
-                  {myAssets.length > 0 ? (
-                    myAssets.map(a => (
-                      <div key={a.id} className="flex items-center gap-2 text-xs">
-                        <Fa icon={faLaptop} className="text-[var(--text-4)]" />
-                        <span className="text-[var(--text-2)]">{a.productName}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-[var(--text-4)]">No assets assigned</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <HRMyPortal
+            name={currentUser?.name ?? ''}
+            employee={myEmployee}
+            department={myDepartmentName}
+            payslips={myPayslips}
+            assets={myAssets.map(a => ({ id: a.id, productName: a.productName, serial: (a as { serialNumber?: string }).serialNumber }))}
+            attendanceOn={!!systemSettings?.hrAttendance}
+            leaveOn={leaveOn}
+            onRequestLeave={() => setTab('leave')}
+            onSalaryAdvance={() => setTab('salary_advances')}
+            onPayslips={() => setTab('payroll')}
+            downloadPayslip={id => void downloadPayslipPdf(id)}
+            showToast={showToast}
+          />
         ) : (
           <div className="p-20 text-center">
             <p className="text-sm text-[var(--text-4)]">This section is coming soon</p>
@@ -818,8 +765,9 @@ function HRContent() {
                     <p className="text-xs text-[var(--text-4)]">{viewEmployee.employeeNo}</p>
                   </div>
                 </div>
+                <HREmployeeSummary employee={viewEmployee} documents={hrDocuments} canSeePay={canSetPayBasis} />
                 <div className="hr-employee-profile__facts grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                  <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold">{departmentName(viewEmployee.departmentId) || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
                   <div><span className="text-[var(--text-4)]">Work email</span><p className="font-semibold">{viewEmployee.workEmail || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Personal email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>

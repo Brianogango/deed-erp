@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayValueForHours, payableValue, payableDays, networkKey, isOfficeIp, dayProblems, monthRange, dailyPay } from '@/lib/hr/attendance-core'
+import { unpaidLeaveDeduction, workingDaysBetween, dayValueForHours, payableValue, payableDays, networkKey, isOfficeIp, dayProblems, monthRange, dailyPay } from '@/lib/hr/attendance-core'
 
 const at = (h: number, m = 0) => `2026-11-24T${String(h - 3).padStart(2, '0')}:${String(m).padStart(2, '0')}:00.000Z` // Nairobi is UTC+3
 
@@ -42,6 +42,13 @@ describe('attendance rules', () => {
     expect(isOfficeIp('2c0f:fe38:2001:abcd:9:8:7:6', office)).toBe(true)
     expect(isOfficeIp('2c0f:fe38:2001:abce::5', office)).toBe(false)
     expect(isOfficeIp(null, office)).toBe(false)
+  })
+
+  it('unpaid leave: basic ÷ working days of the month × unpaid working days', () => {
+    expect(workingDaysBetween('2026-11-01', '2026-11-30')).toBe(21)
+    const cut = unpaidLeaveDeduction(42000, '2026-11', [{ startDate: '2026-11-27', endDate: '2026-12-03' }]) // Fri 27 + Mon 30 in November
+    expect(cut).toEqual({ days: 2, perDay: 2000, amount: 4000 })
+    expect(unpaidLeaveDeduction(42000, '2026-11', [])).toEqual({ days: 0, perDay: 2000, amount: 0 })
   })
 
   it('month range', () => {

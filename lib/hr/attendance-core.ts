@@ -130,3 +130,39 @@ export function monthRange(period: string): { from: string; to: string } {
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
   return { from: `${period}-01`, to: `${period}-${String(last).padStart(2, '0')}` }
 }
+
+// ── Unpaid leave (monthly staff) ────────────────────────────────────────────
+
+/** Mon–Fri days in [from, to] (inclusive) that are not public holidays. */
+export function workingDaysBetween(from: string, to: string, holidays: Iterable<string> = []): number {
+  const off = new Set(holidays)
+  const d = new Date(`${from}T12:00:00Z`)
+  const end = new Date(`${to}T12:00:00Z`)
+  let n = 0
+  while (d <= end) {
+    const dow = d.getUTCDay()
+    if (dow !== 0 && dow !== 6 && !off.has(d.toISOString().slice(0, 10))) n += 1
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return n
+}
+
+/**
+ * What approved unpaid leave takes off a monthly salary: basic ÷ the month's
+ * working days × the unpaid working days that fall in the month.
+ */
+export function unpaidLeaveDeduction(basic: number, period: string, leave: Array<{ startDate: string; endDate: string }>, holidays: Iterable<string> = []): { days: number; perDay: number; amount: number } {
+  const { from, to } = monthRange(period)
+  const hols = [...holidays]
+  const monthDays = workingDaysBetween(from, to, hols)
+  if (!monthDays || basic <= 0) return { days: 0, perDay: 0, amount: 0 }
+  let days = 0
+  for (const l of leave) {
+    const a = l.startDate.slice(0, 10) > from ? l.startDate.slice(0, 10) : from
+    const b = l.endDate.slice(0, 10) < to ? l.endDate.slice(0, 10) : to
+    if (a <= b) days += workingDaysBetween(a, b, hols)
+  }
+  days = Math.min(days, monthDays)
+  const perDay = Math.round((basic / monthDays) * 100) / 100
+  return { days, perDay, amount: Math.min(basic, Math.round(perDay * days * 100) / 100) }
+}

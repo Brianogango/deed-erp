@@ -1341,11 +1341,10 @@ export default function Settings() {
             <>
               <SectionCard title="Enable">
                 <SettingRow label="Attendance Tracking" desc="Staff clock in and out from My work (office connection + Face ID / fingerprint); daily-rate staff are paid their approved days"><Toggle on={ss.hrAttendance} onChange={v => updateSystemSettings({ hrAttendance: v })} /></SettingRow>
-                <SettingRow label="Leave Management" desc="Employees apply for leave via Self Service; HR approves here"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></SettingRow>
+                <SettingRow label="Leave Management" desc="Employees apply for leave from My portal; HR approves it. Off: the Leave section and leave requests are hidden"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Access Controls">
                 <SettingRow label="Restrict Salary Information" desc="Only HR Admin and Finance can view salary, deductions, and payslip data"><Toggle on={ss.hrRestrictSalaryInfo} onChange={v => updateSystemSettings({ hrRestrictSalaryInfo: v })} /></SettingRow>
-                <SettingRow label="Role-Based Visibility" desc="Employees in Self Service only see their own records — not company-wide data"><Toggle on={ss.hrRoleBasedVisibility} onChange={v => updateSystemSettings({ hrRoleBasedVisibility: v })} /></SettingRow>
               </SectionCard>
             </>
           )}

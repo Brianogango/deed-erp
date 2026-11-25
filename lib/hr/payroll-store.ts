@@ -3,8 +3,8 @@ import prisma from '@/lib/prisma'
 import type { PayrollRun, Payslip, PayrollLine } from '@/lib/store'
 import { calculateKenyaPayrollCapped, KENYA_PAYROLL_RULES_2026_02, money } from '@/lib/hr/kenya-payroll'
 import { plannedLoanDeduction } from '@/lib/hr/loans'
-import { dailyPayForMonth, recordAttendancePay } from '@/lib/hr/attendance.server'
-import { dailyPay } from '@/lib/hr/attendance-core'
+import { dailyPayForMonth, recordAttendancePay, unpaidLeaveForMonth } from '@/lib/hr/attendance.server'
+import { dailyPay, unpaidLeaveDeduction } from '@/lib/hr/attendance-core'
 
 // Map the relational payroll_runs / payslips rows to the client PayrollRun /
 // Payslip shapes. The client's PayrollRun.lines are reconstructed from the
@@ -36,9 +36,10 @@ export function payslipToClient(p: any): Payslip {
   }
 }
 
-function lineFromPayslip(p: any, att?: { days: number; rate: number }): PayrollLine {
+function lineFromPayslip(p: any, att?: { days: number; rate: number; kind?: string }): PayrollLine {
   return {
-    ...(att ? { daysWorked: att.days, dailyRate: att.rate } : {}),
+    ...(att && att.kind !== 'unpaid_leave' ? { daysWorked: att.days, dailyRate: att.rate } : {}),
+    ...(att?.kind === 'unpaid_leave' ? { unpaidLeaveDays: att.days } : {}),
     employeeId: p.employeeId,
     employeeName: p.employeeName ?? '',
     basicSalary: num(p.basicSalary),
@@ -49,7 +50,7 @@ function lineFromPayslip(p: any, att?: { days: number; rate: number }): PayrollL
   }
 }
 
-export function runToClient(run: any, payslips: any[], attendance?: Map<string, { days: number; rate: number }>): PayrollRun {
+export function runToClient(run: any, payslips: any[], attendance?: Map<string, { days: number; rate: number; kind?: string }>): PayrollRun {
   const mine = payslips.filter(p => p.payrollRunId === run.id)
   return {
     id: run.id,
@@ -101,12 +102,19 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
   // Daily-rate staff are paid the days they attended (approved days only).
   const period = `${run.year}-${String(periodMonthNumber).padStart(2, '0')}`
   const daily = await dailyPayForMonth(period, employeeIds)
-  const attendancePay: { payslipId: string; payrollRunId: string; employeeId: string; period: string; days: number; rate: number; amount: number }[] = []
+  // Monthly staff: approved unpaid leave comes off the basic (basic ÷ the month's working days per day).
+  const unpaid = await unpaidLeaveForMonth(period, employeeIds.filter(id => !daily.has(id)))
+  const unpaidCut = new Map<string, { days: number; perDay: number; amount: number }>()
+  const attendancePay: { payslipId: string; payrollRunId: string; employeeId: string; period: string; days: number; rate: number; amount: number; kind?: 'daily' | 'unpaid_leave' }[] = []
 
   const computed = payslips.map(ps => {
     const runLine = run.lines.find(l => l.employeeId === ps.employeeId)
     const att = daily.get(ps.employeeId)
-    const basic = att ? dailyPay(att.days, att.rate) : num(runLine?.basicSalary) || num(ps.grossPay)
+    let basic = att ? dailyPay(att.days, att.rate) : num(runLine?.basicSalary) || num(ps.grossPay)
+    if (!att && unpaid.leave.has(ps.employeeId)) {
+      const cut = unpaidLeaveDeduction(basic, period, unpaid.leave.get(ps.employeeId)!, unpaid.holidays)
+      if (cut.amount > 0) { unpaidCut.set(ps.employeeId, cut); basic = money(basic - cut.amount) }
+    }
     const allowances = num(runLine?.allowances)
     const advanceRows = ps.salaryAdvanceDeductions ?? []
     const advanceTotal = money(advanceRows.reduce((sum, item: any) => sum + num(item?.amount), 0))
@@ -209,6 +217,8 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
 
       const att = daily.get(ps.employeeId)
       if (att) attendancePay.push({ payslipId: payslip.id, payrollRunId: payrollRun.id, employeeId: ps.employeeId, period, days: att.days, rate: att.rate, amount: calc.basicSalary })
+      const cut = unpaidCut.get(ps.employeeId)
+      if (cut) attendancePay.push({ payslipId: payslip.id, payrollRunId: payrollRun.id, employeeId: ps.employeeId, period, days: cut.days, rate: cut.perDay, amount: cut.amount, kind: 'unpaid_leave' })
 
       const components = [
         ['BASIC', 'earning', calc.basicSalary, 0, true],

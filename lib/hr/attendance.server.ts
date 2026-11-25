@@ -69,6 +69,8 @@ export function ensureAttendanceTables(): Promise<void> {
           amount NUMERIC(14,2) NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )`
+      // 'daily' (days × rate) or 'unpaid_leave' (days taken off a monthly salary at daily_rate each).
+      await sql`ALTER TABLE attendance_pay ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'daily'`
     })().catch(err => { ready = null; throw err })
   }
   return ready
@@ -308,22 +310,43 @@ export async function dailyPayForMonth(period: string, employeeIds?: string[]): 
   return out
 }
 
-export async function recordAttendancePay(rows: { payslipId: string; payrollRunId: string; employeeId: string; period: string; days: number; rate: number; amount: number }[]) {
+export type AttendancePayKind = 'daily' | 'unpaid_leave'
+
+export async function recordAttendancePay(rows: { payslipId: string; payrollRunId: string; employeeId: string; period: string; days: number; rate: number; amount: number; kind?: AttendancePayKind }[]) {
   if (!rows.length) return
   await ensureAttendanceTables()
   for (const r of rows) {
     await sql`
-      INSERT INTO attendance_pay (payslip_id, payroll_run_id, employee_id, period, days, daily_rate, amount)
-      VALUES (${r.payslipId}, ${r.payrollRunId}, ${r.employeeId}, ${r.period}, ${r.days}, ${r.rate}, ${r.amount})
-      ON CONFLICT (payslip_id) DO UPDATE SET days = EXCLUDED.days, daily_rate = EXCLUDED.daily_rate, amount = EXCLUDED.amount`
+      INSERT INTO attendance_pay (payslip_id, payroll_run_id, employee_id, period, days, daily_rate, amount, kind)
+      VALUES (${r.payslipId}, ${r.payrollRunId}, ${r.employeeId}, ${r.period}, ${r.days}, ${r.rate}, ${r.amount}, ${r.kind ?? 'daily'})
+      ON CONFLICT (payslip_id) DO UPDATE SET days = EXCLUDED.days, daily_rate = EXCLUDED.daily_rate, amount = EXCLUDED.amount, kind = EXCLUDED.kind`
   }
 }
 
-export async function attendancePayForPayslips(payslipIds: string[]): Promise<Map<string, { days: number; rate: number }>> {
-  const out = new Map<string, { days: number; rate: number }>()
+export async function attendancePayForPayslips(payslipIds: string[]): Promise<Map<string, { days: number; rate: number; kind: AttendancePayKind }>> {
+  const out = new Map<string, { days: number; rate: number; kind: AttendancePayKind }>()
   if (!payslipIds.length) return out
   await ensureAttendanceTables()
-  const { rows } = await sql`SELECT payslip_id, days, daily_rate FROM attendance_pay WHERE payslip_id = ANY(${payslipIds})`
-  for (const r of rows) out.set(String(r.payslip_id), { days: Number(r.days), rate: Number(r.daily_rate) })
+  const { rows } = await sql`SELECT payslip_id, days, daily_rate, kind FROM attendance_pay WHERE payslip_id = ANY(${payslipIds})`
+  for (const r of rows) out.set(String(r.payslip_id), { days: Number(r.days), rate: Number(r.daily_rate), kind: r.kind === 'unpaid_leave' ? 'unpaid_leave' : 'daily' })
   return out
+}
+
+/** Approved unpaid leave of monthly-paid staff in a month ("2026-11"), and the public holidays, for payroll. */
+export async function unpaidLeaveForMonth(period: string, employeeIds: string[]): Promise<{ leave: Map<string, Array<{ startDate: string; endDate: string }>>; holidays: string[] }> {
+  const { from, to } = monthRange(period)
+  const [rows, hols] = await Promise.all([
+    prisma.leaveRequest.findMany({
+      where: { employeeId: { in: employeeIds }, leaveType: 'unpaid', status: 'approved', startDate: { lte: new Date(`${to}T00:00:00Z`) }, endDate: { gte: new Date(`${from}T00:00:00Z`) } },
+      select: { employeeId: true, startDate: true, endDate: true },
+    }),
+    prisma.publicHoliday.findMany({ where: { holidayDate: { gte: new Date(`${from}T00:00:00Z`), lte: new Date(`${to}T00:00:00Z`) } }, select: { holidayDate: true } }),
+  ])
+  const leave = new Map<string, Array<{ startDate: string; endDate: string }>>()
+  for (const r of rows) {
+    const list = leave.get(r.employeeId) ?? []
+    list.push({ startDate: r.startDate.toISOString().slice(0, 10), endDate: r.endDate.toISOString().slice(0, 10) })
+    leave.set(r.employeeId, list)
+  }
+  return { leave, holidays: hols.map(h => h.holidayDate.toISOString().slice(0, 10)) }
 }

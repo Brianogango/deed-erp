@@ -175,3 +175,91 @@
 @media (max-width: 640px) {
   .emp-form__grid, .emp-form__grid--3 { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── HR sub-sections (People / Time / Pay / Growth) ─────────────────────── */
+.hr-subnav { display: flex; gap: 0.25rem; overflow-x: auto; margin: 0.75rem 0.75rem 0; padding: 0.1875rem; border-radius: var(--radius-sm); background: var(--bg-surface); scrollbar-width: none; }
+@media (min-width: 640px) { .hr-subnav { margin: 1rem 1rem 0; align-self: flex-start; width: max-content; max-width: calc(100% - 2rem); } }
+.hr-subnav::-webkit-scrollbar { display: none; }
+.hr-subnav button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 0.875rem;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: none;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hr-subnav button.is-active { background: var(--bg-card); color: var(--text-1); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+
+/* ── My portal (components/modules/hr/HRMyPortal.tsx) ───────────────────── */
+.hr-portal { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; }
+@media (min-width: 640px) { .hr-portal { padding: 1.25rem; gap: 1.25rem; } }
+.hr-portal__hero { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; }
+.hr-portal__avatar {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 48px; height: 48px; border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);
+  font-size: 18px; font-weight: 800;
+}
+.hr-portal__who { flex: 1; min-width: 0; }
+.hr-portal__who h2 { margin: 0; color: var(--text-1); font-size: 16px; font-weight: 800; }
+.hr-portal__who p { margin: 0.125rem 0 0; color: var(--text-3); font-size: 12px; }
+.hr-portal__actions { display: flex; gap: 0.5rem; }
+.hr-portal__actions button { min-height: 40px; padding: 0 1rem; font-size: 13px; }
+.hr-portal__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
+.hr-portal__card {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 1rem; border: 1px solid var(--border-lt); border-radius: var(--radius-md); background: var(--bg-card);
+}
+.hr-portal__card h3 { margin: 0; color: var(--text-2); font-size: 12px; font-weight: 700; }
+.hr-portal__big { margin: 0; color: var(--text-1); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hr-portal__big span { color: var(--text-3); font-size: 12px; font-weight: 500; }
+.hr-portal__bar { height: 6px; border-radius: 999px; background: var(--bg-surface); overflow: hidden; }
+.hr-portal__bar span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+.hr-portal__muted { margin: 0; color: var(--text-3); font-size: 12px; }
+.hr-portal__note { margin: 0; color: var(--text-1); font-size: 12px; font-weight: 600; }
+.hr-portal__row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin-top: auto; }
+.hr-portal__row .btn-outline { min-height: 36px; padding: 0 0.875rem; font-size: 12px; }
+.hr-portal__link { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--primary); font-size: 12px; font-weight: 600; cursor: pointer; }
+.hr-portal__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; color: var(--text-1); font-size: 13px; }
+.hr-portal__list span { color: var(--text-3); font-size: 12px; }
+@media (max-width: 640px) {
+  .hr-portal__actions { width: 100%; }
+  .hr-portal__actions button { flex: 1; }
+}
+
+/* ── Employee profile summary (HREmployeeSummary.tsx) ───────────────────── */
+.hr-emp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; }
+.hr-emp-summary__tile { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; padding: 0.625rem 0.75rem; border-radius: var(--radius-sm); background: var(--bg-surface); }
+.hr-emp-summary__tile span { color: var(--text-3); font-size: 11px; font-weight: 600; }
+.hr-emp-summary__tile strong { color: var(--text-1); font-size: 13px; overflow-wrap: anywhere; }
+.hr-emp-summary__tile small { color: var(--text-3); font-size: 11px; }
+.hr-emp-summary__tile.is-warn { background: color-mix(in srgb, var(--warning) 12%, transparent); }
+
+/* ── Departments (HRDepartments.tsx) ─────────────────────────────────────── */
+.hr-depts { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; max-width: 720px; }
+.hr-depts__add, .hr-depts__rename { display: flex; gap: 0.5rem; flex: 1; }
+.hr-depts__add .form-input, .hr-depts__rename .form-input { flex: 1; min-width: 0; }
+.hr-depts__add button, .hr-depts__rename button { min-height: 40px; padding: 0 0.875rem; font-size: 12px; white-space: nowrap; }
+.hr-depts__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.375rem; }
+.hr-depts__list > li {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 1rem;
+  padding: 0.625rem 0.75rem; border: 1px solid var(--border-lt); border-radius: var(--radius-sm); background: var(--bg-card);
+}
+.hr-depts__list > li.is-off { opacity: 0.65; }
+.hr-depts__list > li > div:first-child { display: flex; flex-direction: column; min-width: 0; }
+.hr-depts__list strong { color: var(--text-1); font-size: 13px; }
+.hr-depts__list span { color: var(--text-3); font-size: 12px; }
+.hr-depts__actions { display: flex; gap: 0.375rem; flex-shrink: 0; }
+.hr-depts__actions button { min-height: 34px; padding: 0 0.75rem; font-size: 12px; }
+.hr-depts__toggle { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--primary); font-size: 12px; font-weight: 600; cursor: pointer; }
+.hr-depts__note { margin: 0; color: var(--text-3); font-size: 12px; }
+@media (max-width: 640px) {
+  .hr-depts__add { flex-direction: column; }
+  .hr-depts__list > li { flex-direction: column; align-items: stretch; }
+  .hr-depts__actions button { flex: 1; }
+}
