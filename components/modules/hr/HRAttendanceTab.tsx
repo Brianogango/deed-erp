@@ -156,7 +156,21 @@ export default function HRAttendanceTab() {
                 <div>
                   <strong>{nameOf(d.employeeId)}</strong>
                   <span>{fmtDay(d.workDate)} · {dayLine(d)}</span>
-                  <small>{dayProblems(d, today, d.workDate).map(p => PROBLEM_TEXT[p]).join(' · ') || 'Waiting for approval'}</small>
+                  {/* These are the reason the row is here at all, so they are
+                      read at the same size as the day and marked as the
+                      exception they describe — they used to be 11px grey,
+                      quieter than the date they qualify. */}
+                  {(() => {
+                    const problems = dayProblems(d, today, d.workDate)
+                    if (problems.length === 0) {
+                      return <small className="hr-attendance__why">Waiting for approval</small>
+                    }
+                    return (
+                      <small className="hr-attendance__why is-flagged">
+                        {problems.map(pr => <span key={pr} className="hr-attendance__flag">{PROBLEM_TEXT[pr]}</span>)}
+                      </small>
+                    )
+                  })()}
                 </div>
                 {!lockedBy && (
                   <div className="hr-attendance__actions">
@@ -177,17 +191,29 @@ export default function HRAttendanceTab() {
             {summary.map(s => (
               <li key={s.employee.id}>
                 <strong>{s.employee.fullName}</strong>
+                {/* Monthly salary is the default and was repeating, in link
+                    blue, on every row. It is muted now; daily rate is the
+                    exception these day counts actually drive, so that is what
+                    carries the weight. */}
                 <span>
                   {canPay
-                    ? <button type="button" className="hr-attendance__link" onClick={() => setPayEdit({ employeeId: s.employee.id, name: s.employee.fullName, basis: s.basis, rate: s.rate ? String(s.rate) : '' })}>
+                    ? <button
+                        type="button"
+                        className={`hr-attendance__link${s.basis === 'daily' ? '' : ' is-default'}`}
+                        onClick={() => setPayEdit({ employeeId: s.employee.id, name: s.employee.fullName, basis: s.basis, rate: s.rate ? String(s.rate) : '' })}
+                      >
                         {s.basis === 'daily' ? `${fmtKes(s.rate)} a day` : 'Monthly salary'}
                       </button>
-                    : s.basis === 'daily' ? `${fmtKes(s.rate)} a day` : 'Monthly salary'}
+                    : <span className={s.basis === 'daily' ? undefined : 'hr-attendance__muted'}>
+                        {s.basis === 'daily' ? `${fmtKes(s.rate)} a day` : 'Monthly salary'}
+                      </span>}
                 </span>
-                <span data-label="Days in">{s.present}</span>
-                <span data-label="Days to pay">{s.payable}</span>
-                <span data-label="Waiting">{s.waiting || '—'}</span>
-                <span data-label="Pay for days">{s.basis === 'daily' ? fmtKes(dailyPay(s.payable, s.rate)) : '—'}</span>
+                {/* A grid of full-strength zeros hides the one row that has a
+                    number in it. Zero is context; anything else is the news. */}
+                <span data-label="Days in" className={s.present ? 'hr-attendance__num' : 'hr-attendance__num is-zero'}>{s.present}</span>
+                <span data-label="Days to pay" className={s.payable ? 'hr-attendance__num' : 'hr-attendance__num is-zero'}>{s.payable}</span>
+                <span data-label="Waiting" className={s.waiting ? 'hr-attendance__num is-waiting' : 'hr-attendance__num is-zero'}>{s.waiting || '—'}</span>
+                <span data-label="Pay for days" className={s.basis === 'daily' ? 'hr-attendance__num' : 'hr-attendance__num is-zero'}>{s.basis === 'daily' ? fmtKes(dailyPay(s.payable, s.rate)) : '—'}</span>
               </li>
             ))}
           </ul>

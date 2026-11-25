@@ -22159,6 +22159,127 @@ body:has(.crm-workspace) [role="dialog"] > div {
   min-width: 0;
 }
 
+/* ── Employee row ─────────────────────────────────────────────────────────
+   Six low-saturation tints, chosen per person by avatarTint() in HR.tsx. A
+   directory is scanned far more often than it is read, and a colour that
+   never moves for a given person is the cheapest way to make a familiar row
+   findable before the name is parsed. Saturation stays low so fifteen of
+   them still read as one calm table. */
+.hr-person { display: flex; align-items: center; gap: .625rem; min-width: 0; }
+.hr-person__avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  font-size: .5625rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: var(--hr-tint-bg, var(--bg-surface));
+  color: var(--hr-tint-fg, var(--text-3));
+}
+.hr-person__avatar[data-tint="0"] { --hr-tint-bg: #E0F2FE; --hr-tint-fg: #075985; }
+.hr-person__avatar[data-tint="1"] { --hr-tint-bg: #E7EAF6; --hr-tint-fg: #30337A; }
+.hr-person__avatar[data-tint="2"] { --hr-tint-bg: #DCFCE7; --hr-tint-fg: #15643A; }
+.hr-person__avatar[data-tint="3"] { --hr-tint-bg: #FEF3C7; --hr-tint-fg: #854D0E; }
+.hr-person__avatar[data-tint="4"] { --hr-tint-bg: #FCE7F3; --hr-tint-fg: #9D174D; }
+.hr-person__avatar[data-tint="5"] { --hr-tint-bg: #E6EAEE; --hr-tint-fg: #334155; }
+
+.hr-person__id { display: flex; flex-direction: column; gap: .0625rem; min-width: 0; }
+.hr-person__name {
+  color: var(--text-1);
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The staff number is a reference, not prose: tabular figures keep the
+   column of ids straight under the names. */
+.hr-person__no {
+  color: var(--text-4);
+  font-size: .625rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Every employee has a status, so the common one is stated rather than left
+   as an em dash — which in every other column here means "no value". It is
+   quiet so the exited badge beside it still carries all the weight. */
+.hr-status-quiet { color: var(--text-4); font-size: .6875rem; font-weight: 500; }
+
+/* A genuinely absent value. Muted so a column of them reads as empty rather
+   than as content. */
+.hr-empty-cell { color: var(--text-4); }
+
+/* ── Headcount bars ───────────────────────────────────────────────────────
+   The share is the only thing that varies per row, so it is the only thing
+   passed inline. Keeping the colour in a class is also what fixes the bars:
+   an inline `background: var(--primary)` shorthand painted nothing. */
+.hr-bars { display: flex; flex-direction: column; gap: .5rem; margin: 0; }
+.hr-bars__row {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+}
+.hr-bars__label {
+  color: var(--text-2);
+  font-size: .75rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.hr-bars__track {
+  height: .5rem;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--border-lt);
+  overflow: hidden;
+}
+.hr-bars__fill {
+  width: var(--hr-bar-share, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--primary);
+}
+.hr-bars__value {
+  display: flex;
+  align-items: baseline;
+  gap: .375rem;
+  margin: 0;
+  color: var(--text-1);
+  font-size: .75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* The count is the fact; the share is context, so it reads one step down. */
+.hr-bars__share {
+  min-width: 2.25rem;
+  color: var(--text-4);
+  font-size: .6875rem;
+  font-weight: 500;
+  text-align: right;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hr-bars__fill { transition: width var(--dur-2, 180ms) ease-out; }
+}
+
+/* Long job titles were clipped mid-word with no ellipsis: `.table-row > *`
+   already truncates, but a child span inside the cell overflows it silently
+   instead. Truncating on this element restores the ellipsis and matches the
+   Department column. The full text stays in the title attribute and in the
+   export. */
+.hr-cell-clamp {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .hr-attention__title {
   color: var(--work-navy);
   font-size: .9rem;

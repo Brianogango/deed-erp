@@ -74,6 +74,21 @@ const STAFF_TAB_LABELS: Partial<Record<HRTab, string>> = { self_service: 'My por
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * A stable tint index for a person's avatar, derived from their name.
+ *
+ * Thirteen identically coloured circles carry no information and cost the
+ * widest column 32px each. A colour that never changes for a given person is
+ * something the eye learns, so a familiar row is found by shape before the
+ * name is read. Six low-saturation tints only — this is a directory, not a
+ * palette (see --hr-tint-* in globals.css).
+ */
+function avatarTint(name: string): number {
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return hash % 6
+}
+
 export default function HR() {
   return (
     <Suspense fallback={<ModuleSkeleton />}>
@@ -325,34 +340,44 @@ function HRContent() {
     {
       key: 'employee', label: 'Employee', priority: 1, width: '1.4fr',
       render: e => (
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-[10px] shrink-0">
+        <div className="hr-person">
+          {/* One tint per person, derived from the name. Thirteen identical
+              circles are decoration; a stable colour is something the eye can
+              learn to find a familiar row by. */}
+          <span className="hr-person__avatar" data-tint={avatarTint(e.fullName)} aria-hidden="true">
             {initials(e.fullName)}
-          </div>
-          <div>
-            <p className="text-xs font-bold text-[var(--text-1)]">{e.fullName}</p>
-            <p className="text-[10px] text-[var(--text-4)]">{e.employeeNo}</p>
-          </div>
+          </span>
+          <span className="hr-person__id">
+            <span className="hr-person__name">{e.fullName}</span>
+            <span className="hr-person__no">{e.employeeNo}</span>
+          </span>
         </div>
       ),
       exportValue: e => e.fullName,
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '90px',
+      // Only the exception is loud. Active still says "Active" rather than an
+      // em dash, which reads as missing data in every other column here.
       render: e => e.status === 'active'
-        ? <span className="text-[var(--text-4)]">—</span>
+        ? <span className="hr-status-quiet">Active</span>
         : <Badge status="cancelled" label={e.status} />,
       // The export is a data file, not a screen: every row keeps its status.
       exportValue: e => e.status,
     },
     {
       key: 'department', label: 'Department', priority: 2, width: '150px',
-      render: e => <span className="capitalize">{e.departmentId}</span>,
-      exportValue: e => e.departmentId,
+      // departmentName() resolves an id to its name and passes a name through.
+      // The row used to print departmentId raw, so a record still holding an id
+      // showed one here while the detail panel showed the name.
+      render: e => departmentName(e.departmentId) || <span className="hr-empty-cell">—</span>,
+      exportValue: e => departmentName(e.departmentId),
     },
     {
       key: 'jobTitle', label: 'Job title', priority: 2, width: '210px',
-      render: e => e.jobTitle || <span className="text-[var(--text-4)]">—</span>,
+      render: e => e.jobTitle
+        ? <span className="hr-cell-clamp" title={e.jobTitle}>{e.jobTitle}</span>
+        : <span className="hr-empty-cell">—</span>,
       exportValue: e => e.jobTitle,
     },
     {
@@ -596,6 +621,11 @@ function HRContent() {
             <OperationalSummary
               items={[
                 { id: 'active', label: 'active', value: employees.filter(e => e.status === 'active').length },
+                // The table lists leavers too, so a bare "13 active" over 15
+                // rows left the other two unaccounted for.
+                ...(employees.filter(e => e.status !== 'active').length > 0
+                  ? [{ id: 'exited', label: 'exited', value: employees.filter(e => e.status !== 'active').length }]
+                  : []),
                 ...(onLeaveCount > 0 ? [{ id: 'on-leave', label: 'on leave', value: onLeaveCount }] : []),
                 ...(pendingLeave.length > 0 ? [{ id: 'leave', label: `leave request${pendingLeave.length === 1 ? '' : 's'} to approve`, value: pendingLeave.length, tone: 'warning' as const, onClick: () => setTab('leave') }] : []),
                 ...(openPayroll.length > 0 ? [{ id: 'payroll', label: `payroll run${openPayroll.length === 1 ? '' : 's'} to review`, value: openPayroll.length, tone: 'warning' as const, onClick: () => setTab('payroll') }] : []),

@@ -75,6 +75,29 @@
 .hr-attendance__list strong { color: var(--text-1); font-size: 13px; }
 .hr-attendance__list span { color: var(--text-2); font-size: 12px; }
 .hr-attendance__list small { color: var(--text-3); font-size: 11px; overflow-wrap: anywhere; }
+
+/* Why this day needs a decision. It was 11px grey — quieter than the date it
+   qualifies — so the one thing the reviewer has to read came last. */
+.hr-attendance__why { display: flex; flex-wrap: wrap; gap: .25rem .375rem; font-size: 11.5px; }
+.hr-attendance__why.is-flagged { color: var(--warning); }
+.hr-attendance__flag {
+  padding: .0625rem .375rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Monthly salary is the default on nearly every row; the daily rate is the
+   exception these day counts actually drive. */
+.hr-attendance__link.is-default { color: var(--text-3); text-decoration-color: var(--border); }
+.hr-attendance__muted { color: var(--text-4); }
+
+/* Numbers: zero is context, a value is the news. */
+.hr-attendance__num { font-variant-numeric: tabular-nums; }
+.hr-attendance__num.is-zero { color: var(--text-4); }
+.hr-attendance__num.is-waiting { color: var(--warning); font-weight: 700; }
 .hr-attendance__actions { display: flex; gap: 0.375rem; flex-shrink: 0; }
 .hr-attendance__actions button { min-height: 36px; padding: 0 0.75rem; font-size: 12px; }
 

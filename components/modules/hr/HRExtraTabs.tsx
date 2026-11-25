@@ -301,18 +301,35 @@ export function HRReportsTab() {
     <div className="hr-submodule hr-reports hr-submodule-content p-4 flex flex-col gap-4">
       <div className="hr-report-card rounded-xl border border-[var(--border-lt)] p-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] mb-3 flex items-center gap-2"><Fa icon={faBuilding} /> Headcount by Department</h3>
-        <div className="flex flex-col gap-2">
-          {stats.byDept.length === 0 && <p className="text-xs text-[var(--text-4)]">No active employees</p>}
-          {stats.byDept.map(([dept, count]) => (
-            <div key={dept} className="flex items-center gap-3">
-              <span className="text-xs text-[var(--text-2)] w-48 truncate">{dept}</span>
-              <div className="flex-1 h-3 rounded-full bg-[var(--bg-surface)] overflow-hidden">
-                <div className="h-full bg-primary-500" style={{ width: `${stats.headcount ? (count / stats.headcount) * 100 : 0}%`, background: 'var(--primary)' }} />
-              </div>
-              <span className="text-xs font-bold text-[var(--text-1)] w-8 text-right">{count}</span>
-            </div>
-          ))}
-        </div>
+        {stats.byDept.length === 0
+          ? <p className="text-xs text-[var(--text-4)]">No active employees</p>
+          : (
+            /* Every bar used to render empty: the fill carried its colour as an
+               inline `background: var(--primary)` shorthand, which painted
+               nothing, so four departments all looked like blank tracks. The
+               colour is a class now and only the share is inline. */
+            <dl className="hr-bars">
+              {stats.byDept.map(([dept, count]) => {
+                const share = stats.headcount ? (count / stats.headcount) * 100 : 0
+                return (
+                  <div className="hr-bars__row" key={dept}>
+                    <dt className="hr-bars__label" title={dept}>{dept}</dt>
+                    <div
+                      className="hr-bars__track"
+                      role="img"
+                      aria-label={`${dept}: ${count} of ${stats.headcount} (${Math.round(share)}%)`}
+                    >
+                      <div className="hr-bars__fill" style={{ ['--hr-bar-share' as string]: `${share}%` }} />
+                    </div>
+                    <dd className="hr-bars__value">
+                      {count}
+                      <span className="hr-bars__share">{Math.round(share)}%</span>
+                    </dd>
+                  </div>
+                )
+              })}
+            </dl>
+          )}
       </div>
       <PolicyAckReport />
     </div>
