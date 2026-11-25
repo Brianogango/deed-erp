@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockRequireRole, mockPrisma } = vi.hoisted(() => ({
+const { mockRequireRole, mockPrisma, mockAttendance } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
+  mockAttendance: { dailyPayForMonth: vi.fn(), recordAttendancePay: vi.fn(), attendancePayForPayslips: vi.fn() },
   mockPrisma: {
     payrollRun: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     payslip: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
@@ -28,6 +29,7 @@ vi.mock('@/lib/auth/api', () => ({
 }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
+vi.mock('@/lib/hr/attendance.server', () => mockAttendance)
 
 import { GET, POST } from '@/app/api/payroll/route'
 
@@ -46,6 +48,9 @@ beforeEach(() => {
   mockPrisma.payrollAdjustment.findMany.mockResolvedValue([])
   mockPrisma.payrollAdjustment.updateMany.mockResolvedValue({ count: 0 })
   mockPrisma.employeeLoan.findMany.mockResolvedValue([])
+  mockAttendance.dailyPayForMonth.mockResolvedValue(new Map())
+  mockAttendance.recordAttendancePay.mockResolvedValue(undefined)
+  mockAttendance.attendancePayForPayslips.mockResolvedValue(new Map())
 })
 
 describe('GET /api/payroll', () => {
@@ -96,6 +101,18 @@ describe('POST /api/payroll', () => {
     })
     const codes = mockPrisma.payrollComponentLine.create.mock.calls.map(c => c[0].data.componentCode)
     expect(codes).toEqual(expect.arrayContaining(['BENEFIT_IN_KIND', 'INSURANCE_RELIEF', 'STAFF_LOAN', 'OTHER_ADDITIONS', 'OTHER_DEDUCTIONS']))
+  })
+  it('pays daily-rate staff their approved days × rate and keeps the days for the payslip', async () => {
+    mockAttendance.dailyPayForMonth.mockResolvedValue(new Map([['emp1', { days: 20.5, rate: 800 }]]))
+    mockPrisma.payslip.create.mockResolvedValue({ id: 'ps1' })
+    const res = await POST(postReq({
+      run: { id: 'run1', ref: 'PAY/2026/07', month: '07', year: 2026, lines: [{ employeeId: 'emp1', employeeName: 'Jane', basicSalary: 30000, allowances: 0, deductions: 0, netPay: 0 }] },
+      payslips: [{ id: 'ps1', ref: 'PS/2026/07/001', employeeId: 'emp1', employeeName: 'Jane', grossPay: 30000, salaryAdvanceDeductions: [] }],
+    }))
+    expect(res.status).toBe(200)
+    expect(mockAttendance.dailyPayForMonth).toHaveBeenCalledWith('2026-07', ['emp1'])
+    expect(mockPrisma.payslip.create.mock.calls[0][0].data.basicSalary).toBe(16400)
+    expect(mockAttendance.recordAttendancePay).toHaveBeenCalledWith([expect.objectContaining({ payslipId: 'ps1', days: 20.5, rate: 800, amount: 16400, period: '2026-07' })])
   })
   it('does not duplicate a run that already exists', async () => {
     mockPrisma.payrollRun.findUnique.mockResolvedValue({ id: 'run1', runReference: 'PAY/2026/07' })

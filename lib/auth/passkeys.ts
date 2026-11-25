@@ -102,12 +102,12 @@ function secret(): string {
   return process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 }
 
-export function setPasskeyChallenge(response: NextResponse, request: NextRequest, challenge: Omit<PasskeyChallenge, 'exp'>) {
+export function setPasskeyChallenge(response: NextResponse, request: NextRequest, challenge: Omit<PasskeyChallenge, 'exp'>, path = '/api/auth/passkey') {
   response.cookies.set(PASSKEY_CHALLENGE_COOKIE, sealPasskeyChallenge(challenge, secret()), {
     httpOnly: true,
     sameSite: 'strict',
     secure: shouldUseSecureCookie(request),
-    path: '/api/auth/passkey',
+    path,
     maxAge: PASSKEY_CHALLENGE_TTL_SECONDS,
   })
 }
@@ -118,8 +118,8 @@ export function readPasskeyChallenge(request: NextRequest, mode: PasskeyChalleng
 }
 
 /** Each challenge answers one attempt: cleared on every reply that used it. */
-export function clearPasskeyChallenge<T extends NextResponse>(response: T, request: NextRequest): T {
-  response.cookies.set(PASSKEY_CHALLENGE_COOKIE, '', { httpOnly: true, sameSite: 'strict', secure: shouldUseSecureCookie(request), path: '/api/auth/passkey', maxAge: 0 })
+export function clearPasskeyChallenge<T extends NextResponse>(response: T, request: NextRequest, path = '/api/auth/passkey'): T {
+  response.cookies.set(PASSKEY_CHALLENGE_COOKIE, '', { httpOnly: true, sameSite: 'strict', secure: shouldUseSecureCookie(request), path, maxAge: 0 })
   return response
 }
 

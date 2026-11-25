@@ -7,6 +7,7 @@ import { financeInvoicePath } from '@/lib/finance-invoice'
 import { buildMyWork } from '@/lib/my-work'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { userCan } from '@/lib/auth/can'
+import ClockCard from '@/components/hr/ClockCard'
 
 /**
  * Everything waiting for the signed-in person, across modules. Start the day
@@ -88,6 +89,8 @@ export default function MyWork() {
               : `${total} item${total === 1 ? '' : 's'} waiting across ${queues.length} queue${queues.length === 1 ? '' : 's'} — oldest first in each.`}
           </p>
         </header>
+
+        {app.systemSettings?.hrAttendance && <ClockCard showToast={app.showToast} />}
 
         {queues.length === 0 ? (
           <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] px-4 py-10 text-center text-[13px] text-[var(--text-3)]">
