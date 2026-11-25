@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Deed Scan</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#111823; --panel2:#0F172A; --line:#1F2A37;
+    --text:#E8EEF5; --dim:#93A4B8; --accent:#2DD4BF; --accent-ink:#04221F;
+    --ok:#34D399; --warn:#FBBF24; --bad:#F87171;
+    --pad: 12px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font:16px/1.4 -apple-system,"Roboto","Segoe UI",system-ui,sans-serif;
+    overscroll-behavior:none;}
+  body{display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:12px 14px;min-height:48px;cursor:pointer;}
+  button:active{transform:scale(.985);}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700;}
+  button.ghost{background:transparent;border:none;min-height:40px;padding:8px 10px;font-size:20px;}
+  input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px;padding:12px;min-height:48px;width:100%;}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  label{display:block;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:0 0 6px;}
+  .hidden{display:none !important;}
+
+  header{display:flex;align-items:center;gap:8px;padding:6px var(--pad);border-bottom:1px solid var(--line);}
+  header .title{font-weight:700;letter-spacing:.02em;flex:1;text-align:center;}
+  .pill{font-size:12px;font-weight:700;padding:5px 9px;border-radius:999px;background:var(--panel);
+    border:1px solid var(--line);color:var(--dim);white-space:nowrap;}
+  .pill.ok{color:var(--ok);border-color:#14532D;background:#06281C;}
+  .pill.pend{color:var(--warn);border-color:#4D3708;background:#2A1E04;}
+  .pill.bad{color:var(--bad);border-color:#5B1A1A;background:#2C0E0E;}
+
+  main{flex:1;display:flex;flex-direction:column;min-height:0;}
+  .viewport{position:relative;background:#000;min-height:34vh;aspect-ratio:4/3;max-height:46vh;overflow:hidden;}
+  .viewport video{width:100%;height:100%;object-fit:cover;display:block;}
+  .frame{position:absolute;top:16%;right:6%;bottom:16%;left:6%;inset:16% 6%;border-radius:14px;
+    box-shadow:0 0 0 2000px rgba(4,8,12,.42);pointer-events:none;}
+  .frame::before,.frame::after{content:"";position:absolute;width:26px;height:26px;border:3px solid var(--accent);}
+  .frame::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:12px 0 0 0;}
+  .frame::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 12px 0;}
+  .laser{position:absolute;left:6%;right:6%;top:50%;height:2px;background:var(--accent);
+    box-shadow:0 0 12px var(--accent);opacity:.85;animation:sweep 2.2s ease-in-out infinite;}
+  @keyframes sweep{0%,100%{transform:translateY(-34px)}50%{transform:translateY(34px)}}
+  @media (prefers-reduced-motion:reduce){.laser{animation:none}}
+  .torch{position:absolute;right:10px;bottom:10px;min-height:44px;background:rgba(17,24,35,.82);}
+  .camMsg{position:absolute;top:0;right:0;bottom:0;left:0;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:12px;text-align:center;padding:18px;background:rgba(11,15,20,.92);}
+  .camMsg p{margin:0;color:var(--dim);max-width:34ch;}
+
+  .status{padding:10px var(--pad);font-size:14px;color:var(--dim);min-height:42px;
+    display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);}
+  .status b{color:var(--text);font-variant-numeric:tabular-nums;}
+  .status.flash{color:var(--accent-ink);background:var(--accent);font-weight:600;}
+  .status.err{color:#fff;background:#7F1D1D;}
+
+  .row{display:flex;gap:8px;padding:8px var(--pad) 0;align-items:stretch;}
+  .row > *{flex:1;}
+  .qty{flex:0 0 auto;display:flex;align-items:center;gap:0;border:1px solid var(--line);
+    border-radius:12px;background:var(--panel2);overflow:hidden;}
+  .qty button{border:0;background:transparent;border-radius:0;min-width:46px;font-size:20px;}
+  .qty .val{min-width:58px;text-align:center;padding:0 4px;}
+  .qty .val label{margin:0;font-size:10px;}
+  .qty .val span{font-weight:700;font-variant-numeric:tabular-nums;}
+
+  .listHead{display:flex;justify-content:space-between;align-items:baseline;
+    padding:14px var(--pad) 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);}
+  .list{list-style:none;margin:0;padding:0 var(--pad) 16px;overflow-y:auto;flex:1;min-height:80px;
+    -webkit-overflow-scrolling:touch;}
+  .list li{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  .list .code{flex:1;min-width:0;font-family:ui-monospace,"Roboto Mono",monospace;font-size:15px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .list .meta{font-size:12px;color:var(--dim);text-align:right;white-space:nowrap;}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .dot.saved{background:var(--ok);} .dot.pending{background:var(--warn);} .dot.failed{background:var(--bad);}
+  .empty{color:var(--dim);font-size:14px;padding:10px 2px;}
+
+  .panel{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:var(--bg);z-index:30;display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);}
+  .panel .body{overflow-y:auto;padding:4px var(--pad) 24px;}
+  .panel h2{font-size:17px;margin:0;flex:1;}
+  .field{margin:14px 0;}
+  .hint{font-size:12px;color:var(--dim);margin:6px 0 0;}
+  .toggles{display:flex;flex-direction:column;gap:2px;margin:10px 0;}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;
+    border-bottom:1px solid var(--line);}
+  .toggle span{font-size:15px;}
+  .switch{position:relative;width:52px;height:30px;flex:0 0 auto;}
+  .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;}
+  .switch i{position:absolute;top:0;right:0;bottom:0;left:0;inset:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;transition:background .15s;}
+  .switch i::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+    background:var(--dim);transition:transform .15s,background .15s;}
+  .switch input:checked + i{background:#0C3A35;border-color:#115E59;}
+  .switch input:checked + i::after{transform:translateX(22px);background:var(--accent);}
+  .actions{display:flex;gap:8px;padding:10px var(--pad);border-top:1px solid var(--line);background:var(--bg);}
+  .actions > *{flex:1;}
+  .testOut{margin-top:10px;padding:10px 12px;border-radius:12px;font-size:13px;white-space:pre-wrap;
+    word-break:break-word;background:var(--panel2);border:1px solid var(--line);color:var(--dim);}
+  .testOut.ok{color:var(--ok);border-color:#14532D;} .testOut.bad{color:var(--bad);border-color:#5B1A1A;}
+  .modal{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:40;background:rgba(4,8,12,.72);display:flex;align-items:flex-end;}
+  .sheet{background:var(--panel);border-radius:18px 18px 0 0;padding:18px var(--pad)
+    calc(18px + env(safe-area-inset-bottom));width:100%;border-top:1px solid var(--line);}
+  .sheet h3{margin:0 0 12px;font-size:16px;}
+  .sheetRow{display:flex;gap:8px;margin-top:12px;}
+  .sheetRow > *{flex:1;}
+  .small{font-size:12px;color:var(--dim);}
+  textarea{min-height:120px;font-family:ui-monospace,monospace;font-size:12px;}
+</style>
+</head>
+<body>
+
+<header>
+  <button id="btnSettings" class="ghost" title="Settings" aria-label="Settings">&#9881;</button>
+  <div class="title">Deed Scan</div>
+  <div id="pill" class="pill">setup</div>
+</header>
+
+<main>
+  <div class="viewport">
+    <video id="video" playsinline muted autoplay></video>
+    <div class="frame"><div class="laser"></div></div>
+    <button id="btnTorch" class="torch hidden" aria-label="Torch">&#128161;</button>
+    <div id="camMsg" class="camMsg hidden"><p id="camMsgText"></p><button id="btnCamRetry" class="primary">Enable camera</button></div>
+  </div>
+
+  <div id="status" class="status">Starting camera&hellip;</div>
+
+  <div class="row">
+    <div class="qty">
+      <button id="qtyMinus" aria-label="Decrease quantity">&minus;</button>
+      <div class="val"><label>Qty</label><span id="qtyVal">1</span></div>
+      <button id="qtyPlus" aria-label="Increase quantity">+</button>
+    </div>
+    <input id="refField" placeholder="Reference e.g. GRN-104" autocapitalize="characters" autocomplete="off">
+  </div>
+
+  <div class="row">
+    <button id="btnManual">&#9000; Type code</button>
+    <button id="btnSync">&#8635; Sync now</button>
+  </div>
+
+  <div class="listHead"><span>Recent scans</span><span id="counts"></span></div>
+  <ul id="list" class="list"><li class="empty" id="emptyRow">Nothing scanned yet.</li></ul>
+</main>
+
+<section id="settings" class="panel hidden">
+  <header>
+    <button id="btnCloseSettings" class="ghost" aria-label="Back">&#8592;</button>
+    <h2>Settings</h2>
+    <span class="pill" id="verPill"></span>
+  </header>
+  <div class="body">
+    <div class="field">
+      <label for="setUrl">Google Apps Script web app URL</label>
+      <input id="setUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="none"
+             spellcheck="false" placeholder="https://script.google.com/macros/s/&hellip;/exec">
+      <p class="hint">Deploy the sheet's script as a Web app, then paste the <b>/exec</b> URL here.</p>
+    </div>
+    <div class="field">
+      <label for="setSecret">Shared secret</label>
+      <input id="setSecret" type="password" autocomplete="off" placeholder="Must match SHARED_SECRET in the script">
+    </div>
+    <div class="field">
+      <label for="setDevice">Device / operator name</label>
+      <input id="setDevice" autocomplete="off" placeholder="Store counter 1">
+    </div>
+    <div class="field">
+      <label for="setRef">Default reference</label>
+      <input id="setRef" autocomplete="off" autocapitalize="characters" placeholder="Blank is fine">
+    </div>
+    <div class="field">
+      <label for="setDup">Ignore the same code for (seconds)</label>
+      <input id="setDup" type="number" min="0" max="60" step="0.5" inputmode="decimal">
+    </div>
+    <div class="toggles">
+      <div class="toggle"><span>Beep on scan</span>
+        <label class="switch"><input type="checkbox" id="setBeep"><i></i></label></div>
+      <div class="toggle"><span>Vibrate on scan</span>
+        <label class="switch"><input type="checkbox" id="setVib"><i></i></label></div>
+      <div class="toggle"><span>Send to sheet automatically</span>
+        <label class="switch"><input type="checkbox" id="setAuto"><i></i></label></div>
+      <div class="toggle"><span>Also read QR / Data Matrix</span>
+        <label class="switch"><input type="checkbox" id="set2d"><i></i></label></div>
+    </div>
+    <div class="field">
+      <button id="btnTest">Test connection</button>
+      <div id="testOut" class="testOut hidden"></div>
+    </div>
+    <div class="field">
+      <label>Unsent scans</label>
+      <button id="btnExport">Show unsent as CSV</button>
+      <textarea id="exportBox" class="hidden" readonly></textarea>
+      <p class="hint" id="queueInfo"></p>
+    </div>
+  </div>
+  <div class="actions">
+    <button id="btnSaveSettings" class="primary">Save</button>
+  </div>
+</section>
+
+<div id="manualWrap" class="modal hidden">
+  <div class="sheet">
+    <h3>Enter a barcode</h3>
+    <input id="manualInput" autocomplete="off" autocapitalize="characters" spellcheck="false"
+           inputmode="text" placeholder="Barcode">
+    <p class="small">Uses the quantity and reference currently selected.</p>
+    <div class="sheetRow">
+      <button id="btnManualCancel">Cancel</button>
+      <button id="btnManualAdd" class="primary">Add scan</button>
+    </div>
+  </div>
+</div>
+
+<script src="zxing.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
