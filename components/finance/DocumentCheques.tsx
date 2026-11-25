@@ -13,6 +13,7 @@ type DocCheque = {
   status: string
   hasImage: boolean
   schedule?: { state: string; message: string | null }
+  clearsOn?: string
 }
 
 const fmtDay = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -22,8 +23,10 @@ function stateText(c: DocCheque, today: string): string {
   if (c.status === 'bounced') return c.direction === 'received' ? 'Bounced' : 'Returned'
   if (c.status === 'cancelled') return c.direction === 'received' ? 'Cancelled' : 'Stopped'
   if (c.status === 'cleared') return 'Cleared'
-  if (c.schedule?.state === 'applied' || c.status === 'deposited') return `Paid on ${fmtDay(c.chequeDate)}`
-  if (c.schedule?.state === 'scheduled') return c.chequeDate <= today ? 'Due — applying' : `Pays on ${fmtDay(c.chequeDate)}`
+  const clears = c.clearsOn ?? c.chequeDate
+  if (c.schedule?.state === 'applied') return `Paid on ${fmtDay(clears)}`
+  if (c.status === 'deposited') return `Banked · clears ${fmtDay(clears)}`
+  if (c.schedule?.state === 'scheduled') return c.chequeDate <= today ? `Clears ${fmtDay(clears)}` : `Dated ${fmtDay(c.chequeDate)} · pays ${fmtDay(clears)}`
   return c.status === 'pending' ? 'Held' : c.status
 }
 
@@ -47,7 +50,7 @@ export default function DocumentCheques({ invoiceId, docRef }: { invoiceId: stri
 
   if (!cheques.length) return null
   const live = cheques.filter(c => c.status !== 'bounced' && c.status !== 'cancelled')
-  const waiting = live.filter(c => c.schedule?.state === 'scheduled' && c.chequeDate > today)
+  const waiting = live.filter(c => c.schedule?.state === 'scheduled' && (c.clearsOn ?? c.chequeDate) > today)
   const next = waiting[0]
 
   const printAll = () => {
@@ -75,7 +78,7 @@ export default function DocumentCheques({ invoiceId, docRef }: { invoiceId: stri
           <strong>Cheques ({cheques.length})</strong>{' '}
           <span>
             {fmtKes(live.reduce((s, c) => s + c.amount, 0))}
-            {next ? ` · ${waiting.length} still to come, next ${fmtDay(next.chequeDate)} (${fmtKes(next.amount)})` : ''}
+            {next ? ` · ${waiting.length} still to come, next pays ${fmtDay(next.clearsOn ?? next.chequeDate)} (${fmtKes(next.amount)})` : ''}
           </span>
         </div>
         <button type="button" onClick={printAll}>Print all</button>

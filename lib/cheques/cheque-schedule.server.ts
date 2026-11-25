@@ -10,6 +10,7 @@ import { isPayableInvoiceStatus } from '@/lib/accounting/payment-allocations'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { loadAppState, saveStoreKeys, notifyStoreKeysChanged } from '@/lib/server-store'
 import { nairobiToday } from './cheque-store.server'
+import { chequeClearsOn, clearingDaysSetting } from './clearing'
 
 /**
  * Post-dated cheques that settle an invoice or a bill on their own date.
@@ -159,21 +160,68 @@ type ApplyOutcome = { chequeId: string; chequeNumber: string; invoiceRef: string
  * A cheque that cannot go yet (document not confirmed, period locked) stays
  * scheduled with the reason and is tried again on the next run.
  */
-export async function applyMaturedCheques(opts: { today?: string; onlyChequeIds?: string[] } = {}): Promise<ApplyOutcome[]> {
+/**
+ * How long cheques take to clear (setting, default 2 working days) and the
+ * public holidays to skip, for working out each cheque's clearing day.
+ */
+export async function clearingRules(): Promise<{ days: number; holidays: string[] }> {
+  const [state, holidays] = await Promise.all([
+    loadAppState(['deed_systemSettings']).catch(() => ({} as Record<string, unknown>)),
+    prisma.publicHoliday.findMany({ select: { holidayDate: true } }).catch(() => [] as Array<{ holidayDate: Date }>),
+  ])
+  return { days: clearingDaysSetting(state.deed_systemSettings), holidays: holidays.map(h => h.holidayDate.toISOString().slice(0, 10)) }
+}
+
+export async function clearsOnFor(chequeDate: Date | string): Promise<string> {
+  const rules = await clearingRules()
+  return chequeClearsOn(typeof chequeDate === 'string' ? chequeDate : chequeDate.toISOString().slice(0, 10), rules.days, rules.holidays)
+}
+
+/**
+ * A scheduled cheque goes through two steps:
+ *  - on its date it is banked (received) or presented (given): status
+ *    "deposited", nothing paid yet;
+ *  - on its clearing day (cheque date + the clearing working days) the money
+ *    is there: the payment is recorded on the invoice / bill, dated that day,
+ *    and the cheque is "cleared".
+ * `force` (a person marked it cleared) records the payment now.
+ */
+export async function applyMaturedCheques(opts: { today?: string; onlyChequeIds?: string[]; force?: boolean } = {}): Promise<ApplyOutcome[]> {
   await ensureTable()
   const today = opts.today ?? nairobiToday()
   const pending = (await listSchedules(opts.onlyChequeIds ? { chequeIds: opts.onlyChequeIds } : undefined)).filter(s => s.state === 'scheduled')
   if (!pending.length) return []
+  const rules = await clearingRules()
   const cheques = await prisma.cheque.findMany({ where: { id: { in: pending.map(s => s.chequeId) } } })
   const byId = new Map(cheques.map(c => [c.id, c]))
-  const due = pending
+  const rows = pending
     .map(s => ({ s, c: byId.get(s.chequeId) }))
-    .filter((x): x is { s: ChequeSchedule; c: NonNullable<typeof x.c> } => Boolean(x.c && x.c.status === 'pending' && x.c.chequeDate.toISOString().slice(0, 10) <= today))
+    .filter((x): x is { s: ChequeSchedule; c: NonNullable<typeof x.c> } => Boolean(x.c))
+    .map(x => ({ ...x, dated: x.c.chequeDate.toISOString().slice(0, 10), clears: chequeClearsOn(x.c.chequeDate.toISOString().slice(0, 10), rules.days, rules.holidays) }))
     .sort((a, b) => a.c.chequeDate.getTime() - b.c.chequeDate.getTime())
 
   const out: ApplyOutcome[] = []
   let changed = false
-  for (const { s, c } of due) {
+
+  // Step 1: dated today or earlier but not clear yet — banked / presented.
+  for (const { c, dated, clears } of rows) {
+    if (opts.force || c.status !== 'pending' || dated > today || clears <= today) continue
+    const history = Array.isArray(c.history) ? c.history as unknown[] : []
+    await prisma.cheque.update({
+      where: { id: c.id },
+      data: {
+        status: 'deposited',
+        history: [...history, { at: new Date().toISOString(), by: 'System', status: 'deposited', note: `${c.direction === 'given' ? 'Presented' : 'Banked'} on its date; clears ${clears}` }] as never,
+      },
+    })
+    await setState(c.id, 'scheduled', { message: null })
+    changed = true
+    out.push({ chequeId: c.id, chequeNumber: c.chequeNumber, invoiceRef: '', amount: 0, result: 'waiting', message: `clears ${clears}` })
+  }
+
+  // Step 2: cleared — record the payment.
+  const due = rows.filter(({ c, clears }) => (opts.force ? ['pending', 'deposited', 'cleared'] : ['pending', 'deposited']).includes(c.status) && (opts.force || clears <= today))
+  for (const { s, c, clears } of due) {
     const base = { chequeId: c.id, chequeNumber: c.chequeNumber, invoiceRef: '', amount: 0 }
     try {
       const invoice = await prisma.invoice.findUnique({ where: { id: s.invoiceId } })
@@ -188,7 +236,9 @@ export async function applyMaturedCheques(opts: { today?: string; onlyChequeIds?
         await setState(c.id, 'skipped', { message: `${invoice.invoiceNumber} was already paid — the cheque was not applied` })
         out.push({ ...base, result: 'skipped', message: 'already paid' }); continue
       }
-      const paidAt = new Date(`${c.chequeDate.toISOString().slice(0, 10)}T09:00:00+03:00`)
+      // Dated the day the money is there (today when someone marks it cleared early).
+      const paidDay = opts.force ? (clears < today ? clears : today) : clears
+      const paidAt = new Date(`${paidDay}T09:00:00+03:00`)
       const lock = await checkFiscalLock(paidAt)
       if (!lock.ok) {
         await setState(c.id, 'scheduled', { message: lock.error ?? 'That period is locked — waiting' })
@@ -205,7 +255,7 @@ export async function applyMaturedCheques(opts: { today?: string; onlyChequeIds?
         reference: `Cheque ${c.chequeNumber}`.slice(0, 80),
         externalReference: c.chequeNumber,
         paidAt,
-        notes: `Cheque ${c.chequeNumber}${c.bankName ? ` (${c.bankName})` : ''} on its date · idempotency:cheque:${c.id}`,
+        notes: `Cheque ${c.chequeNumber}${c.bankName ? ` (${c.bankName})` : ''} cleared ${paidDay} · idempotency:cheque:${c.id}`,
         createdById: actorId,
         invoiceId: invoice.id,
         paymentType: isBill ? 'vendor_payment' : 'customer_receipt',
@@ -243,7 +293,7 @@ export async function applyMaturedCheques(opts: { today?: string; onlyChequeIds?
             entityType: 'invoice',
             entityId: invoice.id,
             oldValues: { amountPaid: Number(invoice.amountPaid) },
-            newValues: { chequeId: c.id, chequeNumber: c.chequeNumber, amount, paymentId: paymentRow.id, chequeDate: c.chequeDate.toISOString().slice(0, 10) },
+            newValues: { chequeId: c.id, chequeNumber: c.chequeNumber, amount, paymentId: paymentRow.id, chequeDate: c.chequeDate.toISOString().slice(0, 10), clearedOn: paidDay },
           })
         },
       })
@@ -253,12 +303,13 @@ export async function applyMaturedCheques(opts: { today?: string; onlyChequeIds?
         applied: true,
         message: short > 0 ? `Only ${amount.toLocaleString('en-KE')} was owed on ${invoice.invoiceNumber}; ${short.toLocaleString('en-KE')} of the cheque was not applied` : null,
       })
-      const history = Array.isArray(c.history) ? c.history as unknown[] : []
+      const fresh = await prisma.cheque.findUnique({ where: { id: c.id }, select: { history: true } })
+      const history = Array.isArray(fresh?.history) ? fresh!.history as unknown[] : []
       await prisma.cheque.update({
         where: { id: c.id },
         data: {
-          status: 'deposited',
-          history: [...history, { at: new Date().toISOString(), by: 'System', status: 'deposited', note: `${c.direction === 'given' ? 'Presented' : 'Deposited'} on its date; ${invoice.invoiceNumber} paid ${amount.toLocaleString('en-KE')}` }] as never,
+          status: 'cleared',
+          history: [...history, { at: new Date().toISOString(), by: 'System', status: 'cleared', note: `Cleared ${paidDay}; ${invoice.invoiceNumber} paid ${amount.toLocaleString('en-KE')}` }] as never,
         },
       })
       await syncInvoiceMirror(invoice.id)

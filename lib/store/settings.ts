@@ -156,6 +156,8 @@ export interface SystemSettings {
   accApprovalForRefunds: boolean
   // HR
   hrAttendance: boolean
+  /** Working days after its date before a cheque clears (default 2). */
+  chequeClearingDays?: number
   hrLeaves: boolean
   hrRestrictSalaryInfo: boolean
   hrRoleBasedVisibility: boolean

@@ -41,15 +41,17 @@ type Cheque = {
   alert: ChequeAlert
   /** Pays an invoice / bill on its date (lib/cheques/cheque-schedule.server.ts). */
   schedule?: { invoiceId: string; state: 'scheduled' | 'applied' | 'reversed' | 'skipped'; message: string | null; appliedAt: string | null }
+  /** Cheque date + the clearing working days (weekends and public holidays skipped). */
+  clearsOn?: string
 }
 
 const scheduleText = (c: Cheque): string | null => {
   const s = c.schedule
   if (!s) return null
-  if (s.state === 'applied') return `Paid ${c.linkedRef ?? 'the document'} on its date`
+  if (s.state === 'applied') return `Paid ${c.linkedRef ?? 'the document'} when it cleared`
   if (s.state === 'reversed') return 'Payment reversed'
   if (s.state === 'skipped') return s.message ?? 'Not applied'
-  return s.message ?? `Pays ${c.linkedRef ?? 'the document'} on ${c.chequeDate}`
+  return s.message ?? `Pays ${c.linkedRef ?? 'the document'} when it clears${c.clearsOn ? ` on ${c.clearsOn}` : ''}`
 }
 type Scan = { chequeNumber: string; bankName: string; payeeName: string; accountName: string; amount: number | null; chequeDate: string; warnings: string[] }
 

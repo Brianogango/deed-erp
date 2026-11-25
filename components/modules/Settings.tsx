@@ -1310,6 +1310,9 @@ export default function Settings() {
                 <SettingRow label="Customer Invoices" desc="Issue invoices to customers for sales"><Toggle on={ss.accCustomerInvoices} onChange={v => updateSystemSettings({ accCustomerInvoices: v })} /></SettingRow>
                 <SettingRow label="Vendor Bills" desc="Record supplier invoices as accounts payable"><Toggle on={ss.accVendorBills} onChange={v => updateSystemSettings({ accVendorBills: v })} /></SettingRow>
                 <SettingRow label="Credit Notes" desc="Issue and receive credit notes for returns and adjustments"><Toggle on={ss.accCreditNotes} onChange={v => updateSystemSettings({ accCreditNotes: v })} /></SettingRow>
+                <SettingRow label="Cheque clearing days" desc="Working days after its date before a cheque's money is there (weekends and public holidays skipped). A post-dated cheque pays its invoice or bill on that day.">
+                  <Input type="number" value={String(ss.chequeClearingDays ?? 2)} onChange={v => updateSystemSettings({ chequeClearingDays: Math.min(10, Math.max(0, Math.floor(Number(v) || 0))) })} />
+                </SettingRow>
               </SectionCard>
               <SectionCard title="Taxes">
                 <SettingRow label="Enable VAT" desc="Apply VAT on sales and purchases"><Toggle on={ss.accVatEnabled} onChange={v => updateSystemSettings({ accVatEnabled: v })} /></SettingRow>

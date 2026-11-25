@@ -8,7 +8,8 @@
  *        bankAccountId; lib/cheques/cheque-schedule.server.ts). A cheque dated
  *        today or earlier is applied at once.
  */
-import { applyMaturedCheques, listSchedules, scheduleCheque } from '@/lib/cheques/cheque-schedule.server'
+import { applyMaturedCheques, clearingRules, listSchedules, scheduleCheque } from '@/lib/cheques/cheque-schedule.server'
+import { chequeClearsOn } from '@/lib/cheques/clearing'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
@@ -49,11 +50,13 @@ export async function GET(request: Request) {
     const rows = await prisma.cheque.findMany({ where: forDoc, orderBy: [{ chequeDate: forDoc ? 'asc' : 'desc' }, { createdAt: 'desc' }], take: 2000 })
     const today = nairobiToday()
     const schedules = new Map((await listSchedules().catch(() => [])).map(s => [s.chequeId, s]))
+    const rules = await clearingRules().catch(() => ({ days: 2, holidays: [] as string[] }))
     return NextResponse.json({
       today,
       cheques: rows.map(row => {
         const s = schedules.get(row.id)
-        return { ...toChequeDto(row, today), ...(s ? { schedule: { invoiceId: s.invoiceId, state: s.state, message: s.message, appliedAt: s.appliedAt } } : {}) }
+        const clearsOn = chequeClearsOn(row.chequeDate.toISOString().slice(0, 10), rules.days, rules.holidays)
+        return { ...toChequeDto(row, today), clearsOn, ...(s ? { schedule: { invoiceId: s.invoiceId, state: s.state, message: s.message, appliedAt: s.appliedAt } } : {}) }
       }),
     })
   })
