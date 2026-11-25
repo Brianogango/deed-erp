@@ -49,7 +49,11 @@
     box-shadow:0 0 12px var(--accent);opacity:.85;animation:sweep 2.2s ease-in-out infinite;}
   @keyframes sweep{0%,100%{transform:translateY(-34px)}50%{transform:translateY(34px)}}
   @media (prefers-reduced-motion:reduce){.laser{animation:none}}
-  .torch{position:absolute;right:10px;bottom:10px;min-height:44px;background:rgba(17,24,35,.82);}
+  .vbtn{position:absolute;bottom:10px;min-height:44px;padding:10px 12px;background:rgba(17,24,35,.85);}
+  .torch{right:10px;} .zoom{right:68px;font-variant-numeric:tabular-nums;} .cam{left:10px;}
+  .diag{position:absolute;left:8px;top:8px;max-width:92%;padding:5px 8px;border-radius:8px;
+    background:rgba(4,8,12,.68);color:#9EEAE0;pointer-events:none;white-space:pre-wrap;
+    font:11px/1.4 ui-monospace,"Roboto Mono",monospace;}
   .camMsg{position:absolute;top:0;right:0;bottom:0;left:0;inset:0;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:12px;text-align:center;padding:18px;background:rgba(11,15,20,.92);}
   .camMsg p{margin:0;color:var(--dim);max-width:34ch;}
@@ -127,7 +131,10 @@
   <div class="viewport">
     <video id="video" playsinline muted autoplay></video>
     <div class="frame"><div class="laser"></div></div>
-    <button id="btnTorch" class="torch hidden" aria-label="Torch">&#128161;</button>
+    <button id="btnTorch" class="vbtn torch hidden" aria-label="Torch">&#128161;</button>
+    <button id="btnZoom" class="vbtn zoom hidden" aria-label="Zoom">1&times;</button>
+    <button id="btnCam" class="vbtn cam hidden" aria-label="Switch camera">&#8644;</button>
+    <div id="diag" class="diag hidden"></div>
     <div id="camMsg" class="camMsg hidden"><p id="camMsgText"></p><button id="btnCamRetry" class="primary">Enable camera</button></div>
   </div>
 
@@ -173,6 +180,12 @@
       <input id="setDevice" autocomplete="off" placeholder="Store counter 1">
     </div>
     <div class="field">
+      <label for="setCam">Camera</label>
+      <select id="setCam"></select>
+      <p class="hint">Phones with several back cameras sometimes open a wide-angle one that cannot
+         focus close up. If barcodes stay blurry, try another camera here.</p>
+    </div>
+    <div class="field">
       <label for="setRef">Default reference</label>
       <input id="setRef" autocomplete="off" autocapitalize="characters" placeholder="Blank is fine">
     </div>
@@ -189,6 +202,8 @@
         <label class="switch"><input type="checkbox" id="setAuto"><i></i></label></div>
       <div class="toggle"><span>Also read QR / Data Matrix</span>
         <label class="switch"><input type="checkbox" id="set2d"><i></i></label></div>
+      <div class="toggle"><span>Show scanner diagnostics</span>
+        <label class="switch"><input type="checkbox" id="setDiag"><i></i></label></div>
     </div>
     <div class="field">
       <button id="btnTest">Test connection</button>

@@ -64,6 +64,24 @@ Then **Save**.
 Each row in the sheet is: logged-at, scanned-at (device clock), barcode, qty,
 reference, device, barcode format, scan id.
 
+## When the camera will not read a barcode
+
+In order, the things that actually fix it:
+
+1. **Tap the preview.** That forces a refocus. A barcode held closer than ~15 cm is
+   usually just out of focus.
+2. **Switch camera** (⇄, bottom-left of the preview, shown when the phone has more
+   than one). Many phones expose an ultra-wide or depth lens alongside the main one,
+   and the app cannot always tell which is which — an ultra-wide cannot focus close
+   enough to read a barcode. Settings → **Camera** picks one permanently.
+3. **Zoom** (the `1×` button) for small or distant codes, **torch** (💡) in poor light.
+4. Hold the code so it fills most of the width of the guide, roughly square-on, and
+   pause — motion blur stops more scans than anything else.
+5. Settings → **Show scanner diagnostics** overlays `resolution · fps · ms/frame ·
+   frames · reads`. If resolution is `0×0` the camera never started; if `reads` stays
+   at 0 while fps is healthy, the frames are reaching the decoder but are too blurry
+   or too small.
+
 ## Troubleshooting
 
 | What you see | What it means |

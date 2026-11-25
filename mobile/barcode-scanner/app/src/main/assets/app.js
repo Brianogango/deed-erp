@@ -26,15 +26,23 @@
 
   // ------------------------------------------------------------------- state
   var DEFAULTS = {
-    url: '', secret: '', device: '', ref: '',
-    dupMs: 3000, beep: true, vib: true, auto: true, read2d: true
+    url: '', secret: '', device: '', ref: '', camId: '',
+    dupMs: 3000, beep: true, vib: true, auto: true, read2d: true, diag: false
   };
   var S = { settings: copy(DEFAULTS), log: [] };
   var qty = 1, sending = false, lastSend = '', scanning = false;
-  var stream = null, track = null, timer = null, frames = 0;
+  var stream = null, track = null, timer = null, frames = 0, hits = 0;
   var lastScan = { code: '', at: 0 };
-  var reader = new Z.MultiFormatReader();
+  var cameras = [], camLabel = '', torchOn = false, zoomCap = null, zoomNow = 1;
+  var lastMs = 0, fps = 0, fpsCount = 0, fpsAt = 0, lastErr = null;
+  // Two decoders: the quick one runs on the guide band every frame, the
+  // thorough one (TRY_HARDER, more formats) on the full-frame passes.
+  var readerFast = new Z.MultiFormatReader();
+  var readerHard = new Z.MultiFormatReader();
   var FORMAT_NAMES = buildFormatNames();
+  function now() {
+    return (window.performance && performance.now) ? performance.now() : Date.now();
+  }
 
   function copy(o) { var r = {}; for (var k in o) if (o.hasOwnProperty(k)) r[k] = o[k]; return r; }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -163,84 +171,206 @@
 
   function applyHints() {
     var F = Z.BarcodeFormat;
-    var formats = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.CODE_93,
-                   F.ITF, F.CODABAR, F.RSS_14];
-    if (S.settings.read2d) formats = formats.concat([F.QR_CODE, F.DATA_MATRIX, F.AZTEC, F.PDF_417]);
-    var hints = new Map();
-    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, formats.filter(function (f) { return f !== undefined; }));
-    hints.set(Z.DecodeHintType.TRY_HARDER, true);
-    try { reader.setHints(hints); } catch (e) { }
+    var quick = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.CODE_93, F.ITF, F.CODABAR];
+    var full = quick.concat([F.RSS_14, F.RSS_EXPANDED]);
+    if (S.settings.read2d) {
+      quick = quick.concat([F.QR_CODE]);
+      full = full.concat([F.QR_CODE, F.DATA_MATRIX, F.AZTEC, F.PDF_417]);
+    }
+    function clean(a) { return a.filter(function (f) { return f !== undefined && f !== null; }); }
+    try {
+      var h1 = new Map();
+      h1.set(Z.DecodeHintType.POSSIBLE_FORMATS, clean(quick));
+      readerFast.setHints(h1);
+      var h2 = new Map();
+      h2.set(Z.DecodeHintType.POSSIBLE_FORMATS, clean(full));
+      h2.set(Z.DecodeHintType.TRY_HARDER, true);
+      readerHard.setHints(h2);
+    } catch (e) { }
+  }
+
+  // ------------------------------------------------------------ camera open
+  function listCameras() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      return Promise.resolve([]);
+    }
+    return navigator.mediaDevices.enumerateDevices().then(function (ds) {
+      return ds.filter(function (d) { return d.kind === 'videoinput'; });
+    }).catch(function () { return []; });
+  }
+
+  function fillCameraList(devices) {
+    cameras = devices || [];
+    $('btnCam').classList.toggle('hidden', cameras.length < 2);
+    var sel = $('setCam');
+    if (!sel) return;
+    var html = '<option value="">Automatic (back camera)</option>';
+    for (var i = 0; i < cameras.length; i++) {
+      html += '<option value="' + esc(cameras[i].deviceId) + '">'
+            + esc(cameras[i].label || ('Camera ' + (i + 1))) + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.value = S.settings.camId || '';
   }
 
   function startCamera() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showCamMsg('This device’s WebView has no camera support. You can still type codes in by hand.');
+      showCamMsg('This device\u2019s WebView has no camera support. You can still type codes in by hand.');
       return;
     }
     stopCamera();
-    showCamMsg('Starting camera…', true);
-    navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-    }).then(function (st) {
-      stream = st;
-      video.srcObject = st;
-      var p = video.play();
-      if (p && p.catch) p.catch(function () { });
-      track = st.getVideoTracks()[0] || null;
-      setupTorch();
-      hideCamMsg();
-      scanning = true;
-      frames = 0;
-      if (timer) clearTimeout(timer);
-      tick();
-      setStatus('Point the camera at a barcode');
-    }).catch(function (err) {
-      var name = (err && err.name) || '';
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
-        showCamMsg('Camera permission was denied. Allow it to scan.');
-      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-        showCamMsg('No usable camera was found on this device.');
-      } else if (name === 'NotReadableError') {
-        showCamMsg('The camera is busy — close other camera apps and try again.');
-      } else {
-        showCamMsg('Camera error: ' + (name || (err && err.message) || 'unknown'));
-      }
-    });
+    showCamMsg('Starting camera\u2026', true);
+
+    var hi = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    var tries = [];
+    if (S.settings.camId) {
+      tries.push({ audio: false, video: { deviceId: { exact: S.settings.camId }, width: hi.width, height: hi.height } });
+    }
+    // exact:environment first - with ideal, some phones hand back the selfie camera
+    tries.push({ audio: false, video: { facingMode: { exact: 'environment' }, width: hi.width, height: hi.height } });
+    tries.push({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+    tries.push({ audio: false, video: true });
+
+    lastErr = null;
+    (function attempt(i) {
+      if (i >= tries.length) { camFailed(lastErr); return; }
+      navigator.mediaDevices.getUserMedia(tries[i]).then(onStream).catch(function (err) {
+        lastErr = err;
+        attempt(i + 1);
+      });
+    })(0);
+  }
+
+  function onStream(st) {
+    stream = st;
+    video.srcObject = st;
+    var p = video.play();
+    if (p && p.catch) p.catch(function () { });
+    track = st.getVideoTracks()[0] || null;
+    camLabel = (track && track.label) ? track.label : '';
+    tuneTrack();
+    listCameras().then(fillCameraList);
+    hideCamMsg();
+    scanning = true;
+    frames = 0; hits = 0; fpsAt = now();
+    if (timer) clearTimeout(timer);
+    tick();
+    setStatus(idleText);
+  }
+
+  function camFailed(err) {
+    var name = (err && err.name) || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      showCamMsg('Camera permission was denied. Allow it to scan.');
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      showCamMsg('No usable camera was found on this device.');
+    } else if (name === 'NotReadableError') {
+      showCamMsg('The camera is busy \u2014 close other camera apps and try again.');
+    } else {
+      showCamMsg('Camera error: ' + (name || (err && err.message) || 'unknown'));
+    }
+  }
+
+  /** Ask the camera for continuous autofocus. Without it a barcode held close
+   *  stays soft and never decodes, which looks like the scanner being broken. */
+  function tuneTrack() {
+    torchOn = false; zoomCap = null; zoomNow = 1;
+    if (!track) return;
+    var caps = {};
+    try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (e) { caps = {}; }
+
+    var adv = [];
+    function wants(list, mode) {
+      return list && list.indexOf && list.indexOf(mode) >= 0;
+    }
+    if (wants(caps.focusMode, 'continuous')) adv.push({ focusMode: 'continuous' });
+    if (wants(caps.exposureMode, 'continuous')) adv.push({ exposureMode: 'continuous' });
+    if (wants(caps.whiteBalanceMode, 'continuous')) adv.push({ whiteBalanceMode: 'continuous' });
+    if (adv.length) {
+      try { track.applyConstraints({ advanced: adv }); } catch (e) { }
+    }
+
+    $('btnTorch').classList.toggle('hidden', !caps.torch);
+    if (caps.zoom && caps.zoom.max > (caps.zoom.min || 1)) {
+      zoomCap = caps.zoom;
+      zoomNow = caps.zoom.min || 1;
+      $('btnZoom').classList.remove('hidden');
+      $('btnZoom').textContent = fmtZoom(zoomNow);
+    } else {
+      $('btnZoom').classList.add('hidden');
+    }
+    updateDiag();
+  }
+
+  function fmtZoom(z) { return (Math.round(z * 10) / 10) + '\u00d7'; }
+
+  function cycleZoom() {
+    if (!track || !zoomCap) return;
+    var min = zoomCap.min || 1, max = zoomCap.max || 1;
+    var steps = [min, Math.min(max, min * 2), Math.min(max, min * 3)];
+    var next = steps[0];
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i] > zoomNow + 0.01) { next = steps[i]; break; }
+    }
+    track.applyConstraints({ advanced: [{ zoom: next }] }).then(function () {
+      zoomNow = next;
+      $('btnZoom').textContent = fmtZoom(next);
+    }).catch(function () { });
+  }
+
+  /** Nudge autofocus - handy when the lens has latched onto the background. */
+  function refocus() {
+    if (!track) return;
+    var caps = {};
+    try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (e) { }
+    if (!caps.focusMode) return;
+    var hasSingle = caps.focusMode.indexOf && caps.focusMode.indexOf('single-shot') >= 0;
+    var hasCont = caps.focusMode.indexOf && caps.focusMode.indexOf('continuous') >= 0;
+    if (!hasSingle && !hasCont) return;
+    track.applyConstraints({ advanced: [{ focusMode: hasSingle ? 'single-shot' : 'continuous' }] })
+      .then(function () {
+        if (hasSingle && hasCont) {
+          setTimeout(function () {
+            try { track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (e) { }
+          }, 1200);
+        }
+      }).catch(function () { });
+  }
+
+  function nextCamera() {
+    if (cameras.length < 2) return;
+    var cur = S.settings.camId, idx = -1;
+    for (var i = 0; i < cameras.length; i++) if (cameras[i].deviceId === cur) idx = i;
+    var next = cameras[(idx + 1) % cameras.length];
+    S.settings.camId = next.deviceId;
+    save();
+    setStatus('Camera: ' + (next.label || 'camera ' + (((idx + 1) % cameras.length) + 1)));
+    startCamera();
   }
 
   function stopCamera() {
     scanning = false;
     if (timer) { clearTimeout(timer); timer = null; }
     try { if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { }
-    stream = null; track = null;
+    stream = null; track = null; torchOn = false;
     try { video.srcObject = null; } catch (e) { }
     $('btnTorch').classList.add('hidden');
-  }
-
-  function setupTorch() {
-    var btn = $('btnTorch');
-    var ok = false;
-    try {
-      var caps = track && track.getCapabilities ? track.getCapabilities() : null;
-      ok = !!(caps && caps.torch);
-    } catch (e) { ok = false; }
-    btn.classList.toggle('hidden', !ok);
-    btn.dataset.on = '0';
+    $('btnZoom').classList.add('hidden');
   }
 
   function toggleTorch() {
     if (!track) return;
-    var btn = $('btnTorch');
-    var on = btn.dataset.on !== '1';
+    var on = !torchOn;
     track.applyConstraints({ advanced: [{ torch: on }] }).then(function () {
-      btn.dataset.on = on ? '1' : '0';
-      btn.style.background = on ? 'var(--accent)' : 'rgba(17,24,35,.82)';
+      torchOn = on;
+      $('btnTorch').style.background = on ? 'var(--accent)' : 'rgba(17,24,35,.85)';
     }).catch(function () { setStatus('Torch is not available on this camera'); });
   }
 
+  // -------------------------------------------------------------- scan loop
   function tick() {
     if (!scanning) return;
+    var t0 = now();
     try {
       if (video.readyState >= 2 && video.videoWidth > 0) {
         frames++;
@@ -254,16 +384,21 @@
         else decodeFrame('band', false);
       }
     } catch (e) { }
-    timer = setTimeout(tick, SCAN_INTERVAL_MS);
+    lastMs = Math.round(now() - t0);
+    fpsCount++;
+    if (now() - fpsAt >= 1000) { fps = fpsCount; fpsCount = 0; fpsAt = now(); }
+    if (S.settings.diag && (frames & 3) === 0) updateDiag();
+    // keep roughly a 110ms cycle, but never queue up behind a slow decode
+    timer = setTimeout(tick, Math.max(25, 110 - lastMs));
   }
 
   function decodeFrame(mode, rotated) {
     var vw = video.videoWidth, vh = video.videoHeight;
-    var srcW, srcH, maxW;
+    var srcW, srcH, maxW, reader;
     if (mode === 'band') {
-      srcW = Math.round(vw * 0.90); srcH = Math.round(vh * 0.55); maxW = 1100;
+      srcW = Math.round(vw * 0.92); srcH = Math.round(vh * 0.60); maxW = 1100; reader = readerFast;
     } else {
-      srcW = vw; srcH = vh; maxW = 900;
+      srcW = vw; srcH = vh; maxW = 900; reader = readerHard;
     }
     var outW = srcW, outH = srcH;
     if (outW > maxW) { var k = maxW / outW; outW = Math.round(outW * k); outH = Math.round(outH * k); }
@@ -292,12 +427,26 @@
 
     try {
       var result = reader.decode(bmp);
-      if (result) onDecode(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '');
+      if (result) {
+        hits++;
+        onDecode(result.getText(), FORMAT_NAMES[result.getBarcodeFormat()] || '');
+      }
     } catch (e) {
       /* NotFoundException on most frames - that is the normal case */
     } finally {
       try { reader.reset(); } catch (e) { }
     }
+  }
+
+  function updateDiag() {
+    var el = $('diag');
+    if (!S.settings.diag) { el.classList.add('hidden'); return; }
+    var res = (video.videoWidth || 0) + '\u00d7' + (video.videoHeight || 0);
+    var label = camLabel ? camLabel.replace(/\s*\(.*$/, '').slice(0, 26) : 'camera ?';
+    el.textContent = res + '  ' + fps + 'fps  ' + lastMs + 'ms/frame\n'
+                   + label + (zoomCap ? '  ' + fmtZoom(zoomNow) : '') + '\n'
+                   + 'frames ' + frames + '  reads ' + hits;
+    el.classList.remove('hidden');
   }
 
   // ------------------------------------------------------------------ scans
@@ -486,6 +635,9 @@
     $('setVib').checked = !!S.settings.vib;
     $('setAuto').checked = !!S.settings.auto;
     $('set2d').checked = !!S.settings.read2d;
+    $('setDiag').checked = !!S.settings.diag;
+    fillCameraList(cameras);
+    listCameras().then(fillCameraList);
     $('verPill').textContent = 'v' + host.version();
     $('testOut').classList.add('hidden');
     $('exportBox').classList.add('hidden');
@@ -505,11 +657,16 @@
     S.settings.vib = $('setVib').checked;
     S.settings.auto = $('setAuto').checked;
     S.settings.read2d = $('set2d').checked;
+    S.settings.diag = $('setDiag').checked;
+    var prevCam = S.settings.camId;
+    S.settings.camId = $('setCam') ? $('setCam').value : '';
     if (S.settings.url && S.settings.url.indexOf('https://') !== 0) {
       out('The URL has to start with https://', false);
       return;
     }
     applyHints();
+    updateDiag();
+    if (S.settings.camId !== prevCam) startCamera();
     if (!$('refField').value) $('refField').value = S.settings.ref;
     saveNow();
     closeSettings();
@@ -568,6 +725,9 @@
   $('btnTest').addEventListener('click', testConnection);
   $('btnExport').addEventListener('click', exportCsv);
   $('btnTorch').addEventListener('click', toggleTorch);
+  $('btnZoom').addEventListener('click', cycleZoom);
+  $('btnCam').addEventListener('click', nextCamera);
+  video.addEventListener('click', refocus);
   $('btnSync').addEventListener('click', function () { flush(true); });
   $('btnCamRetry').addEventListener('click', function () {
     try { if (N) N.requestCamera(); } catch (e) { }
@@ -621,15 +781,21 @@
   }, RETRY_MS);
 
   // -------------------------------------------------------------------- boot
-  load();
-  applyHints();
-  setQty(1);
-  $('refField').value = S.settings.ref || '';
-  render();
-  if (!S.settings.url) {
-    setStatus('Open settings (⚙) to connect your sheet');
-    idleText = 'Scans are stored on the phone until the sheet is connected';
+  try {
+    if (!Z || !Z.MultiFormatReader) throw new Error('barcode library did not load');
+    load();
+    applyHints();
+    setQty(1);
+    $('refField').value = S.settings.ref || '';
+    render();
+    updateDiag();
+    if (!S.settings.url) {
+      setStatus('Open settings (⚙) to connect your sheet');
+      idleText = 'Scans are stored on the phone until the sheet is connected';
+    }
+    startCamera();
+  } catch (bootErr) {
+    setStatus('Startup problem: ' + (bootErr && bootErr.message ? bootErr.message : bootErr), 'err');
   }
-  startCamera();
   window.__deedscan = { state: function () { return S; }, flush: flush, add: addScan };
 })();
