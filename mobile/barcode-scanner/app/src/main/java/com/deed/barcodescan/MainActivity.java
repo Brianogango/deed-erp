@@ -283,9 +283,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Google's error pages put the useful sentence in the last 100 bytes of a
+     *  5 KB page, so a body that has to be shortened keeps both ends. */
+    private static final int MAX_BODY = 20000;
+
     void deliver(String reqId, int status, String text) {
         if (text == null) text = "";
-        if (text.length() > 4000) text = text.substring(0, 4000);
+        if (text.length() > MAX_BODY) {
+            int half = MAX_BODY / 2;
+            text = text.substring(0, half) + "\n...\n" + text.substring(text.length() - half);
+        }
         jsEval("window.__httpResult && window.__httpResult("
                 + JSONObject.quote(reqId) + "," + status + "," + JSONObject.quote(text) + ")");
     }

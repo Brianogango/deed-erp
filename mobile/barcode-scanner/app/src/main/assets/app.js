@@ -568,9 +568,16 @@
     }
     if (res.status === 404) return 'URL not found (404) \u2014 check the /exec link';
     if (res.status >= 500) return 'Google script error (' + res.status + ') \u2014 will retry';
+    if (/Sorry, unable to open the file/i.test(body)) {
+      return 'Google cannot open that script \u2014 the /exec URL points at a deployment that no longer exists';
+    }
     if (/<html|<!DOCTYPE/i.test(body)) {
-      return 'The script sent a web page instead of data (' + res.status
-           + ') \u2014 open the /exec URL in a private browser window to see it';
+      // show Google's own words rather than a shrug
+      var vis = body.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+                    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return 'The script replied with a web page, not data (' + res.status + ')'
+           + (vis ? ': \u201c' + vis.slice(0, 140) + '\u201d' : '')
+           + ' \u2014 open the /exec URL in a private browser window';
     }
     return 'Unexpected reply (' + res.status + ') \u2014 will retry';
   }
