@@ -146,3 +146,32 @@
   .hr-attendance__sum > li > span[data-label] { display: flex; justify-content: space-between; gap: 0.5rem; }
   .hr-attendance__sum > li > span[data-label]::before { content: attr(data-label); color: var(--text-3); }
 }
+
+/* ── Add / edit employee (components/modules/HR.tsx employeeFormFields) ── */
+.emp-form { display: flex; flex-direction: column; gap: 1.25rem; }
+.emp-form__section { display: flex; flex-direction: column; gap: 0.75rem; }
+.emp-form__section + .emp-form__section { padding-top: 1.25rem; border-top: 1px solid var(--border-lt); }
+.emp-form__section > h3 { margin: 0; color: var(--text-1); font-size: 13px; font-weight: 700; }
+.emp-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
+.emp-form__grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.emp-form__wide { grid-column: 1 / -1; }
+.emp-form__hint { margin: -0.25rem 0 0; color: var(--text-3); font-size: 12px; }
+.emp-form__seg { display: flex; gap: 0.25rem; padding: 0.1875rem; border-radius: var(--radius-sm); background: var(--bg-surface); }
+.emp-form__seg button {
+  flex: 1;
+  min-height: 38px;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.emp-form__seg button.is-active { background: var(--bg-card); color: var(--primary); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+
+@media (max-width: 640px) {
+  .emp-form__grid, .emp-form__grid--3 { grid-template-columns: minmax(0, 1fr); }
+}

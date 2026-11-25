@@ -196,6 +196,35 @@ function HRContent() {
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
+  // Monthly salary or a daily rate (kept with attendance, see /api/attendance/pay-basis).
+  const canSetPayBasis = userCan(currentUser, 'managePayroll')
+  const [payBasis, setPayBasis] = useState<{ basis: 'monthly' | 'daily'; rate: string; loaded: { basis: 'monthly' | 'daily'; rate: number } }>({ basis: 'monthly', rate: '', loaded: { basis: 'monthly', rate: 0 } })
+  const loadPayBasis = async (employeeId: string | null) => {
+    const none = { basis: 'monthly' as const, rate: '', loaded: { basis: 'monthly' as const, rate: 0 } }
+    setPayBasis(none)
+    if (!employeeId || !canSetPayBasis) return
+    try {
+      const res = await fetch('/api/attendance/pay-basis', { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      const row = Array.isArray(data.payBasis) ? data.payBasis.find((r: { employeeId: string }) => r.employeeId === employeeId) : null
+      if (row) setPayBasis({ basis: row.basis, rate: row.dailyRate ? String(row.dailyRate) : '', loaded: { basis: row.basis, rate: Number(row.dailyRate) || 0 } })
+    } catch { /* keep monthly */ }
+  }
+  /** Save the pay type when it changed. Returns false (and says why) when it could not be saved. */
+  const savePayBasis = async (employeeId: string): Promise<boolean> => {
+    if (!canSetPayBasis) return true
+    const rate = Number(payBasis.rate) || 0
+    if (payBasis.basis === payBasis.loaded.basis && (payBasis.basis === 'monthly' || rate === payBasis.loaded.rate)) return true
+    try {
+      const res = await fetch('/api/attendance/pay-basis', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId, basis: payBasis.basis, dailyRate: rate }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save how they are paid')
+      return true
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not save how they are paid', 'error')
+      return false
+    }
+  }
   const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
 
   /** The employee form as the add / update calls expect it. */
@@ -232,6 +261,7 @@ function HRContent() {
     const missingEmp: string[] = []
     if (!empForm.departmentId) missingEmp.push('Department')
     if (!empForm.startDate) missingEmp.push('Start Date')
+    if (payBasis.basis === 'daily' && !(Number(payBasis.rate) > 0)) missingEmp.push('Daily rate')
     if (missingEmp.length) {
       showToast(`Please fill in: ${missingEmp.join(', ')}`, 'error')
       return
@@ -239,7 +269,8 @@ function HRContent() {
     if (saving) return
     setSaving(true)
     try {
-      await addEmployee(employeePayload())
+      const saved = await addEmployee(employeePayload())
+      await savePayBasis(saved.id)
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
     } catch {
@@ -257,9 +288,14 @@ function HRContent() {
       showToast('Department is required', 'error')
       return
     }
+    if (payBasis.basis === 'daily' && !(Number(payBasis.rate) > 0)) {
+      showToast('Enter the daily rate', 'error')
+      return
+    }
     if (saving) return
     setSaving(true)
     try {
+      if (!(await savePayBasis(editEmpId))) return
       await updateEmployee(editEmpId, employeePayload())
       setEditEmpId(null)
       setViewEmpId(null)
@@ -393,120 +429,101 @@ function HRContent() {
     },
   ].filter(group => group.items.length > 0)
 
-  /** Employee form fields, shared by the Add and Edit modals. */
+  /** One-tap choices (pay type, payment method, gender, status). */
+  const seg = <T extends string>(label: string, value: T, onChange: (v: T) => void, options: Array<[T, string]>) => (
+    <div className="emp-form__seg" role="radiogroup" aria-label={label}>
+      {options.map(([v, text]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? 'is-active' : ''} onClick={() => onChange(v)}>{text}</button>
+      ))}
+    </div>
+  )
+
+  /** Employee form, shared by the Add and Edit modals: grouped the way HR thinks about a person. */
   const employeeFormFields = (isNew: boolean) => (
-    <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Full Name" required>
-          <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
-        </Field>
-        <Field label="Employee No." required>
-          <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Personal email">
-          <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
-        </Field>
-        <Field label="Work email">
-          <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
-        </Field>
-        <Field label="Phone">
-          <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="National ID">
-          <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
-        </Field>
-        <Field label="KRA PIN">
-          <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
-        </Field>
-        <Field label="NSSF Number">
-          <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
-        </Field>
-        <Field label="SHIF Number">
-          <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Gender">
-          <Select
-            value={empForm.gender}
-            onChange={setEF('gender')}
-            options={[
-              { value: '', label: 'Not specified' },
-              { value: 'male', label: 'Male' },
-              { value: 'female', label: 'Female' },
-            ]}
-          />
-        </Field>
-        <Field label="Department" required>
-          <Select
-            value={empForm.departmentId}
-            onChange={setEF('departmentId')}
-            options={isNew ? [{ value: '', label: 'Select department…' }, ...DEPARTMENTS] : DEPARTMENTS}
-          />
-        </Field>
-        <Field label="Job Title">
-          <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Start Date" required={isNew}>
-          <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
-        </Field>
-        <Field label="Status">
-          <Select
-            value={empForm.status}
-            onChange={setEF('status')}
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'on_leave', label: 'On Leave' },
-              { value: 'exited', label: 'Exited' },
-            ]}
-          />
-        </Field>
-      </div>
-      <div className="pt-2 border-t border-[var(--border-lt)]">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Basic Salary (KES)">
-            <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
-          </Field>
-          <Field label="Housing Allowance">
-            <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
-          </Field>
-          <Field label="Transport Allowance">
-            <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
-          </Field>
+    <div className="emp-form">
+      <section className="emp-form__section">
+        <h3>Person</h3>
+        <div className="emp-form__grid">
+          <Field label="Full name" required><Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" /></Field>
+          <Field label="Employee no." required><Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" /></Field>
+          <Field label="Phone"><Input value={empForm.phone} onChange={setEF('phone')} type="tel" placeholder="07xx xxx xxx" /></Field>
+          <Field label="Gender">{seg('Gender', empForm.gender as '' | 'male' | 'female', setEF('gender'), [['female', 'Female'], ['male', 'Male'], ['', 'Not set']])}</Field>
+          <Field label="Personal email"><Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" /></Field>
+          <Field label="Work email"><Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" /></Field>
         </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Reports to">
-          <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
-            { value: '', label: 'No one (top of the chart)' },
-            ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
-          ]} />
-        </Field>
-        <Field label="Salary paid by">
-          <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
-            { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
-          ]} />
-        </Field>
-        <Field label="M-Pesa number">
-          <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
-        </Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Bank Name">
-          <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
-        </Field>
-        <Field label="Bank Account Number">
-          <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" />
-        </Field>
-      </div>
-    </>
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Job</h3>
+        <div className="emp-form__grid">
+          <Field label="Department" required>
+            <Select value={empForm.departmentId} onChange={setEF('departmentId')} options={isNew || !empForm.departmentId ? [{ value: '', label: 'Select department…' }, ...DEPARTMENTS] : DEPARTMENTS} />
+          </Field>
+          <Field label="Job title"><Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" /></Field>
+          <Field label="Start date" required={isNew}>
+            <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
+          </Field>
+          <Field label="Reports to">
+            <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
+              { value: '', label: 'No one (top of the chart)' },
+              ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
+            ]} />
+          </Field>
+          {!isNew && (
+            <div className="emp-form__wide">
+              <Field label="Status">{seg('Status', empForm.status, v => setEmpForm(p => ({ ...p, status: v })), [['active', 'Active'], ['on_leave', 'On leave'], ['exited', 'Exited']])}</Field>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Pay</h3>
+        {canSetPayBasis ? (
+          <>
+            {seg('How they are paid', payBasis.basis, v => setPayBasis(b => ({ ...b, basis: v })), [['monthly', 'Monthly salary'], ['daily', 'By the day']])}
+            <p className="emp-form__hint">
+              {payBasis.basis === 'daily'
+                ? 'Payroll pays the approved attendance days of the month × the daily rate.'
+                : 'Payroll pays the same basic salary every month.'}
+            </p>
+          </>
+        ) : payBasis.basis === 'daily' ? <p className="emp-form__hint">Paid by the day ({fmtKes(Number(payBasis.rate) || 0)} a day).</p> : null}
+        <div className="emp-form__grid emp-form__grid--3">
+          {payBasis.basis === 'daily'
+            ? <Field label="Daily rate (KES)" required><Input type="number" value={payBasis.rate} onChange={v => setPayBasis(b => ({ ...b, rate: String(v) }))} placeholder="e.g. 800" disabled={!canSetPayBasis} /></Field>
+            : <Field label="Basic salary / month (KES)"><Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" /></Field>}
+          <Field label="Housing allowance"><Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" /></Field>
+          <Field label="Transport allowance"><Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" /></Field>
+        </div>
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Paid by</h3>
+        {seg('Salary paid by', empForm.paymentMode as 'mpesa' | 'bank' | 'cash', setEF('paymentMode'), [['mpesa', 'M-Pesa'], ['bank', 'Bank'], ['cash', 'Cash']])}
+        {empForm.paymentMode === 'mpesa' && (
+          <div className="emp-form__grid">
+            <Field label="M-Pesa number"><Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} type="tel" placeholder={empForm.phone || '07xx xxx xxx'} /></Field>
+          </div>
+        )}
+        {empForm.paymentMode === 'bank' && (
+          <div className="emp-form__grid">
+            <Field label="Bank"><Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" /></Field>
+            <Field label="Account number"><Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" /></Field>
+          </div>
+        )}
+      </section>
+
+      <section className="emp-form__section">
+        <h3>Statutory numbers</h3>
+        <div className="emp-form__grid">
+          <Field label="National ID"><Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="ID number" /></Field>
+          <Field label="KRA PIN"><Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" /></Field>
+          <Field label="NSSF number"><Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" /></Field>
+          <Field label="SHIF number"><Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" /></Field>
+        </div>
+      </section>
+    </div>
   )
 
   return (
@@ -520,7 +537,7 @@ function HRContent() {
         primaryAction={isAdmin ? (
           <PrimaryActionButton
             icon={<Fa icon={faUserPlus} />}
-            onClick={() => { setTab('employees'); setShowEmployeeModal(true) }}
+            onClick={() => { setTab('employees'); void loadPayBasis(null); setShowEmployeeModal(true) }}
           >
             Add employee
           </PrimaryActionButton>
@@ -585,7 +602,7 @@ function HRContent() {
               onPageChange={setEmpPage}
               searchPlaceholder="Search employees…"
               emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
-              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
+              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => { void loadPayBasis(null); setShowEmployeeModal(true) }}>+ Add Employee</button> : undefined}
               onRowClick={e => setViewEmpId(e.id)}
               rowActions={e => (
                 <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
@@ -753,36 +770,40 @@ function HRContent() {
       {/* ── Add Employee Modal ── */}
       {showEmployeeModal && (
         <Modal
-          title="Add Employee"
+          title="Add employee"
+          variant="enterprise"
           onClose={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}
-          width={580}
+          width={680}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={handleAddEmployee} disabled={saving}>{saving ? 'Saving…' : 'Add employee'}</button>
+            </>
+          )}
         >
-          <div className="flex flex-col gap-4">
-            {employeeFormFields(true)}
-            <div className="flex gap-3 justify-end pt-2">
-              <button className="btn-secondary px-6" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
-              <button className="btn-primary px-8" onClick={handleAddEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Employee'}</button>
-            </div>
-          </div>
+          {employeeFormFields(true)}
         </Modal>
       )}
 
       {/* ── View Employee Modal ── */}
       {viewEmployee && (
         <Modal 
-          title={editEmpId === viewEmployee.id ? "Edit Employee" : "Employee Details"} 
+          title={editEmpId === viewEmployee.id ? `Edit ${viewEmployee.fullName}` : "Employee Details"} 
+          variant={editEmpId === viewEmployee.id ? 'enterprise' : 'default'}
           onClose={() => { setViewEmpId(null); setEditEmpId(null); setEmpForm(blankEmp()) }} 
-          width={editEmpId === viewEmployee.id ? 580 : 520}
+          width={editEmpId === viewEmployee.id ? 680 : 520}
+          footer={editEmpId === viewEmployee.id ? (
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={handleUpdateEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+            </>
+          ) : undefined}
         >
           <div className="hr-employee-detail flex flex-col gap-4">
             {editEmpId === viewEmployee.id ? (
               // Edit Mode
               <>
                 {employeeFormFields(false)}
-                <div className="flex gap-3 justify-end pt-2">
-                  <button className="btn-secondary px-6" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
-                  <button className="btn-primary px-8" onClick={handleUpdateEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
-                </div>
               </>
             ) : (
               // View Mode
@@ -814,7 +835,7 @@ function HRContent() {
                 <EmployeeLifecyclePanel key={viewEmployee.id} employee={viewEmployee} canManage={canManageHR} />
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '', managerEmployeeId: viewEmployee.managerEmployeeId || '' }); setEditEmpId(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '', managerEmployeeId: viewEmployee.managerEmployeeId || '' }); setEditEmpId(viewEmployee.id); void loadPayBasis(viewEmployee.id) }}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>
