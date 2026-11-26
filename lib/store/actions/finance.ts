@@ -1779,8 +1779,21 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
   
         const isPaidCustomerInvoice = inv.type === 'customer_invoice' && inv.amountPaid > 0
         let credit: CustomerCredit | null = null
+        // Credit notes already issued on the invoice gave their part back:
+        // credit only what is left, or the customer is credited twice.
+        let creditAmount = 0
         if (isPaidCustomerInvoice) {
-          const creditAmount = Math.min(inv.amountPaid, inv.total)
+          try {
+            const res = await fetch(`/api/invoices/${id}/cancel-credit`)
+            const data = await res.json().catch(() => ({})) as { creditable?: number; error?: string }
+            if (!res.ok || typeof data.creditable !== 'number') throw new Error(data.error || 'Could not check earlier credit notes')
+            creditAmount = data.creditable
+          } catch (err) {
+            store.showToast(`${err instanceof Error ? err.message : 'Could not check earlier credit notes'} — nothing was cancelled`, 'error')
+            return
+          }
+        }
+        if (isPaidCustomerInvoice && creditAmount > 0) {
           credit = {
             id: uid(),
             ref: forcedCreditRef ?? await store.storeCtxRef.current!.allocateDocRef('CN'),
@@ -1798,6 +1811,9 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
           }
           store.setCustomerCredits(prev => [credit!, ...prev])
           store.setJournalEntries(prev => [buildCustomerCreditJournal(inv, credit!.ref, creditAmount), ...prev])
+        } else if (isPaidCustomerInvoice) {
+          // Paid, and earlier credit notes already gave all of it back: the
+          // sale is already reversed by them, so nothing more is posted.
         } else {
           const related = store.journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
           const reversals = related

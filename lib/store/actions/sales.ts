@@ -4033,7 +4033,22 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           return null
         }
         const sourceInvoice = candidateInvoices[0]
-        const maxCredit = Math.max(0, Number(sourceInvoice.amountPaid) || Number(sourceInvoice.total) || 0)
+        // Less what earlier credit notes on the invoice already gave back.
+        let alreadyCredited = 0
+        try {
+          const res = await fetch(`/api/invoices/${sourceInvoice.id}/cancel-credit`)
+          const data = await res.json().catch(() => ({})) as { alreadyCredited?: number; error?: string }
+          if (!res.ok || typeof data.alreadyCredited !== 'number') throw new Error(data.error || 'Could not check earlier credit notes')
+          alreadyCredited = data.alreadyCredited
+        } catch (err) {
+          store.showToast(`${err instanceof Error ? err.message : 'Could not check earlier credit notes'} — no credit note issued`, 'error')
+          return null
+        }
+        const maxCredit = Math.max(0, Math.round(((Number(sourceInvoice.amountPaid) || Number(sourceInvoice.total) || 0) - alreadyCredited) * 100) / 100)
+        if (maxCredit <= 0) {
+          store.showToast(`${sourceInvoice.ref} has already been fully credited`, 'error')
+          return null
+        }
         if (creditAmount > maxCredit) {
           store.showToast(`Credit cannot exceed ${store.fmtKes(maxCredit)} for ${sourceInvoice.ref}`, 'error')
           return null

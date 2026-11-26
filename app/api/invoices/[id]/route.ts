@@ -603,7 +603,13 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       const creditRef = typeof body.creditRef === 'string' && body.creditRef
         ? body.creditRef
         : creditRefMatch?.[1]
-      if (creditRef) {
+      // Only what is left after earlier credit notes on this invoice: those
+      // already reversed their part of the sale and credited the customer.
+      const { cancelCreditForInvoice } = await import('@/lib/finance/cancel-credit.server')
+      const { creditable } = creditRef
+        ? await cancelCreditForInvoice({ id: invoice.id, amountPaid: before.amountPaid, totalAmount: before.totalAmount }, creditRef)
+        : { creditable: 0 }
+      if (creditRef && creditable > 0) {
         try {
           const { postCustomerCreditJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
           await postCustomerCreditJournalToPrisma({
@@ -619,7 +625,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
               type: 'customer_invoice',
             },
             creditRef,
-            amount: Math.min(Number(before.amountPaid), Number(before.totalAmount)),
+            amount: creditable,
             createdById: actor.id,
           })
         } catch (err) {
