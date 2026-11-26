@@ -27,7 +27,7 @@ import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProduct
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
-import { faRotate, faPlus, faUser, faWrench, faArrowRight, faBoxOpen, faPencil, faTrash, faBell, faTriangleExclamation, faCheck, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
+import { faRotate, faPlus, faUser, faWrench, faArrowRight, faPencil, faTrash, faBell, faTriangleExclamation, faCheck, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { useCan } from '@/hooks/useCan'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -118,17 +118,10 @@ function RefurbishmentContent() {
   const [showNotesModal, setShowNotesModal]         = useState(false)
   const [showPartModal, setShowPartModal]           = useState(false)
   const [showWriteOffModal, setShowWriteOffModal]   = useState(false)
-  const [showCreateJobModal, setShowCreateJobModal] = useState(false)
   const [showIdentify, setShowIdentify]             = useState(false)
   const [showChangeProduct, setShowChangeProduct]   = useState(false)
   const [showHarvest, setShowHarvest]               = useState(false)
-  const [createJobSerial, setCreateJobSerial]       = useState<SerialNumber | null>(null)
-  const [createJobIssue, setCreateJobIssue]         = useState('')
   const [editPartId, setEditPartId]                 = useState<string | null>(null)
-
-  const [selectedIssueIds, setSelectedIssueIds] = useState<Set<string>>(new Set())
-  const [showBulkSendModal, setShowBulkSendModal] = useState(false)
-  const [bulkIssueDesc, setBulkIssueDesc]         = useState('')
 
   const [notesText, setNotesText]           = useState('')
   const [issuesText, setIssuesText]         = useState('')
@@ -167,7 +160,6 @@ function RefurbishmentContent() {
     [serials, refurbishmentJobs]
   )
   // "With Issues" stock still in our hands (the location is called shop).
-  const withIssuesSerials = useMemo(() => serials.filter(s => s.location === 'shop' && ['available', 'returned'].includes(s.status)), [serials])
   // The sticker number follows the machine onto its job.
   const assetIdBySerialId = useMemo(() => new Map(serials.flatMap(s => {
     const a = (s as SerialNumber & { assetId?: string }).assetId
@@ -194,11 +186,6 @@ function RefurbishmentContent() {
     const issue = knownIssueFor(s)
     createRefurbishmentJob(s.id, issue, { silent: true })
     showToast(issue ? `Job created · issue: ${issue.length > 60 ? `${issue.slice(0, 60)}…` : issue}` : 'Job created · the technician adds what they find')
-  }
-
-  const sendToRefurbishment = (list: SerialNumber[], issue: string) => {
-    list.forEach(s => createRefurbishmentJob(s.id, issue, { silent: true }))
-    showToast(`${list.length} machine${list.length === 1 ? '' : 's'} sent to refurbishment`)
   }
 
   const filtered = useMemo(() => {
@@ -1060,84 +1047,6 @@ function RefurbishmentContent() {
           )
         })()}
 
-        {/* With Issues */}
-        {withIssuesSerials.length > 0 && (
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #FED7AA' }}>
-            <div className="flex items-center justify-between gap-2 px-4 py-2.5 flex-wrap"
-              style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA' }}>
-              <div className="flex items-center gap-2">
-                <Fa icon={faTriangleExclamation} aria-hidden="true" />
-                <p className="text-xs font-bold" style={{ color: 'var(--warning-text)' }}>
-                  {withIssuesSerials.length} device{withIssuesSerials.length > 1 ? 's' : ''} with issues — awaiting refurbishment decision
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-              {(isLeadTech || canDelete) && (
-                <>
-                  <label className="flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none" style={{ color: 'var(--warning-text)' }}>
-                    <input type="checkbox"
-                      checked={withIssuesSerials.length > 0 && withIssuesSerials.every(s => selectedIssueIds.has(s.id))}
-                      onChange={e => setSelectedIssueIds(e.target.checked ? new Set(withIssuesSerials.map(s => s.id)) : new Set())}
-                      style={{ accentColor: '#EA580C' }} />
-                    Select All
-                  </label>
-                  {selectedIssueIds.size > 0 && canDelete && (
-                    <button type="button" className="btn-outline text-[11px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
-                      onClick={() => openDelete([], withIssuesSerials.filter(s => selectedIssueIds.has(s.id)), () => setSelectedIssueIds(new Set()))}>
-                      <Fa icon={faTrash} className="mr-1.5" />Delete {selectedIssueIds.size}
-                    </button>
-                  )}
-                  {selectedIssueIds.size > 0 && isLeadTech && (
-                    <button className="btn-primary text-[11px] py-1 px-3"
-                      style={{ background: '#EA580C', borderColor: '#EA580C' }}
-                      onClick={() => setShowBulkSendModal(true)}>
-                      <Fa icon={faWrench} className="mr-1.5" />Send {selectedIssueIds.size} to Refurbishment
-                    </button>
-                  )}
-                </>
-              )}
-              </div>
-            </div>
-            <div className="bg-white grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
-              {withIssuesSerials.map(s => {
-                const isSel = selectedIssueIds.has(s.id)
-                return (
-                  <div key={s.id} className="flex items-center gap-2.5 rounded-lg px-3 py-2 transition-all"
-                    style={{ background: isSel ? 'var(--warning-bg)' : 'var(--bg-surface)', border: `1px solid ${isSel ? 'var(--warning)' : 'var(--border-lt)'}` }}>
-                    {(isLeadTech || canDelete) && (
-                      <input type="checkbox" checked={isSel} style={{ accentColor: '#EA580C', flexShrink: 0 }}
-                        onChange={e => {
-                          const next = new Set(selectedIssueIds)
-                          e.target.checked ? next.add(s.id) : next.delete(s.id)
-                          setSelectedIssueIds(next)
-                        }} />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-t1 truncate" title={s.productName}>{s.productName}</p>
-                      <p className="font-mono text-[10px] text-t3 truncate">
-                        {unitInfo(s).assetId || s.serial}
-                        {unitInfo(s).assetId && !unitInfo(s).identityPending && s.serial !== unitInfo(s).assetId ? ` · S/N ${s.serial}` : ''}
-                      </p>
-                      {unitInfo(s).intakeIssue && <p className="text-[10px] text-t3 truncate" title={unitInfo(s).intakeIssue}>{unitInfo(s).intakeIssue}</p>}
-                    </div>
-                    {isLeadTech && selectedIssueIds.size === 0 && (
-                      <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#EA580C', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                        onClick={() => { setCreateJobSerial(s); setCreateJobIssue(unitInfo(s).intakeIssue ?? ''); setShowCreateJobModal(true) }}>
-                        Send
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {!isLeadTech && (
-              <div className="px-4 py-2 text-[10px]" style={{ background: '#FFF7ED', color: 'var(--warning-text)', borderTop: '1px solid #FED7AA' }}>
-                Ask the lead technician to send these devices for refurbishment.
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Orphaned serials */}
         {orphanedSerials.length > 0 && (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #FDE68A' }}>
@@ -1282,57 +1191,6 @@ function RefurbishmentContent() {
       )}
 
 
-      {/* ── Bulk Send Modal ── */}
-      {showBulkSendModal && (
-        <Modal title={`Send ${selectedIssueIds.size} Device${selectedIssueIds.size > 1 ? 's' : ''} to Refurbishment`}
-          onClose={() => setShowBulkSendModal(false)} width={480}>
-          <div className="rounded-lg p-3 mb-3 flex flex-col gap-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)', maxHeight: 180, overflowY: 'auto' }}>
-            {withIssuesSerials.filter(s => selectedIssueIds.has(s.id)).map(s => (
-              <div key={s.id} className="flex items-center gap-2 text-xs">
-                <Fa icon={faBoxOpen} className="text-t3" aria-hidden="true" />
-                <span className="font-semibold text-t1">{s.productName}</span>
-                <span className="font-mono text-t3">{unitInfo(s).assetId || s.serial}</span>
-                {unitInfo(s).intakeIssue && <span className="text-t3 truncate">· {unitInfo(s).intakeIssue}</span>}
-              </div>
-            ))}
-          </div>
-          <Field label="Issue (optional)">
-            <Textarea value={bulkIssueDesc} onChange={setBulkIssueDesc} rows={3}
-              placeholder="Leave blank to keep each machine's own issues — the technician adds what they find" />
-          </Field>
-          <div className="flex gap-2 justify-end mt-4">
-            <button className="btn-outline" onClick={() => setShowBulkSendModal(false)}>Cancel</button>
-            <button className="btn-primary" style={{ background: '#EA580C', borderColor: '#EA580C' }}
-              onClick={() => {
-                sendToRefurbishment(withIssuesSerials.filter(s => selectedIssueIds.has(s.id)), bulkIssueDesc.trim())
-                setSelectedIssueIds(new Set()); setBulkIssueDesc(''); setShowBulkSendModal(false)
-              }}>
-              Send to Refurbishment
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Create Job Modal ── */}
-      {showCreateJobModal && createJobSerial && (
-        <Modal title="Create Refurbishment Job" onClose={() => setShowCreateJobModal(false)} width={440}>
-          <div className="rounded-lg p-3 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-            <p className="text-xs font-semibold text-t1">{createJobSerial.productName}</p>
-            <p className="font-mono text-[11px] text-t3">{unitInfo(createJobSerial).assetId ? `${unitInfo(createJobSerial).assetId} · ` : ''}S/N: {createJobSerial.serial}</p>
-          </div>
-          <Field label="Issue (optional)">
-            <Textarea value={createJobIssue} onChange={setCreateJobIssue} rows={3}
-              placeholder="Describe the problem — e.g. cracked screen, battery failure…" />
-          </Field>
-          <div className="flex gap-2 justify-end mt-4">
-            <button className="btn-outline" onClick={() => setShowCreateJobModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={() => {
-              createRefurbishmentJob(createJobSerial.id, createJobIssue.trim())
-              setShowCreateJobModal(false)
-            }}>Create Job</button>
-          </div>
-        </Modal>
-      )}
       {pendingConfirm && (
         <Confirm
           message={pendingConfirm.msg}
