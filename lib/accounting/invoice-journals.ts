@@ -1,4 +1,5 @@
 import 'server-only'
+import { cancelReversal } from '@/lib/finance/cancel-credit'
 import { isWithholdingMethod, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
 import prisma from '@/lib/prisma'
 import { createJournalEntry, persistStoreJournalEntry, reverseJournalEntry, type CreateJournalEntryInput } from '@/lib/accounting/journal-service'
@@ -352,31 +353,37 @@ export async function postCustomerCreditJournalToPrisma(params: {
   invoice: InvoiceLike
   creditRef: string
   amount: number
+  /** The unpaid balance of a partly paid invoice, taken off receivables. */
+  receivable?: number
   createdById?: string
 }) {
   const invRef = String(params.invoice.ref || params.invoice.invoiceNumber || params.invoice.id)
   const partner = params.invoice.partnerName || params.invoice.clientName || 'Customer'
-  const amount = money(params.amount)
-  const total = money(params.invoice.total ?? params.invoice.totalAmount) || amount
-  const subtotal = money(params.invoice.subtotal ?? total)
-  const tax = money(params.invoice.taxTotal ?? params.invoice.taxAmount)
-  const subtotalRatio = total > 0 ? subtotal / total : 1
-  const taxRatio = total > 0 ? tax / total : 0
-  const revenueReversal = money(amount * subtotalRatio)
-  const vatReversal = money(amount * taxRatio)
+  const total = money(params.invoice.total ?? params.invoice.totalAmount) || money(params.amount)
+  const r = cancelReversal({
+    total,
+    subtotal: money(params.invoice.subtotal ?? total),
+    tax: money(params.invoice.taxTotal ?? params.invoice.taxAmount),
+    credit: money(params.amount),
+    receivable: money(params.receivable ?? 0),
+  })
+  if (r.total <= 0) return null
   const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, [])
 
   return persistStoreJournalEntry({
     ref: `JRN/${params.creditRef}`,
     source: 'manual',
-    description: `Credit note ${params.creditRef} for cancelled paid invoice ${invRef}`,
+    description: r.credit > 0
+      ? `Credit note ${params.creditRef} for cancelled paid invoice ${invRef}`
+      : `Cancelled invoice ${invRef}: unpaid balance reversed`,
     invoiceId: params.invoice.id,
     lines: [
-      { account: saleLabel, description: `Credit note ${params.creditRef}: reverse ${invRef}`, debit: revenueReversal, credit: 0 },
-      ...(vatReversal > 0
-        ? [{ account: labelForRole('output_vat'), description: `Credit VAT ${params.creditRef}`, debit: vatReversal, credit: 0 }]
+      { account: saleLabel, description: `${params.creditRef}: reverse ${invRef}`, debit: r.revenue, credit: 0 },
+      ...(r.vat > 0
+        ? [{ account: labelForRole('output_vat'), description: `Reverse VAT ${params.creditRef}`, debit: r.vat, credit: 0 }]
         : []),
-      { account: CUSTOMER_CREDITS_ACCOUNT, description: `Customer credit: ${partner}`, debit: 0, credit: amount },
+      ...(r.credit > 0 ? [{ account: CUSTOMER_CREDITS_ACCOUNT, description: `Customer credit: ${partner}`, debit: 0, credit: r.credit }] : []),
+      ...(r.receivable > 0 ? [{ account: labelForRole('ar'), description: `Unpaid balance of cancelled ${invRef}`, debit: 0, credit: r.receivable }] : []),
     ],
   }, { createdById: params.createdById, journalCode: 'SAL' })
 }

@@ -594,7 +594,8 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
 
     // Paid customer invoice cancel → credit liability journal (creditRef from body/notes)
     const paidCancel = before
-      && (before.status === 'approved' || before.status === 'invoiced')
+      // Any posted state: a delivered or dispatched invoice is as posted as an approved one.
+      && PRISMA_POSTED_INVOICE_STATUSES.has(String(before.status))
       && (invoice.status === 'cancelled' || invoice.status === 'voided')
       && Number(before.amountPaid) > 0
       && invoiceType === 'customer_invoice'
@@ -609,7 +610,12 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       const { creditable } = creditRef
         ? await cancelCreditForInvoice({ id: invoice.id, amountPaid: before.amountPaid, totalAmount: before.totalAmount }, creditRef)
         : { creditable: 0 }
-      if (creditRef && creditable > 0) {
+      // A partly paid invoice also has an unpaid balance: it comes off
+      // receivables too, or a cancelled invoice stays owed.
+      const { openReceivable } = await import('@/lib/finance/cancel-credit')
+      const receivable = openReceivable({ total: Number(before.totalAmount), amountPaid: Number(before.amountPaid) })
+      const journalRef = creditRef && creditable > 0 ? creditRef : `CANCEL/${before.invoiceNumber || invoice.invoiceNumber}`
+      if ((creditRef && creditable > 0) || receivable > 0) {
         try {
           const { postCustomerCreditJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
           await postCustomerCreditJournalToPrisma({
@@ -624,13 +630,26 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
               clientName: mirror.clientName,
               type: 'customer_invoice',
             },
-            creditRef,
-            amount: creditable,
+            creditRef: journalRef,
+            amount: creditRef ? creditable : 0,
+            receivable,
             createdById: actor.id,
           })
         } catch (err) {
           console.error('[invoice] customer credit journal dual-write failed:', err)
         }
+      }
+    }
+
+    // A cancelled customer invoice ends the warranties on it: the sale is
+    // undone. One ended by mistake can be restored on the warranty.
+    if (nowCancelled && invoiceType === 'customer_invoice') {
+      try {
+        const { cancelSaleWarranties } = await import('@/lib/warranty/e-warranty.server')
+        const ref = before.invoiceNumber || invoice.invoiceNumber
+        await cancelSaleWarranties({ invoiceId: invoice.id }, { reason: `Invoice ${ref} cancelled`, byRef: String(ref) })
+      } catch (err) {
+        console.error('[invoice] cancelling its warranties failed:', err)
       }
     }
 

@@ -1,3 +1,4 @@
+import { cancelReversal } from '@/lib/finance/cancel-credit'
 import { now, uid } from './ids'
 import { type JournalEntryLine, type JournalEntry, type Invoice, type VendorJournalOpts } from './finance'
 import { type PpeJournalDraft } from '@/lib/accounting/ppe-journals'
@@ -301,26 +302,24 @@ export const buildReversalJournal = (original: JournalEntry, documentRef: string
   }
 }
 
-export const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: number): JournalEntry => {
-  const subtotalRatio = inv.total > 0 ? inv.subtotal / inv.total : 1
-  const taxRatio = inv.total > 0 ? inv.taxTotal / inv.total : 0
-  const revenueReversal = Math.round(amount * subtotalRatio * 100) / 100
-  const vatReversal = Math.round(amount * taxRatio * 100) / 100
+export const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: number, receivable = 0): JournalEntry => {
+  const r = cancelReversal({ total: inv.total, subtotal: inv.subtotal, tax: inv.taxTotal, credit: amount, receivable })
   const lines = [
-    accountLine('5000 - Sales Revenue', `Credit note ${creditRef}: reverse ${inv.ref}`, revenueReversal, 0),
-    ...(vatReversal > 0 ? [accountLine('3301 - Output VAT Payable', `Credit VAT ${creditRef}`, vatReversal, 0)] : []),
-    accountLine('3313 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, amount),
+    accountLine('5000 - Sales Revenue', `${creditRef}: reverse ${inv.ref}`, r.revenue, 0),
+    ...(r.vat > 0 ? [accountLine('3301 - Output VAT Payable', `Reverse VAT ${creditRef}`, r.vat, 0)] : []),
+    ...(r.credit > 0 ? [accountLine('3313 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, r.credit)] : []),
+    ...(r.receivable > 0 ? [accountLine('1800 - Accounts Receivable', `Unpaid balance of cancelled ${inv.ref}`, 0, r.receivable)] : []),
   ]
   return {
     id: uid(),
     ref: `JRN/${creditRef}`,
     date: now(),
     source: 'manual',
-    description: `Credit note ${creditRef} for cancelled paid invoice ${inv.ref}`,
+    description: r.credit > 0 ? `Credit note ${creditRef} for cancelled paid invoice ${inv.ref}` : `Cancelled invoice ${inv.ref}: unpaid balance reversed`,
     status: 'posted',
     invoiceId: inv.id,
     lines,
-    totalDebit: amount,
-    totalCredit: amount,
+    totalDebit: r.total,
+    totalCredit: r.total,
   }
 }

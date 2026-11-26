@@ -56,3 +56,27 @@ describe('alreadyCreditedOnInvoice', () => {
     expect(await alreadyCreditedOnInvoice('inv1', 'CN/2026/0012')).toBe(0)
   })
 })
+
+describe('cancelling a partly paid invoice reverses the whole sale', () => {
+  it('10,000 incl. VAT, 6,000 paid: 6,000 to credit, 4,000 off receivables, sales and VAT reversed on all 10,000', async () => {
+    const { cancelReversal, openReceivable } = await import('@/lib/finance/cancel-credit')
+    const receivable = openReceivable({ total: 11600, amountPaid: 6000 })
+    expect(receivable).toBe(5600)
+    const r = cancelReversal({ total: 11600, subtotal: 10000, tax: 1600, credit: 6000, receivable })
+    expect(r).toMatchObject({ credit: 6000, receivable: 5600, revenue: 10000, vat: 1600, total: 11600 })
+  })
+
+  it('always balances, VAT or not', async () => {
+    const { cancelReversal } = await import('@/lib/finance/cancel-credit')
+    for (const [total, subtotal, tax, credit, receivable] of [[1000, 862.07, 137.93, 333.33, 0], [5000, 5000, 0, 1200, 3800], [999.99, 862.06, 137.93, 0, 999.99]]) {
+      const r = cancelReversal({ total, subtotal, tax, credit, receivable })
+      expect(Math.round((r.revenue + r.vat) * 100)).toBe(Math.round((r.credit + r.receivable) * 100))
+    }
+  })
+
+  it('a fully paid invoice has nothing left in receivables', async () => {
+    const { openReceivable } = await import('@/lib/finance/cancel-credit')
+    expect(openReceivable({ total: 10000, amountPaid: 10000 })).toBe(0)
+    expect(openReceivable({ total: 10000, amountPaid: 12000 })).toBe(0)
+  })
+})

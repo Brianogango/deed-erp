@@ -1810,10 +1810,12 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
             applications: [],
           }
           store.setCustomerCredits(prev => [credit!, ...prev])
-          store.setJournalEntries(prev => [buildCustomerCreditJournal(inv, credit!.ref, creditAmount), ...prev])
+          store.setJournalEntries(prev => [buildCustomerCreditJournal(inv, credit!.ref, creditAmount, Math.max(0, Math.round((inv.total - inv.amountPaid) * 100) / 100)), ...prev])
         } else if (isPaidCustomerInvoice) {
-          // Paid, and earlier credit notes already gave all of it back: the
-          // sale is already reversed by them, so nothing more is posted.
+          // Paid, and earlier credit notes already gave the money back: only
+          // an unpaid balance (a partly paid invoice) is left to reverse.
+          const open = Math.max(0, Math.round((inv.total - inv.amountPaid) * 100) / 100)
+          if (open > 0) store.setJournalEntries(prev => [buildCustomerCreditJournal(inv, `CANCEL/${inv.ref}`, 0, open), ...prev])
         } else {
           const related = store.journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
           const reversals = related

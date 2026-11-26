@@ -10,6 +10,7 @@ import { faCreditCard } from '@fortawesome/free-solid-svg-icons'
 import { EmptyState, StatusBadge } from '@/components/erp'
 import { Modal, Field, Input, Select } from '@/components/ui'
 import { useCan } from '@/hooks/useCan'
+import DoubleCreditsPanel from './DoubleCreditsPanel'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import {
@@ -124,6 +125,7 @@ export default function CustomerCreditsTab() {
           Credit from buy-backs, returns, credit notes and cancelled paid invoices. Apply it on a posted unpaid invoice, or refund it.
         </p>
       </div>
+      {can('accounting.manage') && <DoubleCreditsPanel showToast={showToast} />}
 
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5" style={{ borderColor: 'var(--border-lt)' }}>
         <input
