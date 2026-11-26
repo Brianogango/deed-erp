@@ -13,8 +13,12 @@ export async function POST(request: Request) {
     const body = await request.json()
     const parsed = applyBenchSchema.safeParse(body)
     if (!parsed.success) {
+      // Name the field, so the bench screen says what to fix instead of a
+      // bare "Validation failed".
+      const issue = parsed.error.issues[0]
+      const where = issue?.path.join('.') || 'request'
       return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.flatten() },
+        { error: `Validation failed: ${where} — ${issue?.message ?? 'invalid value'}`, details: parsed.error.flatten() },
         { status: 400 },
       )
     }

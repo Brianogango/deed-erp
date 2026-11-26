@@ -398,7 +398,7 @@ export default function Reconfiguration() {
           serialId: wizSerialId,
           ram: {
             action: ram.action,
-            moduleCount: slotModuleCount(ram),
+            moduleCount: slotModuleCount(ram) || undefined,
             outgoingProductId: ram.outgoingProductId || undefined,
             incomingProductId: ram.incomingProductId || undefined,
             incomingCapacityGb: ram.incomingProductId
@@ -411,7 +411,7 @@ export default function Reconfiguration() {
           },
           storage: {
             action: storage.action,
-            moduleCount: slotModuleCount(storage),
+            moduleCount: slotModuleCount(storage) || undefined,
             outgoingProductId: storage.outgoingProductId || undefined,
             incomingProductId: storage.incomingProductId || undefined,
             incomingCapacityGb: storage.incomingProductId

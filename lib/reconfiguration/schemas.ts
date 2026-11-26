@@ -115,9 +115,16 @@ export const completeSchema = z.object({
 })
 
 /** One slot on the bench form — RAM and SSD share this shape. */
+/** 0, '' and null mean "not given": a slot left as-is on a unit with no
+ *  installed-parts record has no count, and must not fail the whole job. */
+const optionalModuleCount = z.preprocess(
+  v => (v === 0 || v === '' || v === null ? undefined : v),
+  z.number().int().min(1).max(4).optional(),
+)
+
 const benchSlotSchema = z.object({
   action: z.enum(['none', 'pull_one', 'swap', 'add_one']),
-  moduleCount: z.number().int().min(1).max(4).optional(),
+  moduleCount: optionalModuleCount,
   pullCapacityGb: z.number().int().min(1).optional(),
   incomingProductId: z.string().uuid().optional(),
   incomingCapacityGb: z.number().int().min(1).optional(),
