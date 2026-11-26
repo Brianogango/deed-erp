@@ -26,6 +26,8 @@ export default function CustomerCreditsTab() {
   const can = useCan()
   const [refund, setRefund] = useState({ amount: '', method: '', bankAccountId: '', reference: '', date: '' })
   const [refunding, setRefunding] = useState(false)
+  const [cancelForm, setCancelForm] = useState({ amount: '', reason: '' })
+  const [cancelling, setCancelling] = useState(false)
   const activeBanks = bankAccounts.filter(a => a.active)
   const [creditSearch, setCreditSearch] = useUrlUiState('creditQ', '')
   const [creditStatus, setCreditStatus] = useUrlUiState('creditStatus', 'all')
@@ -218,9 +220,66 @@ export default function CustomerCreditsTab() {
               </div>
             )}
 
+            {Array.isArray((selectedCredit as { cancellations?: unknown[] }).cancellations) && ((selectedCredit as { cancellations?: unknown[] }).cancellations!.length > 0) && (
+              <div className="rounded-lg border border-[var(--border-lt)] px-3 py-3 text-[11px]">
+                <p className="text-[9px] uppercase tracking-wide font-semibold text-t4">Cancelled</p>
+                {((selectedCredit as { cancellations?: Array<{ id: string; date: string; amount: number; reason?: string; cancelledBy?: string }> }).cancellations ?? []).map(c => (
+                  <p key={c.id} className="mt-1 text-t2">
+                    {fmtDate(c.date)} · <span className="font-mono">{fmtKes(c.amount)}</span>{c.reason ? ` · ${c.reason}` : ''}{c.cancelledBy ? ` · ${c.cancelledBy}` : ''}
+                  </p>
+                ))}
+              </div>
+            )}
+
             <p className="text-[11px] text-t3">
-              Use the credit on a posted unpaid invoice of this customer (Apply credit on the invoice), or pay it back below.
+              Use the credit on a posted unpaid invoice of this customer (Apply credit on the invoice), pay it back below, or cancel it if it was given in error.
             </p>
+
+            {can('accounting.manage') && (selectedCredit.status === 'available' || selectedCredit.status === 'partially_used') && (Number(selectedCredit.balance) || 0) > 0 && (
+              <div className="grid grid-cols-1 gap-3 rounded-lg border p-3 sm:grid-cols-2" style={{ borderColor: '#FECACA', background: '#FEF2F2' }}>
+                <div className="sm:col-span-2">
+                  <p className="text-[9px] uppercase tracking-wide font-semibold" style={{ color: '#991B1B' }}>Cancel credit given in error</p>
+                  <p className="mt-1 text-[11px] text-t2">For a double credit or a credit that should not exist. Nothing is paid to the customer: the credit goes down and the entry that created it is undone in the books.</p>
+                </div>
+                <Field label={`Amount to cancel (blank = all ${fmtKes(selectedCredit.balance)})`}>
+                  <Input type="number" value={cancelForm.amount} onChange={v => setCancelForm(f => ({ ...f, amount: v }))} placeholder={String(selectedCredit.balance)} />
+                </Field>
+                <Field label="Reason *">
+                  <Input value={cancelForm.reason} onChange={v => setCancelForm(f => ({ ...f, reason: v }))} placeholder="e.g. Double credit — credit note already given" />
+                </Field>
+                <div className="flex justify-end sm:col-span-2">
+                  <button
+                    type="button"
+                    className="btn-primary text-[11px] disabled:opacity-40"
+                    style={{ background: 'var(--danger)' }}
+                    disabled={cancelling || !cancelForm.reason.trim() || (cancelForm.amount !== '' && !(Number(cancelForm.amount) > 0))}
+                    onClick={async () => {
+                      const amt = cancelForm.amount === '' ? Number(selectedCredit.balance) || 0 : Number(cancelForm.amount)
+                      if (!window.confirm(`Cancel ${fmtKes(amt)} of ${selectedCredit.ref}? ${selectedCredit.customerName || 'The customer'} loses this credit; nothing is paid out.`)) return
+                      setCancelling(true)
+                      try {
+                        const res = await fetch(`/api/customer-credits/${encodeURIComponent(String(selectedCredit.id))}/cancel`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ amount: cancelForm.amount === '' ? undefined : Number(cancelForm.amount), reason: cancelForm.reason.trim() }),
+                        })
+                        const data = await res.json().catch(() => null) as { error?: string; cancelled?: number } | null
+                        if (!res.ok) throw new Error(data?.error || `Could not cancel the credit (${res.status})`)
+                        showToast(`${fmtKes(data?.cancelled ?? amt)} of ${selectedCredit.ref} cancelled`, 'success')
+                        setCancelForm({ amount: '', reason: '' })
+                        setSelectedCredit(null)
+                      } catch (err) {
+                        showToast(err instanceof Error ? err.message : 'Could not cancel the credit', 'error')
+                      } finally {
+                        setCancelling(false)
+                      }
+                    }}
+                  >
+                    {cancelling ? 'Cancelling…' : 'Cancel credit'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {can('customer_credits.refund') && (selectedCredit.status === 'available' || selectedCredit.status === 'partially_used') && (Number(selectedCredit.balance) || 0) > 0 && (
               <div className="grid grid-cols-1 gap-3 rounded-lg border border-[var(--border-lt)] p-3 sm:grid-cols-2">
