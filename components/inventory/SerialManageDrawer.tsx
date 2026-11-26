@@ -312,9 +312,21 @@ export default function SerialManageDrawer({
     },
   ]
 
-  // One "⋯" per unit: Label, Edit, Move and Release were up to four bordered
-  // buttons on every row, taking more room than the serial itself.
+  // Move stays a visible button: it is the everyday fix for a machine filed
+  // under the wrong model. Label, Edit and Release sit in the "⋯".
   const rowMenu = (row: SerialNumber) => (
+    <span className="inline-flex items-center gap-1.5">
+      {canEdit && !unitMoveBlocker(row) && (
+        <button
+          type="button"
+          className="px-2 py-1 rounded-lg border border-border-lt text-[10px] font-bold text-text-2 hover:bg-surface"
+          title="Filed under the wrong model or specs? Move it to the right product"
+          aria-label={`Move ${row.serial} to another product`}
+          onClick={() => setMoveTarget(row)}
+        >
+          Move
+        </button>
+      )}
     <SecondaryActionMenu
       compact
       ariaLabel={`Actions for ${row.serial}`}
@@ -333,9 +345,9 @@ export default function SerialManageDrawer({
           },
         },
         { id: 'edit', label: 'Edit serial', hidden: !canEdit, onClick: () => openEdit(row) },
-        { id: 'move', label: 'Move to another product…', hidden: !(canEdit && !unitMoveBlocker(row)), onClick: () => setMoveTarget(row) },
       ]}
     />
+    </span>
   )
 
   const chips: Array<[StatusChip, string]> = [
