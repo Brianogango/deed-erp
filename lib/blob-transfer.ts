@@ -78,7 +78,7 @@ const MOVE_TYPE: Record<string, string> = {
  */
 const SERIAL_COLUMN_FIELDS = ['serial', 'serialNumber', 'productId', 'barcode', 'location'] as const
 
-function serialRow(row: Record<string, unknown>) {
+export function serialRow(row: Record<string, unknown>) {
   const extras: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(row)) {
     if (v == null || (SERIAL_COLUMN_FIELDS as readonly string[]).includes(k)) continue

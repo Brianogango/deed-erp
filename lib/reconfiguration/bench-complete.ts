@@ -43,6 +43,7 @@ import {
 } from '@/lib/reconfiguration/service'
 import type { DeviceConfigFields } from '@/lib/reconfiguration/types'
 import { readBenchNotes, type BenchNotes } from '@/lib/reconfiguration/bench-notes'
+import { ensureDeviceInDatabase } from '@/lib/reconfiguration/ensure-device-row'
 
 function dec(n: unknown) {
   return round2(Number(n) || 0)
@@ -209,6 +210,7 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
   if (!isUuid(device.serialId) || !isUuid(device.productId || '')) {
     throw httpError('This serial is not linked to the catalog yet — receive it into inventory first.', 422)
   }
+  await ensureDeviceInDatabase(device)
 
   const ramInstalled = modulesFromInstalled(device.installed, 'ram')
   const storageInstalled = modulesFromInstalled(device.installed, 'storage')
