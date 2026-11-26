@@ -1031,7 +1031,7 @@ function AccountingContent() {
 
     const monthExpenses = expenses.filter((expense: any) =>
       monthKey(expense.expenseDate || expense.submittedDate || expense.createdAt) === monthlyReportMonth &&
-      !['rejected'].includes(expense.status)
+      !['rejected', 'cancelled'].includes(expense.status) && !expense.deletedAt
     )
     const expensesByCategory = new Map<string, { category: string; amount: number; count: number }>()
     monthExpenses.forEach((expense: any) => {

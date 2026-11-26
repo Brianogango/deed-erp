@@ -31,6 +31,8 @@ export type ExpenseActionBody =
   | { action: 'edit'; id: string; patch: Record<string, unknown> }
   | { action: 'withdraw'; id: string; reason?: string }
   | { action: 'resubmit'; id: string; patch?: Record<string, unknown>; note?: string }
+  | { action: 'cancel'; id: string; reason: string }
+  | { action: 'delete'; id: string }
 
 export interface AppState {
   activeModule: ModuleId; sidebarOpen: boolean

@@ -12,7 +12,7 @@ import {
   type ExpenseApprovalStep,
 } from '@/lib/expense-approval-chain'
 
-export type ClaimStatus = 'submitted' | 'approved' | 'rejected' | 'paid' | 'reimbursed' | 'withdrawn'
+export type ClaimStatus = 'submitted' | 'approved' | 'rejected' | 'paid' | 'reimbursed' | 'withdrawn' | 'cancelled'
 
 export type ClaimHistoryEntry = { date: string; by: string; action: string; note?: string }
 
@@ -47,6 +47,12 @@ export type Claim = {
   reportId?: string
   reportTitle?: string
   history?: ClaimHistoryEntry[]
+  cancelledByName?: string
+  cancelledDate?: string
+  cancelReason?: string
+  /** Deleted claims stay in the list, hidden, so an older screen cannot bring them back. */
+  deletedAt?: string
+  deletedByName?: string
   [key: string]: unknown
 }
 
@@ -265,15 +271,68 @@ export function resubmitClaim(
   return { claims: claims.map(x => (x.id === id ? updated : x)), changed: updated }
 }
 
+// ── Cancel and delete ────────────────────────────────────────────────────────
+
+/**
+ * Cancel a claim that should never be paid: typically a duplicate, where the
+ * company had already given the money. Submitted, part-approved and approved
+ * claims can be cancelled; the caller reverses the approval journal when
+ * `reverseApproval` is set. A paid claim cannot: that money has left, and is
+ * recovered with a refund, not by cancelling.
+ */
+export function cancelClaim(
+  claims: Claim[],
+  id: string,
+  params: { actor: Actor; now: string; reason: string },
+): { claims: Claim[]; changed?: Claim; reverseApproval?: boolean; error?: string } {
+  const c = claims.find(x => x.id === id && !x.deletedAt)
+  if (!c) return { claims, error: 'Claim not found' }
+  if (!params.actor.managesAll) return { claims, error: 'Only Finance or the Director can cancel a claim' }
+  const reason = params.reason.trim()
+  if (!reason) return { claims, error: 'Say why the claim is cancelled' }
+  if (c.status === 'paid' || c.status === 'reimbursed') {
+    return { claims, error: `${c.ref} is already ${c.status === 'paid' ? 'paid' : 'reimbursed'} — the money has left; record a refund or recovery instead of cancelling` }
+  }
+  if (c.status !== 'submitted' && c.status !== 'approved') {
+    return { claims, error: `${c.ref} is ${c.status} — there is nothing to cancel; delete it instead` }
+  }
+  const updated = withHistory(
+    { ...c, status: 'cancelled', cancelledByName: params.actor.name, cancelledDate: params.now, cancelReason: reason },
+    { date: params.now, by: params.actor.name, action: c.status === 'approved' ? 'cancelled after approval' : 'cancelled', note: reason },
+  )
+  return { claims: claims.map(x => (x.id === id ? updated : x)), changed: updated, reverseApproval: c.status === 'approved' }
+}
+
+/**
+ * Delete a claim that has nothing in the books: rejected, withdrawn, or
+ * cancelled (its approval already reversed). The claimant may delete their
+ * own rejected or withdrawn claim; Finance may delete any of these.
+ */
+export function deleteClaim(
+  claims: Claim[],
+  id: string,
+  params: { actor: Actor; now: string },
+): { claims: Claim[]; changed?: Claim; error?: string } {
+  const c = claims.find(x => x.id === id && !x.deletedAt)
+  if (!c) return { claims, error: 'Claim not found' }
+  if (c.status === 'submitted' || c.status === 'approved') return { claims, error: `${c.ref} is still open — cancel it first, then delete it` }
+  if (c.status === 'paid' || c.status === 'reimbursed') return { claims, error: `${c.ref} has been paid and stays on record` }
+  const own = c.submittedByUserId === params.actor.id && (c.status === 'rejected' || c.status === 'withdrawn')
+  if (!own && !params.actor.managesAll) return { claims, error: 'Only Finance or the Director can delete this claim' }
+  const updated = withHistory({ ...c, deletedAt: params.now, deletedByName: params.actor.name }, { date: params.now, by: params.actor.name, action: 'deleted' })
+  return { claims: claims.map(x => (x.id === id ? updated : x)), changed: updated }
+}
+
 // ── Saves from a browser never move a claim backwards ───────────────────────
 
-const RANK: Record<string, number> = { submitted: 0, withdrawn: 1, rejected: 1, approved: 2, paid: 3, reimbursed: 3 }
+const RANK: Record<string, number> = { submitted: 0, withdrawn: 1, rejected: 1, approved: 2, paid: 3, reimbursed: 3, cancelled: 4 }
 
 /** Fields only the server's actions may change once a claim exists. */
 const SETTLED_FIELDS = [
   'status', 'approvalChain', 'reviewedByUserId', 'reviewedByName', 'reviewedDate',
   'reimbursementMethod', 'reimbursementBankAccount', 'reimbursementReference', 'reimbursementDate',
   'paymentBankAccount', 'paymentReference', 'paidDate', 'paymentBatchRef', 'history', 'amount',
+  'cancelledByName', 'cancelledDate', 'cancelReason',
 ] as const
 
 /**
@@ -288,6 +347,8 @@ export function guardClaimRegression<T extends Record<string, any>>(server: T[] 
   return incoming.map(row => {
     const was = row?.id ? byId.get(row.id) : undefined
     if (!was) return row
+    // A deleted claim stays deleted, whatever an older screen still holds.
+    if (was.deletedAt) return was
     const from = RANK[String(was.status)] ?? 0
     const to = RANK[String(row.status)] ?? 0
     // Moving forward (an older screen approving or paying) is accepted; a

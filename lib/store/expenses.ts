@@ -69,4 +69,11 @@ export interface Expense {
   paymentBatchRef?: string
   /** What happened to the claim: edited, approved, rejected, sent again, paid… */
   history?: { date: string; by: string; action: string; note?: string }[]
+  /** Cancelled by Finance (e.g. a duplicate: the company already gave the money). */
+  cancelledByName?: string
+  cancelledDate?: string
+  cancelReason?: string
+  /** Deleted claims are kept, hidden, so an older screen cannot bring them back. */
+  deletedAt?: string
+  deletedByName?: string
 }

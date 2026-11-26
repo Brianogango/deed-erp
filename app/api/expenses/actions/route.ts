@@ -9,10 +9,12 @@ import { canReimburseExpense, canReviewExpense } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
-import { commitPosting, postExpenseApproval, postExpenseCompanyPayment, postExpenseReimbursement } from '@/lib/accounting/posting-service'
+import { commitPosting, postExpenseApproval, postExpenseCompanyPayment, postExpenseReimbursement, reversePosting } from '@/lib/accounting/posting-service'
 import { bankAccountIdForPaymentMethod, bankAccountLabelForId } from '@/lib/accounting/expense-pos-accounts'
 import { roundMoney } from '@/lib/accounting/money'
 import {
+  cancelClaim,
+  deleteClaim,
   editClaim,
   payClaims,
   resubmitClaim,
@@ -37,6 +39,10 @@ export const dynamic = 'force-dynamic'
  *   edit      { id, patch }       the claimant, before anyone has acted
  *   withdraw  { id, reason? }     the claimant, before anyone has acted
  *   resubmit  { id, patch?, note? }   a rejected or withdrawn claim, corrected
+ *   cancel    { id, reason }   Finance: a submitted or approved claim that must not be paid
+ *             (e.g. a duplicate — the company already gave the money); an
+ *             approved claim's approval journal is reversed
+ *   delete    { id }           a rejected, withdrawn or cancelled claim; hidden, kept
  */
 
 const patchSchema = z.object({
@@ -66,6 +72,8 @@ const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('edit'), id: z.string().min(1), patch: patchSchema }),
   z.object({ action: z.literal('withdraw'), id: z.string().min(1), reason: z.string().max(500).optional() }),
   z.object({ action: z.literal('resubmit'), id: z.string().min(1), patch: patchSchema.optional(), note: z.string().max(500).optional() }),
+  z.object({ action: z.literal('cancel'), id: z.string().min(1), reason: z.string().min(1).max(500) }),
+  z.object({ action: z.literal('delete'), id: z.string().min(1) }),
 ])
 
 function httpError(message: string, status = 422) {
@@ -110,6 +118,9 @@ export async function POST(request: Request) {
     }
     if (body.action === 'pay' && !(userCan(user, 'expenses.post') && canReimburseExpense(actor.role))) {
       throw httpError('Only Finance or the Director can pay expenses', 403)
+    }
+    if (body.action === 'cancel' && !(userCan(user, 'expenses.post') && canReviewExpense(actor.role))) {
+      throw httpError('Only Finance or the Director can cancel an expense', 403)
     }
 
     const now = new Date().toISOString()
@@ -202,6 +213,27 @@ export async function POST(request: Request) {
         })
         next = result.claims
         changed = result.changed
+      } else if (body.action === 'cancel') {
+        const result = cancelClaim(claims, body.id, { actor, now, reason: body.reason })
+        if (result.error) throw httpError(result.error)
+        if (result.reverseApproval && result.changed) {
+          // Reverse the approval journal first: reversal is idempotent, so a
+          // retry after a failed save never reverses twice. Old claims approved
+          // before approvals were journaled have nothing to reverse.
+          const ref = `JRN/EXP/${result.changed.ref}`
+          const journal = await prisma.journalEntry.findUnique({ where: { ref }, select: { id: true } }).catch(() => null)
+          if (journal) {
+            await assertOpenPeriod(now)
+            await reversePosting(ref, actor.id)
+          }
+        }
+        next = result.claims
+        changed = result.changed ? [result.changed] : []
+      } else if (body.action === 'delete') {
+        const result = deleteClaim(claims, body.id, { actor, now })
+        if (result.error) throw httpError(result.error)
+        next = result.claims
+        changed = result.changed ? [result.changed] : []
       } else {
         const thresholds = body.action === 'withdraw' ? undefined : await expenseThresholds()
         const result = body.action === 'edit'

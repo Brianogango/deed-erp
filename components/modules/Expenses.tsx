@@ -52,6 +52,7 @@ const STATUS_META: Record<Expense['status'], { label: string; badgeStatus: strin
   paid:        { label: 'Paid',           badgeStatus: 'paid' },
   reimbursed:  { label: 'Reimbursed',     badgeStatus: 'paid' },
   withdrawn:   { label: 'Withdrawn',      badgeStatus: 'cancelled' },
+  cancelled:   { label: 'Cancelled',      badgeStatus: 'cancelled' },
 }
 
 const CAT_ICONS: Record<string, IconProp> = {
@@ -150,7 +151,7 @@ function ExpensesContent() {
   const { users, currentUserId, expenses: storedExpenses, submitExpense, expenseAction, showToast, bankAccounts } = useFinanceStore()
   // Newest claim first: latest submission date, then highest reference.
   const expenses = useMemo(
-    () => [...storedExpenses].sort((a, b) => newestDocumentFirst({ date: a.submittedDate, ref: a.ref }, { date: b.submittedDate, ref: b.ref })),
+    () => storedExpenses.filter(e => !e.deletedAt).sort((a, b) => newestDocumentFirst({ date: a.submittedDate, ref: a.ref }, { date: b.submittedDate, ref: b.ref })),
     [storedExpenses],
   )
 
@@ -212,7 +213,7 @@ function ExpensesContent() {
   // Review status filter starts at "all" (no preselected status).
   const [reviewStatusValue, setReviewStatusValue] = useUrlUiState('status', 'all')
   const reviewStatus: Expense['status'] | 'all' =
-    ['all', 'submitted', 'approved', 'rejected', 'paid', 'reimbursed', 'withdrawn'].includes(reviewStatusValue)
+    ['all', 'submitted', 'approved', 'rejected', 'paid', 'reimbursed', 'withdrawn', 'cancelled'].includes(reviewStatusValue)
       ? reviewStatusValue as Expense['status'] | 'all'
       : 'all'
   const setReviewStatus = (value: Expense['status'] | 'all') =>
@@ -688,6 +689,7 @@ function ExpensesContent() {
                   { value: 'paid', label: 'Paid' },
                   { value: 'reimbursed', label: 'Reimbursed' },
                   { value: 'withdrawn', label: 'Withdrawn' },
+                  { value: 'cancelled', label: 'Cancelled' },
                 ],
                 onChange: v => setReviewStatus(v as typeof reviewStatus),
               },
@@ -1076,6 +1078,22 @@ function ExpensesContent() {
                     )}
                     <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Close</button>
                   </>
+                )}
+                {isFinance && (exp.status === 'approved' || exp.status === 'submitted') && (
+                  <button type="button" className="btn-outline text-[11px] py-2 px-4" style={{ color: '#991B1B', borderColor: '#FECACA' }} onClick={() => {
+                    const why = window.prompt(exp.status === 'approved'
+                      ? `Cancel ${exp.ref}? Its approval is reversed in the books and it will not be paid. Reason (e.g. duplicate — funds already given):`
+                      : `Cancel ${exp.ref}? It will not be approved or paid. Reason (e.g. duplicate — funds already given):`)
+                    if (why === null) return
+                    if (!why.trim()) { showToast('Say why the claim is cancelled', 'error'); return }
+                    void expenseAction({ action: 'cancel', id: exp.id, reason: why.trim() }).then(o => { if (o.ok) { showToast(`${exp.ref} cancelled`, 'success'); setReviewingId(null) } })
+                  }}>Cancel claim</button>
+                )}
+                {(exp.status === 'cancelled' || exp.status === 'rejected' || exp.status === 'withdrawn') && (isFinance || (mine && exp.status !== 'cancelled')) && (
+                  <button type="button" className="btn-outline text-[11px] py-2 px-4" style={{ color: '#991B1B', borderColor: '#FECACA' }} onClick={() => {
+                    if (!window.confirm(`Delete ${exp.ref}? It disappears from the expenses list. Nothing in the books changes.`)) return
+                    void expenseAction({ action: 'delete', id: exp.id }).then(o => { if (o.ok) { showToast(`${exp.ref} deleted`, 'success'); setReviewingId(null) } })
+                  }}>Delete</button>
                 )}
               </div>
               </div>
