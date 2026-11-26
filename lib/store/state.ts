@@ -722,7 +722,8 @@ export interface AppState {
   createBuyBack: (customerId: string, customerName: string, lines: Omit<BuyBackLine, 'id'>[], destination: LocationId, notes?: string, originalSOId?: string, originalSORef?: string) => BuyBack
   approveBuyBack: (id: string) => void
   /** Cash / M-Pesa / bank payout. Refuses `store_credit` — that path is `creditBuyBack`. */
-  payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void | Promise<void>
+  /** Send the buy-back's bill to Finance to pay; the buy-back settles once that bill is paid. */
+  payBuyBack: (id: string) => void | Promise<void>
   /** After approve: add the buy-back amount as store credit (3102) instead of paying cash. Marks the BBK paid so stocking can follow. */
   creditBuyBack: (id: string) => void | Promise<void>
   receiveFreeBuyBack: (id: string) => void

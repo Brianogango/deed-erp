@@ -194,3 +194,19 @@ export function buyBacksPaidWithoutBill<T extends { status: string; paymentMetho
     && !!b.paymentMethod && b.paymentMethod !== 'store_credit'
     && !b.billId && !b.creditId)
 }
+
+/**
+ * A buy-back whose bill Finance has now paid in full: settled, with how and
+ * when it was paid (from the bill's last payment). Null while money is owed.
+ */
+export function buyBackSettledByBill(
+  bb: { status: string; billId?: string | null } | null | undefined,
+  bill: { id: string; status: string; total: number; amountPaid: number; payments?: Array<{ date: string; method: string; reference?: string }> } | null | undefined,
+): { paidDate: string; paymentMethod: 'cash' | 'bank_transfer' | 'mpesa'; reference?: string } | null {
+  if (!bb || bb.status !== 'approved' || !bb.billId || !bill || bill.id !== bb.billId) return null
+  if (bill.status === 'cancelled' || !(bill.total > 0) || bill.amountPaid + 0.005 < bill.total) return null
+  const last = [...(bill.payments ?? [])].sort((a, b) => String(a.date).localeCompare(String(b.date))).pop()
+  const m = String(last?.method ?? '').toLowerCase()
+  const paymentMethod = m.includes('mpesa') || m.includes('m-pesa') ? 'mpesa' : m === 'cash' ? 'cash' : 'bank_transfer'
+  return { paidDate: last?.date ?? new Date().toISOString(), paymentMethod, ...(last?.reference ? { reference: last.reference } : {}) }
+}

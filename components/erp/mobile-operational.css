@@ -555,3 +555,71 @@
     padding-inline: 8px !important;
   }
 }
+
+/* ── Purchase order detail on phones (final word over the older rules above
+      and in globals.css): one line for the title, a compact totals strip the
+      same width as the cards below it, no duplicate "Next action", and no
+      sideways-scrolling step bar (the status badge already says the stage). */
+@media (max-width: 640px) {
+  .purchase-order-detail .purchase-order-detail__header {
+    padding: 4px 0 10px !important;
+  }
+  .purchase-order-detail .purchase-order-detail__identity {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px !important;
+  }
+  .purchase-order-detail .purchase-order-detail__identity > .btn-outline {
+    min-height: 36px !important;
+    padding: 0 10px !important;
+  }
+  .purchase-order-detail .purchase-order-detail__identity > .text-sm {
+    font-size: 16px !important;
+    line-height: 1.2;
+  }
+  .purchase-order-detail .purchase-order-detail__actions {
+    display: flex !important;
+    gap: 8px !important;
+  }
+  .purchase-order-detail .purchase-order-detail__actions > :first-child { flex: 1; }
+
+  .purchase-order-detail .purchase-order-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    width: auto !important;
+    margin: 10px 0 !important;
+    gap: 1px !important;
+    border: 1px solid var(--border-lt);
+    border-radius: 10px;
+    background: var(--border-lt);
+    overflow: hidden;
+  }
+  .purchase-order-detail .purchase-order-summary__item {
+    min-height: 0 !important;
+    padding: 8px 10px !important;
+    border: 0 !important;
+    background: var(--bg-card);
+  }
+  .purchase-order-detail .purchase-order-summary__item > span {
+    font-size: 10px !important;
+    letter-spacing: 0.04em;
+  }
+  .purchase-order-detail .purchase-order-summary__item > strong {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px !important;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .purchase-order-detail .purchase-order-summary__item--next { display: none !important; }
+
+  .purchase-order-detail .purchase-order-detail__progress,
+  .purchase-order-detail .purchase-order-detail__grid {
+    margin-inline: 0 !important;
+  }
+  .purchase-order-detail .purchase-order-detail__progress {
+    padding: 8px 10px !important;
+  }
+  .purchase-order-detail .purchase-order-detail__progress > :first-child { display: none !important; }
+  .purchase-order-detail .purchase-order-detail__progress .erp-smart-buttons { justify-content: flex-start; margin: 0; }
+}
