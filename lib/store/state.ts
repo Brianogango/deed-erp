@@ -718,6 +718,8 @@ export interface AppState {
   rejectReturn: (id: string, reason: string) => void
   /** Ends a warranty by hand (e.g. the customer returned the machine for good). Managers only. */
   cancelWarranty: (id: string, reason: string) => void
+  restoreWarranty: (id: string, note?: string) => void
+  changeWarrantyMonths: (id: string, months: number, reason: string) => void
 
   // Buy-backs
   buyBacks: BuyBack[]
@@ -1213,6 +1215,8 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'registerCustomerReturnSerial'
   | 'rejectReturn'
   | 'cancelWarranty'
+  | 'restoreWarranty'
+  | 'changeWarrantyMonths'
   | 'releaseSerialToStock'
   | 'showToast'
   | 'stockBuyBack'

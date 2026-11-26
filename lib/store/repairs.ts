@@ -247,6 +247,8 @@ export interface Warranty {
   sourceKey?: string
   issuedAt?: string
   specs?: string
+  restoredAt?: string; restoredBy?: string; restoredFrom?: string
+  lengthChangedAt?: string; lengthChangedBy?: string; lengthChangedFrom?: number; lengthChangeReason?: string
 }
 
 export type OutsourceJobStatus = 'sent' | 'returned_resolved' | 'returned_unresolved' | 'cancelled'

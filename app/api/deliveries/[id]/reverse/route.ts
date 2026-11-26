@@ -23,6 +23,7 @@ import { reverseJournalEntry } from '@/lib/accounting/journal-service'
 import { mirrorDeliveryToPrisma } from '@/lib/delivery-mirror'
 import { effectiveDeliveryLineQty, normalizeDeliveryStatus } from '@/lib/odoo-sales-flow'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
+import { cancelSaleWarranties } from '@/lib/warranty/e-warranty.server'
 
 export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
@@ -115,12 +116,24 @@ export async function POST(request: NextRequest, { params }: { params: RoutePara
       }
     }
 
+    // The machines are back in stock: the warranties issued on this delivery end.
+    let warrantiesCancelled = 0
+    if (outcome.wasDone) {
+      try {
+        const ref = String(outcome.item.ref ?? outcome.item.id)
+        warrantiesCancelled = await cancelSaleWarranties({ deliveryId: outcome.item.id }, { reason: `Delivery ${ref} reversed`, byRef: ref })
+      } catch (err) {
+        console.error('[delivery-reverse] cancelling its warranties failed:', err)
+      }
+    }
+
     void mirrorDeliveryToPrisma(outcome.item).catch(() => {})
 
     return NextResponse.json({
       item: outcome.item,
       reversedStock: outcome.wasDone,
       journalReversed,
+      warrantiesCancelled,
     })
   })
 }

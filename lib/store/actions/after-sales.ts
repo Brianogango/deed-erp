@@ -7,6 +7,7 @@ import { pickPostedInvoiceForReturn, stampDeliveryReturnQtys, findReleasedOrcsFo
 import type { DeliveryLine } from '../delivery'
 import type { LocationId } from '../core'
 import { sync } from '../sync'
+import { changeWarrantyMonths, restoreWarranty } from '@/lib/warranty/warranty-edits'
 import type { OrcLogEntry, SerialNumber } from '../inventory'
 import type { Invoice, CustomerCredit, JournalEntry, RefundPayment, InvoiceLine } from '../finance'
 import { bankAccountIdForMethod, bankAccountLabel, accountLine } from '../journals'
@@ -21,7 +22,7 @@ import type { AppState } from '../state'
 import type { StoreDeps } from './deps'
 
 /** after-sales actions of the store. `store` reads the provider's current state, setters and helpers. */
-export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'createReturnOrder' | 'approveReturn' | 'receiveReturn' | 'processReturn' | 'cancelWarranty' | 'rejectReturn' | 'registerCustomerReturnSerial' | 'createBuyBack' | 'approveBuyBack' | 'payBuyBack' | 'creditBuyBack' | 'receiveFreeBuyBack' | 'stockBuyBack' | 'deleteBuyBack' | 'createDonation' | 'confirmDonation' | 'deleteDonation' | 'createExchange' | 'approveExchange' | 'completeExchange' | 'cancelExchange'> {
+export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'createReturnOrder' | 'approveReturn' | 'receiveReturn' | 'processReturn' | 'cancelWarranty' | 'restoreWarranty' | 'changeWarrantyMonths' | 'rejectReturn' | 'registerCustomerReturnSerial' | 'createBuyBack' | 'approveBuyBack' | 'payBuyBack' | 'creditBuyBack' | 'receiveFreeBuyBack' | 'stockBuyBack' | 'deleteBuyBack' | 'createDonation' | 'confirmDonation' | 'deleteDonation' | 'createExchange' | 'approveExchange' | 'completeExchange' | 'cancelExchange'> {
   return {
     createReturnOrder: (saleOrderId, saleOrderRef, customerId, customerName, reason, lines) => {
         for (const line of lines) {
@@ -521,6 +522,33 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           : x))
         store.addAuditLog('warranty_cancel', w.ref, `Cancelled ${w.ref} for ${w.customerName} (${w.serialNumber}) — ${why}`)
         store.showToast(`${w.ref} cancelled`)
+      },
+
+    restoreWarranty: (id, note) => {
+        const user = store.currentUser(); if (!user) return
+        if (!userCan(user, 'repair.warranty.cancel')) {
+          store.showToast('Only a manager or Finance can restore a warranty', 'error'); return
+        }
+        const out = restoreWarranty(store.warranties, id, { by: user.name, now: now(), note })
+        if (out.error || !out.changed) { store.showToast(out.error ?? 'Could not restore the warranty', 'error'); return }
+        store.setWarranties(() => out.list)
+        const w = out.changed
+        store.addAuditLog('warranty_restore', w.ref, `Restored ${w.ref} for ${w.customerName} (${w.serialNumber})${note?.trim() ? ` — ${note.trim()}` : ''}`)
+        store.showToast(`${w.ref} restored`)
+      },
+
+    changeWarrantyMonths: (id, months, reason) => {
+        const user = store.currentUser(); if (!user) return
+        if (!userCan(user, 'repair.warranty.cancel')) {
+          store.showToast('Only a manager or Finance can change a warranty', 'error'); return
+        }
+        const before = store.warranties.find(x => x.id === id)
+        const out = changeWarrantyMonths(store.warranties, id, months, { by: user.name, now: now(), reason })
+        if (out.error || !out.changed || !before) { store.showToast(out.error ?? 'Could not change the warranty', 'error'); return }
+        store.setWarranties(() => out.list)
+        const w = out.changed
+        store.addAuditLog('warranty_length', w.ref, `${w.ref} (${w.serialNumber}): ${before.months} → ${w.months} months, now ends ${w.endDate} — ${reason.trim()}`)
+        store.showToast(`${w.ref} is now ${w.months} months, to ${w.endDate}`)
       },
 
     rejectReturn: (id, reason) => {

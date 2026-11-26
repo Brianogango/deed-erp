@@ -1,6 +1,7 @@
 import 'server-only'
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { loadAppState, loadAppStateForWrite, notifyStoreKeysChanged, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import { cancelWarrantiesForSale } from './warranty-edits'
 import { exchangeCancellations, nextWarrantyRefs, warrantiesForDocument, warrantiesToIssue, warrantyPath, type DocWarranty, type ExchangeSource, type WarrantyRow, type WarrantySource } from './e-warranty'
 
 const arr = <T,>(v: unknown) => (Array.isArray(v) ? v as T[] : [])
@@ -169,4 +170,47 @@ export async function documentWarranties(q: { invoiceId?: string; posOrderId?: s
   const deliveryIds = deliveries.filter(d => saleOrderIds.has(String(d.saleOrderId))).map(d => String(d.id))
   const saleOrderRefs = orders.filter(o => saleOrderIds.has(String(o.id))).map(o => String(o.ref))
   return warrantiesForDocument(warranties, { posOrderIds: [...posOrderIds], deliveryIds, saleOrderRefs, serialNumbers, serialIds }).map(toDocWarranty)
+}
+
+/**
+ * End the warranties of a sale that was undone: an invoice cancelled (the
+ * warranties shown on it) or a delivered delivery note reversed (the ones
+ * issued from it). Each keeps the reason and the document; one cancelled by
+ * mistake can be restored on the warranty.
+ */
+export async function cancelSaleWarranties(
+  q: { invoiceId?: string; deliveryId?: string },
+  p: { reason: string; byRef: string },
+): Promise<number> {
+  let fromInvoice: string[] = []
+  if (q.invoiceId) {
+    const onDoc = await documentWarranties({ invoiceId: q.invoiceId })
+    // When the invoice names its machines, end only theirs: an order billed on
+    // two invoices keeps the other invoice's warranties.
+    const inv = arr<Record<string, any>>((await loadAppState(['deed_invoices'])).deed_invoices).find(i => i.id === q.invoiceId)
+    const named = new Set(arr<Record<string, any>>(inv?.lines).flatMap(l => [l.serial, l.serialNumber, l.serialNumberId, l.serialId]).filter(Boolean).map(String))
+    fromInvoice = onDoc.filter(w => !named.size || named.has(w.serialNumber)).map(w => w.id)
+    if (named.size) {
+      const byId = new Set(arr<Record<string, any>>(inv?.lines).flatMap(l => [l.serialNumberId, l.serialId]).filter(Boolean).map(String))
+      if (byId.size) {
+        const all = arr<WarrantyRow>((await loadAppState(['deed_warranties'])).deed_warranties)
+        const onDocIds = new Set(onDoc.map(w => w.id))
+        for (const w of all) if (onDocIds.has(w.id) && byId.has(w.serialId) && !fromInvoice.includes(w.id)) fromInvoice.push(w.id)
+      }
+    }
+  }
+  return withAppStateKeyLock('deed_warranties', async () => {
+    const state = await loadAppStateForWrite(['deed_warranties'])
+    const list = arr<WarrantyRow>(state.deed_warranties)
+    const ids = new Set(fromInvoice)
+    if (q.deliveryId) {
+      for (const w of list) if (w.deliveryId === q.deliveryId || w.sourceKey === `delivery:${q.deliveryId}`) ids.add(w.id)
+    }
+    const { list: next, cancelled } = cancelWarrantiesForSale(list, ids, { now: new Date().toISOString(), reason: p.reason, byRef: p.byRef })
+    if (cancelled.length) {
+      await saveStoreKeys({ deed_warranties: JSON.stringify(next) })
+      await notifyStoreKeysChanged(['deed_warranties']).catch(() => {})
+    }
+    return cancelled.length
+  })
 }

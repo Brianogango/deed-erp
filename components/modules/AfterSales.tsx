@@ -63,7 +63,7 @@ function AfterSalesContent() {
     invoices, posOrders,
     returnOrders, buyBacks, donations, clientExchanges,
     createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
-    releaseSerialToStock, cancelWarranty,
+    releaseSerialToStock, cancelWarranty, restoreWarranty, changeWarrantyMonths,
     showToast,
   } = useAfterSalesStore()
 
@@ -149,6 +149,9 @@ function AfterSalesContent() {
   // Reject modal
   const [cancelWarrantyReason, setCancelWarrantyReason] = useState('')
   const [showCancelWarranty, setShowCancelWarranty] = useState(false)
+  const [showWarrantyLength, setShowWarrantyLength] = useState(false)
+  const [warrantyMonths, setWarrantyMonths] = useState('')
+  const [warrantyLengthReason, setWarrantyLengthReason] = useState('')
   const [showReject, setShowReject]       = useState(false)
   const [rejectTarget, setRejectTarget]   = useState<ReturnOrder | null>(null)
   const [rejectReason, setRejectReason]   = useState('')
@@ -333,8 +336,22 @@ function AfterSalesContent() {
             {meta.label}
           </span>
           {w.status !== 'cancelled' && canCancelWarranty && (
+            <button type="button" className="btn-secondary text-[11px]" onClick={() => { setWarrantyMonths(String(w.months || '')); setWarrantyLengthReason(''); setShowWarrantyLength(true) }}>
+              Change length
+            </button>
+          )}
+          {w.status !== 'cancelled' && canCancelWarranty && (
             <button type="button" className="btn-secondary text-[11px]" onClick={() => { setCancelWarrantyReason(''); setShowCancelWarranty(true) }}>
               Cancel warranty
+            </button>
+          )}
+          {w.status === 'cancelled' && canCancelWarranty && (
+            <button type="button" className="btn-primary text-[11px]" onClick={() => {
+              const note = window.prompt(`Restore ${w.ref}? ${w.customerName} is covered again on ${w.serialNumber} until ${fmtDate(w.endDate)}. Note (optional):`)
+              if (note === null) return
+              restoreWarranty(w.id, note)
+            }}>
+              Restore warranty
             </button>
           )}
         </div>
@@ -355,6 +372,40 @@ function AfterSalesContent() {
             <p className="text-t3 mt-0.5">{w.cancelledReason || 'No reason recorded'}{w.cancelledByRef ? ` · ${w.cancelledByRef}` : ''}</p>
           </div>
         )}
+        {(w.restoredAt || w.lengthChangedAt) && (
+          <div className="card p-3 text-[11px] text-t3" style={{ background: '#F8FAFC' }}>
+            {w.restoredAt && <p>Restored on {fmtDate(w.restoredAt)} by {w.restoredBy}{w.restoredFrom ? ` · was cancelled: ${w.restoredFrom}` : ''}</p>}
+            {w.lengthChangedAt && <p>Length changed from {formatWarrantyDuration(w.lengthChangedFrom)} on {fmtDate(w.lengthChangedAt)} by {w.lengthChangedBy}{w.lengthChangeReason ? ` — ${w.lengthChangeReason}` : ''}</p>}
+          </div>
+        )}
+
+        {showWarrantyLength && (() => {
+          const m = Number(warrantyMonths)
+          const valid = Number.isInteger(m) && m >= 1 && m <= 60 && m !== Number(w.months)
+          const start = String(w.startDate).slice(0, 10)
+          const end = valid ? (() => { const d = new Date(start); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) })() : ''
+          return (
+            <div className="card p-4 space-y-2" role="dialog" aria-label={`Change the length of ${w.ref}`}>
+              <p className="text-[12px] font-semibold text-t1">Change the length of {w.ref}</p>
+              <p className="text-[11px] text-t3">Now {formatWarrantyDuration(w.months)}, from {fmtDate(w.startDate)} to {fmtDate(w.endDate)}. The start date stays; the end date follows.</p>
+              <div className="flex gap-2 items-center">
+                <input type="number" min={1} max={60} className="form-input text-[12px]" style={{ width: 90 }} aria-label="Months"
+                  value={warrantyMonths} onChange={e => setWarrantyMonths(e.target.value)} />
+                <span className="text-[12px] text-t2">months{end ? ` · ends ${fmtDate(end)}` : ''}</span>
+              </div>
+              <textarea className="form-input w-full text-[12px]" rows={2} maxLength={300}
+                placeholder="Reason (required) — e.g. Product sold with 12 months; set up as 6 by mistake"
+                value={warrantyLengthReason} onChange={e => setWarrantyLengthReason(e.target.value)} />
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn-secondary text-[11px]" onClick={() => setShowWarrantyLength(false)}>Keep as is</button>
+                <button type="button" className="btn-primary text-[11px]" disabled={!valid || !warrantyLengthReason.trim()}
+                  onClick={() => { changeWarrantyMonths(w.id, m, warrantyLengthReason); setShowWarrantyLength(false) }}>
+                  Save {valid ? `${m} months` : ''}
+                </button>
+              </div>
+            </div>
+          )
+        })()}
 
         {showCancelWarranty && (
           <div className="card p-4 space-y-2" role="dialog" aria-label={`Cancel ${w.ref}`}>
