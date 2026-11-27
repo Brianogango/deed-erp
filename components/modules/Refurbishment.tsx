@@ -397,7 +397,7 @@ function RefurbishmentContent() {
           })()}
         />
 
-        <div className="mod-body p-4 flex flex-col gap-4">
+        <div className="mod-body p-4 flex flex-col gap-4 rjd">
           {/* Parts-ready notification */}
           {readyParts.length > 0 && (
             <div className="rounded-xl px-4 py-3 flex items-start gap-3"
@@ -418,8 +418,23 @@ function RefurbishmentContent() {
             const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName, noPrice: jobNoPrice })
             if (next.key === 'none') return null
             const reached = refurbFlowProgress(job)
+            const since = job.status === 'ready' ? (job.completedDate || job.startedDate) : job.status === 'in_progress' ? (job.startedDate || job.assignedDate) : job.status === 'assigned' ? job.assignedDate : job.intakeDate
+            const waitDays = since ? Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000)) : null
+            const tag = assetIdBySerialId.get(job.serialId)
             return (
-              <div className="card p-4 space-y-3">
+              <div className="card rjd-hero">
+                <div className="rjd-hero__head">
+                  <div className="min-w-0">
+                    <h2>{job.productName} <span className="rjd-pill">{sm.label}</span> <span className="rj-ref">{job.ref}</span></h2>
+                    <p className="rjd-ids">
+                      <span>{job.identityPending ? 'Tag' : 'Serial'} <b className="tb-mono">{job.serialNumber}</b></span>
+                      {tag ? <span>Tag <b>{tag}</b></span> : null}
+                      {job.specs ? <span>{job.specs}</span> : null}
+                      <span>Technician <b>{job.assignedTechnicianName || 'not assigned'}</b></span>
+                      {waitDays !== null ? <span>Waiting <b className={waitDays >= 7 ? 'is-red' : waitDays >= 3 ? 'is-amber' : ''}>{waitDays === 0 ? 'today' : `${waitDays} day${waitDays === 1 ? '' : 's'}`}</b></span> : null}
+                    </p>
+                  </div>
+                </div>
                 {/* Phone: where the job is in one line and a bar (the chips wrapped
                     onto two rows there). */}
                 <div className="sm:hidden" aria-hidden="true">
@@ -433,22 +448,19 @@ function RefurbishmentContent() {
                     ))}
                   </div>
                 </div>
-                <ol className="hidden flex-wrap items-center gap-1.5 text-[11px] sm:flex" aria-label="Job progress">
+                <ol className="rjd-timeline" aria-label="Job progress">
                   {REFURB_FLOW_STEPS.map((label, i) => (
-                    <li key={label} className="inline-flex items-center gap-1.5">
-                      {i > 0 && <span aria-hidden="true" className="text-t3">→</span>}
-                      <span className="rounded-full px-2 py-0.5 font-semibold" style={i <= reached
-                        ? { background: '#E0F6FD', color: '#20164D', border: '1px solid #00AEEF' }
-                        : { background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)' }}>
-                        {i <= reached && <Fa icon={faCheck} className="mr-1" aria-hidden="true" />}{label}
-                      </span>
+                    <li key={label} className={i < reached ? 'is-done' : i === reached ? 'is-now' : ''}>
+                      <span className="rjd-timeline__pt" aria-hidden="true" />
+                      <b>{label}</b>
                     </li>
                   ))}
                 </ol>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="rjd-next">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-t1">Next: {next.title}</p>
-                    <p className="text-[11px] text-t3">{next.detail}</p>
+                    <small>Next step</small>
+                    <p className="rjd-next__title">{next.title}</p>
+                    <p className="rjd-next__detail">{next.detail}</p>
                   </div>
                   {next.mine && next.key === 'record_issues' && (
                     <button className="btn-primary text-xs py-1.5" onClick={() => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) }}>Record issues</button>
@@ -1166,65 +1178,93 @@ function RefurbishmentContent() {
           )
         })()}
 
+        {/* Stage chips: the same status filter, one tap */}
+        <div className="rj-stages" role="tablist" aria-label="Job stage">
+          {(['all', 'queued', 'assigned', 'in_progress', 'ready', 'transferred', 'written_off'] as const).map(st => (
+            <button key={st} type="button" role="tab" aria-selected={filterStatus === st} className={filterStatus === st ? 'is-on' : ''}
+              onClick={() => setFilterStatus(st)}>
+              {st === 'all' ? 'All' : st === 'ready' ? 'Final test' : STATUS_META[st].label} <b>{statusCounts[st] ?? 0}</b>
+            </button>
+          ))}
+        </div>
+
         {/* Jobs table */}
         <div className="card overflow-hidden">
           <DataTable
             tableId="refurbishment-jobs"
             columns={[
               {
-                key: 'ref', label: 'Ref', priority: 1, width: '90px',
-                render: (j: RefurbishmentJob) => <span className="font-mono text-[11px] font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>,
-                exportValue: (j: RefurbishmentJob) => j.ref,
-              },
-              {
-                key: 'device', label: 'Device', priority: 1, width: '1fr',
+                key: 'device', label: 'Machine', priority: 1, width: '1.5fr',
                 render: (j: RefurbishmentJob) => (
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-t1 erp-truncate" title={j.productName}>{j.productName}</p>
-                    <p className="font-mono text-[10px] text-t3 erp-truncate" title={j.serialNumber}>
-                      {assetIdBySerialId.get(j.serialId) && <span className="font-semibold text-t2">{assetIdBySerialId.get(j.serialId)} · </span>}
-                      {j.identityPending ? 'Tag' : 'S/N'} {j.serialNumber}
-                      {j.identityPending && !['transferred', 'written_off'].includes(j.status) && <span className="ml-1.5 font-sans font-semibold rounded px-1" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>Unidentified</span>}
-                      {j.outcome === 'harvested' && <span className="ml-1.5 font-sans font-semibold rounded px-1" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>Harvested</span>}
+                  <div className="rj-machine">
+                    <p><span className="erp-truncate" title={j.productName}>{j.productName}</span><span className="rj-ref">{j.ref}</span></p>
+                    <p className="rj-ids">
+                      {assetIdBySerialId.get(j.serialId) && <span>{assetIdBySerialId.get(j.serialId)}</span>}
+                      <span>{j.identityPending ? 'Tag' : 'S/N'} {j.serialNumber}</span>
+                      {j.identityPending && !['transferred', 'written_off'].includes(j.status) && <em className="rj-flag is-warn">Unidentified</em>}
+                      {j.outcome === 'harvested' && <em className="rj-flag">Harvested</em>}
                     </p>
                   </div>
                 ),
-                accessor: (j: RefurbishmentJob) => `${j.productName} ${j.serialNumber} ${assetIdBySerialId.get(j.serialId) ?? ''}`,
-                exportValue: (j: RefurbishmentJob) => j.productName,
+                accessor: (j: RefurbishmentJob) => `${j.ref} ${j.productName} ${j.serialNumber} ${assetIdBySerialId.get(j.serialId) ?? ''}`,
+                exportValue: (j: RefurbishmentJob) => `${j.ref} ${j.productName}`,
               },
               {
-                key: 'status', label: 'Status', priority: 1, width: '120px',
-                render: (j: RefurbishmentJob) => <RefurbStatusBadge status={j.status} />,
+                key: 'needs', label: 'What it needs', priority: 2, width: '1.2fr',
+                render: (j: RefurbishmentJob) => {
+                  const todo = (j.testTasks ?? []).filter(t => !t.done)
+                  const total = (j.testTasks ?? []).length
+                  return (
+                    <span className="rj-needs">
+                      {todo.length ? todo.map(t => t.text).join(' · ') : j.issuesFound || j.intakeIssueDescription || '—'}
+                      {total ? <em>{total - todo.length} of {total} to-dos done</em> : null}
+                    </span>
+                  )
+                },
+                exportValue: (j: RefurbishmentJob) => j.issuesFound || j.intakeIssueDescription || '',
+              },
+              {
+                key: 'status', label: 'Progress', priority: 1, width: '170px',
+                render: (j: RefurbishmentJob) => {
+                  if (j.status === 'transferred' || j.status === 'written_off') return <RefurbStatusBadge status={j.status} />
+                  const step = { queued: 0, assigned: 1, in_progress: 2, ready: 3 }[j.status]
+                  const waitingParts = j.partsNeeded.filter(p => p.status === 'requested' || p.status === 'ordered').length
+                  return (
+                    <div className="rj-prog">
+                      <div className="rj-prog__bar" aria-hidden="true">{[0, 1, 2, 3].map(i => <i key={i} className={i < step ? 'is-done' : i === step ? 'is-now' : ''} />)}</div>
+                      <span>{j.status === 'ready' ? 'Repaired — final test' : STATUS_META[j.status].label}{waitingParts ? ` · waiting for ${waitingParts} part${waitingParts === 1 ? '' : 's'}` : ''}</span>
+                    </div>
+                  )
+                },
                 accessor: (j: RefurbishmentJob) => STATUS_META[j.status].label,
                 exportValue: (j: RefurbishmentJob) => STATUS_META[j.status].label,
               },
               {
-                key: 'technician', label: 'Technician', priority: 2, width: '110px',
+                key: 'technician', label: 'Technician', priority: 2, width: '130px',
                 render: (j: RefurbishmentJob) => j.assignedTechnicianName ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
-                      {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
-                    </div>
-                    <span className="text-xs text-t1 truncate">{j.assignedTechnicianName}</span>
-                  </div>
-                ) : (
-                  <span className="text-xs italic font-medium inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Unassigned</span>
+                  <span className="rj-tech"><span className="rj-avatar">{j.assignedTechnicianName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span><span className="erp-truncate">{j.assignedTechnicianName}</span></span>
+                ) : ['transferred', 'written_off'].includes(j.status) ? <span className="text-t3 text-xs">—</span> : (
+                  <span className="rj-flag is-warn">Unassigned</span>
                 ),
                 exportValue: (j: RefurbishmentJob) => j.assignedTechnicianName || '',
               },
               {
-                key: 'partsCost', label: 'Parts cost', align: 'right' as const, priority: 2, width: '130px',
+                key: 'waiting', label: 'Waiting', priority: 1, width: '90px',
                 render: (j: RefurbishmentJob) => {
-                  const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
-                  return <span className="text-xs font-medium text-t2">{partTotal > 0 ? fmtKes(partTotal) : '—'}</span>
+                  if (j.status === 'transferred' || j.status === 'written_off') return <span className="text-t3 text-xs">{fmtDate(j.transferDate || j.completedDate || j.intakeDate)}</span>
+                  const since = j.status === 'ready' ? (j.completedDate || j.startedDate) : j.status === 'in_progress' ? (j.startedDate || j.assignedDate) : j.status === 'assigned' ? j.assignedDate : j.intakeDate
+                  const d = since ? Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000)) : null
+                  return <span className={`rj-wait${d !== null && d >= 7 ? ' is-red' : d !== null && d >= 3 ? ' is-amber' : ''}`}>{d === null ? '—' : d === 0 ? 'today' : `${d} day${d === 1 ? '' : 's'}`}</span>
                 },
-                exportValue: (j: RefurbishmentJob) => j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0),
+                exportValue: (j: RefurbishmentJob) => j.intakeDate,
               },
               {
-                key: 'intake', label: 'Intake', priority: 3, width: '90px',
-                render: (j: RefurbishmentJob) => <span className="text-xs text-t3">{fmtDate(j.intakeDate)}</span>,
-                exportValue: (j: RefurbishmentJob) => j.intakeDate,
+                key: 'partsCost', label: 'Parts', align: 'right' as const, priority: 3, width: '110px',
+                render: (j: RefurbishmentJob) => {
+                  const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
+                  return <span className="text-xs text-t2">{partTotal > 0 ? fmtKes(partTotal) : '—'}</span>
+                },
+                exportValue: (j: RefurbishmentJob) => j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0),
               },
             ] as ColumnDef<RefurbishmentJob>[]}
             rows={filtered}
@@ -1252,6 +1292,15 @@ function RefurbishmentContent() {
             ) : undefined}
             rowStyle={j => ({ borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}` })}
             cardAccent={j => STATUS_LEFT_BORDER[j.status]}
+            rowActions={j => {
+              const label = j.status === 'queued' && !j.assignedTechnicianName ? 'Assign' : j.status === 'ready' ? 'Final test' : 'Open'
+              return (
+                <button type="button" className={label === 'Open' ? 'btn-outline rj-act' : 'btn-primary rj-act'} onClick={e => { e.stopPropagation(); setActiveId(j.id) }}>
+                  {label}
+                </button>
+              )
+            }}
+            rowActionsWidth={110}
             exportTitle="Refurbishment Jobs"
             exportFilename="refurbishment-jobs"
           />

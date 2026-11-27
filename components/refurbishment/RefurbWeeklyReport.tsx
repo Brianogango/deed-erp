@@ -106,18 +106,18 @@ export function RefurbWeeklyReport({
   ]
 
   const section = (title: string, count: number, body: React.ReactNode, note?: string) => (
-    <div className="card overflow-hidden">
-      <div className="px-4 pt-3">
-        <p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-t2">{title} ({count})</p>
-        {note && <p className="m-0 mt-0.5 text-[11px] text-t3">{note}</p>}
+    <section className="tb-card">
+      <div className="tb-card__head">
+        <h3>{title} <span className="tb-count">{count}</span></h3>
+        {note && <span className="tb-muted">{note}</span>}
       </div>
-      <div className="p-2">{body}</div>
-    </div>
+      <div className="rwr-table">{body}</div>
+    </section>
   )
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="rwr-week">
         <div className="flex items-center gap-2">
           <button type="button" className="btn-outline text-xs px-2.5" aria-label="Previous week" onClick={() => onWeekChange(shiftWeek(weekStart, -1))}>
             <Fa icon={faChevronLeft} />
@@ -148,25 +148,25 @@ export function RefurbWeeklyReport({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+      <div className="rwr-tiles">
         {tiles.map(([label, value, color]) => (
-          <div key={label} className="card px-3 py-2.5">
-            <p className="m-0 text-lg font-bold" style={{ color: color ?? 'var(--text-1)' }}>{value}</p>
-            <p className="m-0 text-[11px] text-t3">{label}</p>
+          <div key={label} className="tb-tile">
+            <span>{label}</span>
+            <strong style={color ? { color } : undefined}>{value}</strong>
           </div>
         ))}
       </div>
 
       {report.pendingByStage.length > 0 && report.isCurrentWeek && (
-        <div className="card flex flex-wrap gap-2 px-4 py-3">
+        <div className="rwr-stages">
           {report.pendingByStage.map(s => (
-            <span key={s.stage} className="rounded-full px-2.5 py-1 text-[11px]" style={{ background: 'var(--bg-muted)', color: 'var(--text-2)' }}>
-              {s.stage}: <b>{s.count}</b>
-            </span>
+            <span key={s.stage}>{s.stage} <b>{s.count}</b></span>
           ))}
         </div>
       )}
 
+      <div className="rwr-cols">
+      <div className="rwr-col">
       {section('Completed', report.completed.length,
         <DataTable tableId="refurb-report-completed" columns={completedCols} rows={report.completed} rowKey={c => c.id} hideSearch hideColumnFilters
           onRowClick={c => onOpenJob(c.id)} emptyMessage="No machines completed this week" exportTitle={`Refurbishment completed ${report.label}`} exportFilename={`refurb-completed-${weekStart}`} />,
@@ -177,6 +177,8 @@ export function RefurbWeeklyReport({
           onRowClick={p => onOpenJob(p.id)} emptyMessage="Nothing pending" exportTitle={`Refurbishment pending ${report.label}`} exportFilename={`refurb-pending-${weekStart}`} />,
         report.isCurrentWeek ? 'Not yet ready, oldest first. Over 7 days in amber, over 14 in red.' : 'Received by the end of the week and not finished by then.')}
 
+      </div>
+      <div className="rwr-col">
       {section('Technicians', report.technicians.length,
         <DataTable tableId="refurb-report-techs" columns={techCols} rows={report.technicians} rowKey={x => x.name} hideSearch hideColumnFilters
           emptyMessage="No assigned work" exportTitle={`Refurbishment by technician ${report.label}`} exportFilename={`refurb-technicians-${weekStart}`} />)}
@@ -184,6 +186,8 @@ export function RefurbWeeklyReport({
       {report.writtenOff.length > 0 && section('Written off', report.writtenOff.length,
         <DataTable tableId="refurb-report-written-off" columns={writtenOffCols} rows={report.writtenOff} rowKey={c => c.id} hideSearch hideColumnFilters
           onRowClick={c => onOpenJob(c.id)} emptyMessage="Nothing written off" exportTitle={`Refurbishment written off ${report.label}`} exportFilename={`refurb-written-off-${weekStart}`} />)}
+      </div>
+      </div>
     </div>
   )
 }
