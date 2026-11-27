@@ -74,8 +74,17 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [assignTo, setAssignTo] = useState('')
   const [busy, setBusy] = useState(false)
+  const [query, setQuery] = useState('')
 
-  const inbound = useMemo(() => (serials as Unit[]).filter(s => s.location === 'pending_testing' && s.status !== 'sold'), [serials])
+  const allInbound = useMemo(() => (serials as Unit[]).filter(s => s.location === 'pending_testing' && s.status !== 'sold'), [serials])
+  // Search: asset ID, serial, barcode, model or tester; every word must match.
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const matches = (u: Unit) => {
+    if (!words.length) return true
+    const hay = [u.assetId, u.serial, u.barcode, u.productName, bySerial.get(u.id)?.assignedToName].map(v => String(v ?? '').toLowerCase()).join(' ')
+    return words.every(w => hay.includes(w))
+  }
+  const inbound = allInbound.filter(matches)
   const retestFirst = (a: Unit, b: Unit) => {
     const r = (u: Unit) => {
       const x = bySerial.get(u.id)
@@ -161,6 +170,25 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
     </a>
   ) : null
 
+  const searchBox = (onEnter: () => void, shownCount: number) => (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <input
+        type="search"
+        className="flex-1 min-w-0 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-[13px] text-t1 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+        placeholder="Search or scan: asset ID, serial, model or tester…"
+        aria-label="Search units on the test bench"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } if (e.key === 'Escape') setQuery('') }}
+      />
+      {words.length ? (
+        <p className="text-[11px] text-t3 shrink-0">
+          {shownCount} match{shownCount === 1 ? '' : 'es'} · <button type="button" className="font-semibold text-[var(--navy)] hover:underline" onClick={() => setQuery('')}>Clear</button>
+        </p>
+      ) : null}
+    </div>
+  )
+
   if (!loaded) return <p className="text-[12px] text-t3 px-1">Loading the test bench…</p>
 
   // ── Tester: only what was given to them ──────────────────────────────
@@ -175,6 +203,8 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
           <span className="font-semibold">Today: {myDone.length} tested</span>
           {myDone.length ? <span className="text-t3">({myDone.filter(b => b.result !== 'failed').length} passed · {myDone.filter(b => b.result === 'failed').length} failed)</span> : null}
         </div>
+        {/* Scanning a unit's sticker opens its test when it is one of mine. */}
+        {searchBox(() => { const only = [...onBench, ...waiting]; if (only.length === 1) setOpen(only[0]) }, onBench.length + waiting.length)}
         <Card title="On my bench" count={onBench.length} empty="Nothing started">
           {onBench.map(u => <UnitLine key={u.id} u={u} b={bySerial.get(u.id)}>{statusChip(u)}{startBtn(u)}</UnitLine>)}
         </Card>
@@ -187,15 +217,21 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
   }
 
   // ── Technical lead: assign and follow every tester ───────────────────
-  const owners = Array.from(new Set([...withTester.map(ownerOf), ...doneToday.map(b => b.testedById ?? '')].filter(Boolean)))
+  // Searching shows only the testers with matching units.
+  const owners = Array.from(new Set([...withTester.map(ownerOf), ...(words.length ? [] : doneToday.map(b => b.testedById ?? ''))].filter(Boolean)))
   const allPicked = unassigned.length > 0 && unassigned.every(u => picked.has(u.id))
+  const totals = {
+    toAssign: allInbound.filter(u => !['assigned', 'in_progress', 'completed'].includes(String(stage(u)))).length,
+    withTesters: allInbound.filter(u => stage(u) === 'assigned').length,
+    onBench: allInbound.filter(u => stage(u) === 'in_progress').length,
+  }
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          ['To assign', unassigned.length],
-          ['With testers', withTester.filter(u => stage(u) === 'assigned').length],
-          ['On the bench', withTester.filter(u => stage(u) === 'in_progress').length],
+          ['To assign', totals.toAssign],
+          ['With testers', totals.withTesters],
+          ['On the bench', totals.onBench],
           ['Tested today', doneToday.length],
         ].map(([l, n]) => (
           <div key={String(l)} className="card px-3 py-2.5">
@@ -205,10 +241,19 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
         ))}
       </div>
 
+      {/* Scanning a sticker ticks that unit for assigning (one exact match). */}
+      {searchBox(() => {
+        if (unassigned.length !== 1) return
+        const u = unassigned[0]
+        setPicked(prev => new Set(prev).add(u.id))
+        setQuery('')
+        notify(`${u.assetId || u.serial} ticked — ${picked.has(u.id) ? picked.size : picked.size + 1} selected`, 'info')
+      }, unassigned.length + withTester.length)}
+
       <Card
         title="Waiting to be assigned"
         count={unassigned.length}
-        empty="Nothing waiting — every unit in Inbound has a tester."
+        empty={words.length ? 'No unassigned unit matches this search' : 'Nothing waiting — every unit in Inbound has a tester.'}
         hint={unassigned.length ? (
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-[11px] text-t2 cursor-pointer select-none">
@@ -220,7 +265,7 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
               {techs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             <button type="button" className="btn-primary text-[11px]" disabled={busy || !assignTo || picked.size === 0}
-              onClick={() => void assign(unassigned.filter(u => picked.has(u.id)).map(u => u.id), assignTo)}>
+              onClick={() => void assign([...picked], assignTo)}>
               Assign {picked.size || ''}
             </button>
           </div>
