@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
+import { paymentBank } from '@/lib/finance/payment-bank'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { financeInvoicePath } from '@/lib/finance-invoice'
@@ -90,7 +91,7 @@ export default function PartnerLedgerTab() {
   const w = words(side)
 
   const ledger = useMemo(
-    () => buildPartnerLedger({ docs: partnerDocs, side, from: plDateFrom, to: plDateTo, asOf: today() }),
+    () => buildPartnerLedger({ docs: partnerDocs, side, from: plDateFrom, to: plDateTo, asOf: today(), bankOf: p => { const b = paymentBank(p, bankAccounts); return b ? `${b.label}${b.isDefault ? ' (default)' : ''}` : null } }),
     [partnerDocs, side, plDateFrom, plDateTo],
   )
 

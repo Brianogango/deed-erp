@@ -38,6 +38,7 @@ import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import { findRepairForInvoice, repairDeviceHeading } from '@/lib/repair-invoice-device-section'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import { paymentDetailRows } from '@/lib/contacts/payment-details'
+import { accountChoiceRequired, paymentBank, reconciledStatementLine } from '@/lib/finance/payment-bank'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { InvoiceCreditNoteModal } from '@/components/finance/InvoiceCreditNoteModal'
@@ -90,6 +91,7 @@ export default function InvoiceDetail() {
     contacts,
     saleOrders,
     bankAccounts,
+    bankStatementLines,
     companySettings,
     outboundReleases,
     initRelease,
@@ -153,6 +155,10 @@ export default function InvoiceDetail() {
   const showDeviceHeading = !!deviceHeading && !(invoice?.lines ?? []).some(l => l.lineType === 'section')
 
   const [showPayModal, setShowPayModal] = useState(false)
+  const [changingBankId, setChangingBankId] = useState<string | null>(null)
+  const [newBankId, setNewBankId] = useState('')
+  const [bankChangeReason, setBankChangeReason] = useState('')
+  const [bankChangeBusy, setBankChangeBusy] = useState(false)
   const [showCreditNote, setShowCreditNote] = useState(false)
   const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null)
   const [reversalReason, setReversalReason] = useState('')
@@ -494,6 +500,10 @@ export default function InvoiceDetail() {
     if (byCheque && !chequeNumber.trim()) missing.push('Cheque number')
     if (missing.length) { showToast(`Required: ${missing.join(', ')}`, 'error'); return }
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
+    // Two M-Pesa (or cash) accounts: say which, or reconciliation cannot tell.
+    if (!payBankAccountId && accountChoiceRequired(payMethod, activeBanks)) {
+      showToast(`You have more than one ${payMethod === 'mpesa' ? 'M-Pesa' : 'cash'} account — pick the one the money went through`, 'error'); return
+    }
     const applied = financePaymentPreview(payAmount, balance).applied
     const reference = payReference.trim() || (byCheque ? `Cheque ${chequeNumber.trim()}` : payReference)
     // A post-dated cheque pays on its own date (lib/cheques/cheque-schedule.server.ts):
@@ -1410,6 +1420,29 @@ export default function InvoiceDetail() {
                           <p className="invoice-detail__pay-meta">
                             {fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}
                           </p>
+                          {(() => {
+                            // Which account the money went through, for reconciliation.
+                            const bank = paymentBank(pay, bankAccounts)
+                            if (!bank) return null
+                            const line = reconciledStatementLine(bankStatementLines ?? [], invoice.id, String(pay.id))
+                            return (
+                              <p className="invoice-detail__pay-meta">
+                                <span className="font-semibold text-[var(--text-2)]">{bank.label}</span>
+                                {bank.isDefault && <span title="No account was chosen on this payment; the books used the default for its method"> (default)</span>}
+                                {line
+                                  ? <span className="ml-1.5 font-semibold text-emerald-700">· Reconciled ✓{line.date ? ` (statement ${fmtDate(line.date)})` : ''}</span>
+                                  : canManageFullFinance && changingBankId !== pay.id && (
+                                    <button type="button" className="ml-1.5 text-[11px] font-semibold text-[var(--primary-dark)] underline-offset-2 hover:underline"
+                                      onClick={() => { setChangingBankId(String(pay.id)); setNewBankId(''); setBankChangeReason('') }}>
+                                      Change bank
+                                    </button>
+                                  )}
+                                {(pay as { bankChanges?: Array<{ at: string; by: string }> }).bankChanges?.length
+                                  ? <span className="ml-1.5" title={(pay as { bankChanges?: Array<{ at: string; by: string; reason?: string }> }).bankChanges!.map(c => `${fmtDate(c.at)} ${c.by}: ${c.reason ?? ''}`).join('\n')}>· bank changed</span>
+                                  : null}
+                              </p>
+                            )
+                          })()}
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
@@ -1424,6 +1457,44 @@ export default function InvoiceDetail() {
                           )}
                         </div>
                       </div>
+                      {changingBankId === pay.id && (() => {
+                        const current = paymentBank(pay, bankAccounts)
+                        const choices = bankAccounts.filter(b => b.active && b.id !== current?.id)
+                        return (
+                          <div className="mb-3 space-y-2 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 text-xs">
+                            <p>Move this {fmtKes(pay.amount)} payment from <b>{current?.label}</b> to the account it really went through. The books move it between the two accounts; the cashbook follows.</p>
+                            <select className="form-input w-full text-xs" aria-label="Bank account" value={newBankId} onChange={e => setNewBankId(e.target.value)}>
+                              <option value="">Select account…</option>
+                              {choices.map(b => <option key={b.id} value={b.id}>{paymentBank({ method: pay.method, bankAccountId: b.id }, bankAccounts)?.label}</option>)}
+                            </select>
+                            <input className="form-input w-full text-xs" aria-label="Reason for changing the bank" placeholder="Why? e.g. Paid into Equity, recorded as NCBA"
+                              value={bankChangeReason} onChange={e => setBankChangeReason(e.target.value)} />
+                            <div className="flex justify-end gap-2">
+                              <button type="button" className="btn-secondary px-3 py-1 text-[11px]" disabled={bankChangeBusy} onClick={() => setChangingBankId(null)}>Keep as is</button>
+                              <button type="button" className="btn-primary px-3 py-1 text-[11px]" disabled={bankChangeBusy || !newBankId || bankChangeReason.trim().length < 3}
+                                onClick={async () => {
+                                  setBankChangeBusy(true)
+                                  try {
+                                    const res = await fetch(`/api/invoices/${encodeURIComponent(invoice.id)}/payments/${encodeURIComponent(String(pay.id))}/bank`, {
+                                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ bankAccountId: newBankId, reason: bankChangeReason.trim() }),
+                                    })
+                                    const data = await res.json().catch(() => ({})) as { error?: string; change?: { toName?: string } }
+                                    if (!res.ok) throw new Error(data.error || 'Could not change the bank')
+                                    showToast(`Payment moved to ${data.change?.toName ?? 'the new account'}`, 'success')
+                                    setChangingBankId(null)
+                                  } catch (e) {
+                                    showToast(e instanceof Error ? e.message : 'Could not change the bank', 'error')
+                                  } finally {
+                                    setBankChangeBusy(false)
+                                  }
+                                }}>
+                                {bankChangeBusy ? 'Moving…' : 'Move payment'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
                       {reversingPaymentId === pay.id && (
                         <div className="mb-3 space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900">
                           <p>
@@ -1732,7 +1803,7 @@ export default function InvoiceDetail() {
             </Field>
 
             {activeBanks.length > 0 && (
-              <Field label={invoice.type === 'customer_invoice' ? 'Bank / cash account received into' : 'Bank / cash account paid from'}>
+              <Field label={`${invoice.type === 'customer_invoice' ? 'Bank / cash account received into' : 'Bank / cash account paid from'}${payMethod === 'bank_transfer' || accountChoiceRequired(payMethod, activeBanks) ? ' *' : ''}`}>
                 <Select
                   value={payBankAccountId}
                   onChange={setPayBankAccountId}

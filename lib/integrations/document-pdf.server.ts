@@ -70,6 +70,17 @@ export async function paymentReceiptAttachment(input: {
   const balance = Math.max(0, Math.round((total - paid) * 100) / 100)
   const receiptNo = `RCT-${String(input.paymentId).replace(/-/g, '').slice(0, 8).toUpperCase()}`
   const method = input.paymentMethod ? String(input.paymentMethod).replace(/_/g, ' ') : 'Payment'
+  // Which account it went into, beside the reference, for the customer's and our reconciliation.
+  let into = ''
+  try {
+    const { loadAppState } = await import('@/lib/server-store')
+    const { paymentBank } = await import('@/lib/finance/payment-bank')
+    const s = await loadAppState(['deed_invoices', 'deed_bankAccounts'])
+    const inv = (Array.isArray(s.deed_invoices) ? s.deed_invoices : []).find((i: any) => i?.id === input.invoiceId) as any
+    const pay = (Array.isArray(inv?.payments) ? inv.payments : []).find((p: any) => String(p?.id) === String(input.paymentId))
+    const bank = pay ? paymentBank({ method: pay.method ?? input.paymentMethod, bankAccountId: pay.bankAccountId }, Array.isArray(s.deed_bankAccounts) ? s.deed_bankAccounts as any[] : []) : null
+    if (bank) into = ` · Into ${bank.label}`
+  } catch { /* the receipt still goes out without the account */ }
   const content = await companyPdf({
     title: 'Receipt',
     ref: receiptNo,
@@ -92,7 +103,7 @@ export async function paymentReceiptAttachment(input: {
     total: amount,
     // No "Balance due 0" box: the invoice may still have money owing — the notes say how much.
     notes: [
-      `Method: ${method}${input.reference ? ` · Ref ${input.reference}` : ''}`,
+      `Method: ${method}${into}${input.reference ? ` · Ref ${input.reference}` : ''}`,
       `Invoice total: KES ${total.toLocaleString('en-KE')} · Paid to date: KES ${paid.toLocaleString('en-KE')}`,
       balance <= 0.009 ? 'Status: PAID IN FULL' : `Balance remaining: KES ${balance.toLocaleString('en-KE')}`,
     ].join('\n'),

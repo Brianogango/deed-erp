@@ -160,6 +160,8 @@ export function buildPartnerLedger(args: {
   to?: string
   /** "Today" for aging; defaults to the period end or the real date. */
   asOf?: string
+  /** The bank or cash account a payment went through, for reconciliation (lib/finance/payment-bank). */
+  bankOf?: (payment: { id?: string; method?: string; bankAccountId?: string | null }) => string | null
 }): PartnerLedger {
   const asOf = day(args.asOf || args.to || new Date().toISOString())
   const from = day(args.from)
@@ -230,7 +232,7 @@ export function buildPartnerLedger(args: {
         reference: p.reference || doc.ref,
         description: allocation
           ? `Credit ${p.reference ?? ''} used on ${doc.ref}`.replace(/\s+/g, ' ')
-          : `${args.side === 'customer' ? 'Received' : 'Paid'} by ${method}${p.reference ? ` · ${p.reference}` : ''}${isCleared ? '' : ' · not cleared yet'}`,
+          : `${args.side === 'customer' ? 'Received' : 'Paid'} by ${method}${(() => { const b = args.bankOf?.(p as any); return b ? ` · ${b}` : '' })()}${p.reference ? ` · ${p.reference}` : ''}${isCleared ? '' : ' · not cleared yet'}`,
         charge: 0,
         payment: allocation ? 0 : amount,
         cleared: isCleared,
