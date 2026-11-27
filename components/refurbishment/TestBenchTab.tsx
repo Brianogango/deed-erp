@@ -8,8 +8,6 @@ import { unitTestAction, useUnitTests, type UnitTestBrief } from '@/components/i
 type Unit = SerialNumber & { assetId?: string }
 type Tech = { id: string; name: string }
 
-const chip = 'text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap'
-
 function minutesSince(iso?: string): string {
   if (!iso) return ''
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
@@ -23,34 +21,36 @@ const isToday = (iso?: string) => {
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()
 }
 
-function UnitLine({ u, b, children, leading }: { u: Unit; b?: UnitTestBrief; children?: React.ReactNode; leading?: React.ReactNode }) {
+function UnitLine({ u, b, children, leading, accent }: { u: Unit; b?: UnitTestBrief; children?: React.ReactNode; leading?: React.ReactNode; accent?: boolean }) {
   const last = b?.status === 'placed' ? { placedTo: b.placedTo, failReasons: b.failReasons } : b?.previous
-  const retest = b?.source === 'retest_after_repair' || ['shop', 'repair_unit'].includes(String(last?.placedTo))
+  const retestAfterRepair = b?.source === 'retest_after_repair' || ['shop', 'repair_unit'].includes(String(last?.placedTo))
+  const tag = retestAfterRepair ? <span className="tb-tag tb-tag--vio">Retest after repair</span>
+    : last ? <span className="tb-tag">Retest</span>
+    : <span className="tb-tag tb-tag--new">New</span>
   return (
-    <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+    <div className={`tb-unit${accent ? ' is-picked' : ''}`}>
       {leading}
-      <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-bold text-t1 truncate">{u.productName}</p>
-        <p className="text-[11px] text-t3 flex flex-wrap items-center gap-1.5 mt-0.5">
-          <span className="font-mono font-semibold text-t2">{u.assetId || u.serial}</span>
-          {u.assetId && u.assetId !== u.serial ? <span className="font-mono">S/N {u.serial}</span> : null}
-          {retest ? <span className={`${chip} bg-[var(--primary-light)] text-[var(--navy)]`}>Retest after repair</span> : null}
-          {last?.failReasons.length ? <span>last failed: {last.failReasons.join(' · ')}</span> : null}
+      <div className="tb-unit__main">
+        <p className="tb-unit__name"><span>{u.productName}</span>{tag}</p>
+        <p className="tb-unit__meta">
+          <span className="tb-mono">{u.assetId || u.serial}</span>
+          {u.assetId && u.assetId !== u.serial ? <span className="tb-mono">S/N {u.serial}</span> : null}
+          {last?.failReasons.length ? <span className="tb-unit__fail">last failed: {last.failReasons.join(' · ')}</span> : null}
         </p>
       </div>
-      <div className="flex flex-wrap items-center gap-2 shrink-0">{children}</div>
+      <div className="tb-unit__actions">{children}</div>
     </div>
   )
 }
 
 function Card({ title, count, hint, children, empty }: { title: string; count: number; hint?: React.ReactNode; children: React.ReactNode; empty: string }) {
   return (
-    <section className="card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-[var(--border-lt)] bg-[var(--bg-surface)]">
-        <p className="text-[13px] font-bold text-t1">{title} <span className="ml-1 text-[11px] font-bold tabular-nums text-t3">{count}</span></p>
+    <section className="tb-card">
+      <div className="tb-card__head">
+        <h3>{title} <span className="tb-count">{count}</span></h3>
         {hint}
       </div>
-      {count === 0 ? <p className="py-6 text-center text-[12px] text-t3">{empty}</p> : <div className="divide-y divide-[var(--border-lt)]">{children}</div>}
+      {count === 0 ? <p className="tb-card__empty">{empty}</p> : <div>{children}</div>}
     </section>
   )
 }
@@ -149,8 +149,8 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
   const statusChip = (u: Unit) => {
     const b = bySerial.get(u.id)
     return b?.status === 'in_progress'
-      ? <span className={`${chip} bg-[var(--info-bg)] text-[var(--info-text)]`}>On the bench {minutesSince(b.startedAt)}</span>
-      : <span className={`${chip} bg-[var(--bg-muted)] text-t3`}>Waiting · given {minutesSince(b?.assignedAt)} ago</span>
+      ? <span className="tb-pill tb-pill--info">On the bench · {minutesSince(b.startedAt)}</span>
+      : <span className="tb-pill">Waiting · given {minutesSince(b?.assignedAt)} ago</span>
   }
 
   const form = open && (
@@ -165,31 +165,31 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
   )
 
   const placementNote = awaitingPlacement > 0 ? (
-    <a href="/inventory?tab=warehouse&location=tested" className="text-[11px] font-semibold text-[var(--navy)] hover:underline">
+    <a href="/inventory?tab=warehouse&location=tested" className="tb-link">
       {awaitingPlacement} tested, waiting for Inventory to place →
     </a>
   ) : null
 
-  const searchBox = (onEnter: () => void, shownCount: number) => (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+  const searchBox = (onEnter: () => void, shownCount: number, hint: string) => (
+    <div className="tb-scan">
+      <span className="tb-scan__icon" aria-hidden="true">▣</span>
       <input
         type="search"
-        className="flex-1 min-w-0 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-[13px] text-t1 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
-        placeholder="Search or scan: asset ID, serial, model or tester…"
+        placeholder={hint}
         aria-label="Search units on the test bench"
         value={query}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } if (e.key === 'Escape') setQuery('') }}
       />
       {words.length ? (
-        <p className="text-[11px] text-t3 shrink-0">
-          {shownCount} match{shownCount === 1 ? '' : 'es'} · <button type="button" className="font-semibold text-[var(--navy)] hover:underline" onClick={() => setQuery('')}>Clear</button>
-        </p>
+        <span className="tb-scan__count">
+          {shownCount} match{shownCount === 1 ? '' : 'es'} · <button type="button" onClick={() => setQuery('')}>Clear</button>
+        </span>
       ) : null}
     </div>
   )
 
-  if (!loaded) return <p className="text-[12px] text-t3 px-1">Loading the test bench…</p>
+  if (!loaded) return <p className="tb-loading">Loading the test bench…</p>
 
   // ── Tester: only what was given to them ──────────────────────────────
   if (!canAssign) {
@@ -197,16 +197,17 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
     const waiting = mine.filter(u => stage(u) === 'assigned').sort(retestFirst)
     const onBench = mine.filter(u => stage(u) === 'in_progress')
     const myDone = doneToday.filter(b => b.testedById === currentUserId)
+    const myPassed = myDone.filter(b => b.result !== 'failed').length
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2 text-[12px] text-t2">
-          <span className="font-semibold">Today: {myDone.length} tested</span>
-          {myDone.length ? <span className="text-t3">({myDone.filter(b => b.result !== 'failed').length} passed · {myDone.filter(b => b.result === 'failed').length} failed)</span> : null}
+      <div className="tb">
+        <div className="tb-today">
+          <div><span>Today</span><strong>{myDone.length} tested</strong></div>
+          {myDone.length ? <div className="tb-today__split"><span className="tb-pill tb-pill--ok">{myPassed} passed</span><span className="tb-pill tb-pill--bad">{myDone.length - myPassed} failed</span></div> : null}
         </div>
         {/* Scanning a unit's sticker opens its test when it is one of mine. */}
-        {searchBox(() => { const only = [...onBench, ...waiting]; if (only.length === 1) setOpen(only[0]) }, onBench.length + waiting.length)}
+        {searchBox(() => { const only = [...onBench, ...waiting]; if (only.length === 1) setOpen(only[0]) }, onBench.length + waiting.length, 'Scan a sticker or type a serial to open its test')}
         <Card title="On my bench" count={onBench.length} empty="Nothing started">
-          {onBench.map(u => <UnitLine key={u.id} u={u} b={bySerial.get(u.id)}>{statusChip(u)}{startBtn(u)}</UnitLine>)}
+          {onBench.map(u => <UnitLine key={u.id} u={u} b={bySerial.get(u.id)} accent>{statusChip(u)}{startBtn(u)}</UnitLine>)}
         </Card>
         <Card title="My units to test" count={waiting.length} empty="Nothing assigned to you. The Technical lead gives out units to test.">
           {waiting.map(u => <UnitLine key={u.id} u={u} b={bySerial.get(u.id)}>{startBtn(u)}</UnitLine>)}
@@ -225,20 +226,14 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
     withTesters: allInbound.filter(u => stage(u) === 'assigned').length,
     onBench: allInbound.filter(u => stage(u) === 'in_progress').length,
   }
+  const passedToday = doneToday.filter(b => b.result !== 'failed').length
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[
-          ['To assign', totals.toAssign],
-          ['With testers', totals.withTesters],
-          ['On the bench', totals.onBench],
-          ['Tested today', doneToday.length],
-        ].map(([l, n]) => (
-          <div key={String(l)} className="card px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-t3">{l}</p>
-            <p className="text-lg font-extrabold tabular-nums text-[var(--navy)] leading-tight">{n}</p>
-          </div>
-        ))}
+    <div className="tb">
+      <div className="tb-tiles">
+        <div className="tb-tile"><span>To assign</span><strong>{totals.toAssign}</strong><small>waiting for a tester</small></div>
+        <div className="tb-tile"><span>With testers</span><strong>{totals.withTesters}</strong><small>not started yet</small></div>
+        <div className="tb-tile"><span>On the bench</span><strong>{totals.onBench}</strong><small>being tested now</small></div>
+        <div className="tb-tile"><span>Tested today</span><strong>{doneToday.length}</strong><small><b className="is-ok">{passedToday} passed</b> · <b className="is-bad">{doneToday.length - passedToday} failed</b></small></div>
       </div>
 
       {/* Scanning a sticker ticks that unit for assigning (one exact match). */}
@@ -248,69 +243,90 @@ export default function TestBenchTab({ serials, techs, currentUserId, canAssign,
         setPicked(prev => new Set(prev).add(u.id))
         setQuery('')
         notify(`${u.assetId || u.serial} ticked — ${picked.has(u.id) ? picked.size : picked.size + 1} selected`, 'info')
-      }, unassigned.length + withTester.length)}
+      }, unassigned.length + withTester.length, 'Scan a sticker or type a serial, model or tester — a match is ticked for assigning')}
 
-      <Card
-        title="Waiting to be assigned"
-        count={unassigned.length}
-        empty={words.length ? 'No unassigned unit matches this search' : 'Nothing waiting — every unit in Inbound has a tester.'}
-        hint={unassigned.length ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 text-[11px] text-t2 cursor-pointer select-none">
-              <input type="checkbox" checked={allPicked} onChange={e => setPicked(e.target.checked ? new Set(unassigned.map(u => u.id)) : new Set())} />
-              Select all
-            </label>
-            <select className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2 py-1.5 text-[12px] text-t1" value={assignTo} onChange={e => setAssignTo(e.target.value)} aria-label="Tester">
-              <option value="">Choose tester…</option>
-              {techs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            <button type="button" className="btn-primary text-[11px]" disabled={busy || !assignTo || picked.size === 0}
-              onClick={() => void assign([...picked], assignTo)}>
-              Assign {picked.size || ''}
-            </button>
-          </div>
-        ) : null}
-      >
-        {unassigned.map(u => (
-          <UnitLine key={u.id} u={u} b={bySerial.get(u.id)}
-            leading={<input type="checkbox" aria-label={`Select ${u.serial}`} checked={picked.has(u.id)}
-              onChange={e => setPicked(prev => { const n = new Set(prev); if (e.target.checked) n.add(u.id); else n.delete(u.id); return n })} />}>
-            {canRecord ? <button type="button" className="btn-outline text-[11px]" onClick={() => setOpen(u)}>Test it myself</button> : null}
-          </UnitLine>
-        ))}
-      </Card>
+      <div className="tb-cols">
+        <Card
+          title="Waiting to be assigned"
+          count={unassigned.length}
+          empty={words.length ? 'No unassigned unit matches this search' : 'Nothing waiting — every unit in Inbound has a tester.'}
+          hint={unassigned.length ? (
+            <div className="tb-assign">
+              <label className="tb-assign__all">
+                <input type="checkbox" checked={allPicked} onChange={e => setPicked(e.target.checked ? new Set(unassigned.map(u => u.id)) : new Set())} />
+                All
+              </label>
+              <select value={assignTo} onChange={e => setAssignTo(e.target.value)} aria-label="Tester">
+                <option value="">Choose tester…</option>
+                {techs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <button type="button" className="btn-primary" disabled={busy || !assignTo || picked.size === 0}
+                onClick={() => void assign([...picked], assignTo)}>
+                Assign{picked.size ? ` ${picked.size}` : ''}
+              </button>
+            </div>
+          ) : null}
+        >
+          {unassigned.map(u => (
+            <UnitLine key={u.id} u={u} b={bySerial.get(u.id)} accent={picked.has(u.id)}
+              leading={<input type="checkbox" className="tb-check" aria-label={`Select ${u.serial}`} checked={picked.has(u.id)}
+                onChange={e => setPicked(prev => { const n = new Set(prev); if (e.target.checked) n.add(u.id); else n.delete(u.id); return n })} />}>
+              {canRecord ? <button type="button" className="btn-outline" onClick={() => setOpen(u)}>Test it myself</button> : null}
+            </UnitLine>
+          ))}
+        </Card>
 
-      {owners.length === 0 ? null : (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[12px] font-extrabold uppercase tracking-wide text-[var(--navy)]">By tester</p>
-            {placementNote}
+        <section className="tb-card">
+          <div className="tb-card__head">
+            <h3>By tester</h3>
+            {placementNote ?? <span className="tb-muted">today</span>}
           </div>
-          {owners.map(id => {
+          {owners.length === 0 ? <p className="tb-card__empty">No tester has units right now.</p> : owners.map(id => {
             const units = withTester.filter(u => ownerOf(u) === id).sort((a, b) => (stage(a) === 'in_progress' ? -1 : 0) - (stage(b) === 'in_progress' ? -1 : 0))
             const done = doneToday.filter(b => b.testedById === id)
+            const failed = done.filter(b => b.result === 'failed').length
+            const bench = units.filter(u => stage(u) === 'in_progress').length
+            const waitingN = units.filter(u => stage(u) === 'assigned').length
+            const total = Math.max(1, done.length + bench + waitingN)
+            const name = techName(id)
             return (
-              <Card key={id} title={techName(id)} count={units.length}
-                hint={<span className="text-[11px] text-t3">{units.filter(u => stage(u) === 'assigned').length} waiting · {units.filter(u => stage(u) === 'in_progress').length} on the bench · {done.length} tested today ({done.filter(b => b.result === 'failed').length} failed)</span>}
-                empty="Nothing waiting with this tester">
-                {units.map(u => (
-                  <UnitLine key={u.id} u={u} b={bySerial.get(u.id)}>
-                    {statusChip(u)}
-                    <select className="rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2 py-1 text-[11px] text-t2" value="" aria-label={`Reassign ${u.serial}`}
-                      onChange={e => { if (e.target.value) void assign([u.id], e.target.value) }}>
-                      <option value="">Reassign…</option>
-                      {techs.filter(t => t.id !== id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                    {stage(u) === 'assigned' ? <button type="button" className="text-[11px] font-semibold text-t3 hover:text-[var(--danger-text)]" onClick={() => void unassign(u.id)}>Unassign</button> : null}
-                    <button type="button" className="btn-outline text-[11px]" onClick={() => setOpen(u)}>{stage(u) === 'in_progress' ? 'Open' : 'Test it myself'}</button>
-                  </UnitLine>
-                ))}
-              </Card>
+              <div key={id} className="tb-tester">
+                <div className="tb-tester__head">
+                  <span className="tb-tester__who"><span className="tb-avatar">{name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span><strong>{name}</strong></span>
+                  <span className="tb-muted">{done.length} tested · {bench} on bench · {waitingN} waiting</span>
+                </div>
+                <div className="tb-bar" aria-hidden="true">
+                  <i className="is-ok" style={{ width: `${((done.length - failed) / total) * 100}%` }} />
+                  <i className="is-bad" style={{ width: `${(failed / total) * 100}%` }} />
+                  <i className="is-info" style={{ width: `${(bench / total) * 100}%` }} />
+                </div>
+                {units.map(u => {
+                  const b = bySerial.get(u.id)
+                  return (
+                    <div key={u.id} className="tb-mini">
+                      <span className="tb-mini__what">
+                        <b>{stage(u) === 'in_progress' ? 'On bench' : 'Waiting'}</b> · {u.productName} · <span className="tb-mono">{u.assetId || u.serial}</span>
+                        <em className={stage(u) === 'in_progress' ? 'is-info' : ''}>{stage(u) === 'in_progress' ? minutesSince(b?.startedAt) : `given ${minutesSince(b?.assignedAt)} ago`}</em>
+                      </span>
+                      <span className="tb-mini__act">
+                        <select value="" aria-label={`Reassign ${u.serial}`} onChange={e => { if (e.target.value) void assign([u.id], e.target.value) }}>
+                          <option value="">Reassign…</option>
+                          {techs.filter(t => t.id !== id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        {stage(u) === 'assigned' ? <button type="button" className="tb-textbtn" onClick={() => void unassign(u.id)}>Unassign</button> : null}
+                        <button type="button" className="tb-textbtn is-strong" onClick={() => setOpen(u)}>{stage(u) === 'in_progress' ? 'Open' : 'Test it myself'}</button>
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             )
           })}
-        </div>
-      )}
-      {owners.length === 0 && placementNote ? <div>{placementNote}</div> : null}
+          {owners.length ? (
+            <div className="tb-legend"><span><i className="is-ok" />passed</span><span><i className="is-bad" />failed</span><span><i className="is-info" />on bench</span><span><i />waiting</span></div>
+          ) : null}
+        </section>
+      </div>
       {form}
     </div>
   )
