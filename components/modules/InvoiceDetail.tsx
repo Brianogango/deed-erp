@@ -37,6 +37,7 @@ import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import { findRepairForInvoice, repairDeviceHeading } from '@/lib/repair-invoice-device-section'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
+import { paymentDetailRows } from '@/lib/contacts/payment-details'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { InvoiceCreditNoteModal } from '@/components/finance/InvoiceCreditNoteModal'
@@ -1338,8 +1339,8 @@ export default function InvoiceDetail() {
               ['payments', 'Payments'],
               ['notes', `Notes`],
               ['activity', 'History & activity'],
-              ['instructions', 'Payment instructions'],
-            ] as const).filter(([id]) => id !== 'instructions' || invoice.type === 'customer_invoice').map(([id, label]) => (
+              ['instructions', invoice.type === 'vendor_bill' ? 'Vendor payment details' : 'Payment instructions'],
+            ] as const).filter(([id]) => id !== 'instructions' || invoice.type === 'customer_invoice' || invoice.type === 'vendor_bill').map(([id, label]) => (
               <button
                 key={id}
                 type="button"
@@ -1499,6 +1500,32 @@ export default function InvoiceDetail() {
               />
             )}
 
+            {detailTab === 'instructions' && invoice.type === 'vendor_bill' && (() => {
+              // Where to pay this supplier: kept on the vendor's contact, as on its page.
+              const rows = partnerContact ? paymentDetailRows(partnerContact) : []
+              return (
+                <div className="invoice-detail__tab-stack">
+                  {rows.length > 0 ? (
+                    <dl className="grid gap-1 text-[12px]" style={{ gridTemplateColumns: 'minmax(100px, 30%) minmax(0, 1fr)' }}>
+                      {rows.map(r => (
+                        <div key={r.label} className="contents">
+                          <dt className="text-[var(--text-3)]">{r.label}</dt>
+                          <dd className={r.mono ? 'font-mono font-semibold' : 'font-semibold'}>{r.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="invoice-detail__info-muted">No payment details on {invoice.partnerName || 'this vendor'} yet.</p>
+                  )}
+                  {invoice.partnerId && (
+                    <a className="text-[11px] font-semibold text-[var(--primary-dark)]" href={`/contacts?id=${encodeURIComponent(invoice.partnerId)}`}>
+                      {rows.length > 0 ? 'Change them on the vendor' : 'Add them on the vendor'} →
+                    </a>
+                  )}
+                </div>
+              )
+            })()}
+
             {detailTab === 'activity' && (
               <div className="invoice-detail__tab-stack">
                 {auditTrail && auditTrail.length > 0 ? (
@@ -1636,6 +1663,19 @@ export default function InvoiceDetail() {
                 <p className="text-[13px] font-bold font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
               </div>
             </div>
+
+            {/* Paying a supplier: where the money goes, from the vendor's contact. */}
+            {invoice.type === 'vendor_bill' && partnerContact && paymentDetailRows(partnerContact).length > 0 && (
+              <div className="rounded-xl border border-[var(--border-lt)] px-3 py-2 text-[11px]">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Pay to</p>
+                {paymentDetailRows(partnerContact).map(r => (
+                  <p key={r.label} className="flex justify-between gap-3">
+                    <span className="text-[var(--text-3)]">{r.label}</span>
+                    <span className={r.mono ? 'font-mono font-semibold' : 'font-semibold'}>{r.value}</span>
+                  </p>
+                ))}
+              </div>
+            )}
 
             <Field label={invoice.type === 'customer_invoice' ? 'Receipt date *' : 'Payment date *'}>
               <Input type="date" value={payDate} onChange={setPayDate} />
