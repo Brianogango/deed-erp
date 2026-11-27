@@ -114,6 +114,12 @@ export async function POST(request: NextRequest) {
         customerCreditAmount,
         paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
         bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
+        tenders: Array.isArray(body.tenders)
+          ? (body.tenders as unknown[]).slice(0, 4).map(t => {
+              const x = (t ?? {}) as Record<string, unknown>
+              return { method: String(x.method ?? ''), amount: Number(x.amount) || 0, bankAccountId: x.bankAccountId ? String(x.bankAccountId) : undefined }
+            }).filter(t => ['cash', 'mpesa', 'bank'].includes(t.method) && t.amount > 0)
+          : undefined,
         customerName: body.customerName ? String(body.customerName) : undefined,
         revenueLines,
         date,

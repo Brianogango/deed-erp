@@ -4,6 +4,7 @@ import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { MarginPolicySettings } from '@/components/modules/settings/MarginPolicySettings'
 import { CommissionRatesSettings } from '@/components/modules/settings/CommissionRatesSettings'
 import { UnitTestChecklistSettings } from '@/components/modules/settings/UnitTestChecklistSettings'
+import { tenderTotalsByMethod } from '@/lib/pos-tenders'
 import { normalizePricingMarginPolicy, DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
@@ -442,10 +443,11 @@ export default function Settings() {
     posOrders.forEach(o => {
       const cur = map.get(o.date) || { date: o.date, cash: 0, mpesa: 0, bank: 0, credit: 0, total: 0, count: 0 }
       const credit = Math.max(0, Number(o.customerCreditAmount) || 0)
-      const tender = Math.max(0, o.total - credit)
-      if (o.payment === 'cash') cur.cash += tender
-      if (o.payment === 'mpesa') cur.mpesa += tender
-      if (o.payment === 'bank' || o.payment === 'card') cur.bank += tender
+      // Split sales count each part under its own method.
+      const t = tenderTotalsByMethod([o])
+      cur.cash += t.cash
+      cur.mpesa += t.mpesa
+      cur.bank += t.bank
       cur.credit += credit
       cur.total += o.total; cur.count += 1
       map.set(o.date, cur)

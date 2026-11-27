@@ -498,6 +498,11 @@ export interface POSOrder {
   bankAccountId?: string
   /** Optional transfer / deposit reference for bank (or M-Pesa code). */
   paymentReference?: string
+  /**
+   * Paid in parts, e.g. KES 5,000 cash and the rest by bank. `payment` is
+   * then the part that took the most; totals read the parts (lib/pos-tenders).
+   */
+  splitPayments?: import('@/lib/pos-tenders').PosTender[]
   customerId?: string; customerName?: string; date: string
   createdByUserId?: string; createdByName?: string
   /** Person who closed the sale for commission (may differ from cashier). */

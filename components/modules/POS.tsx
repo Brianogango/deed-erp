@@ -33,6 +33,7 @@ import { issuePosWarranties, type LinkedWarranty } from '@/lib/warranty/client'
 import { PosWarrantyActions } from '@/components/pos/PosWarrantyActions'
 import { WARRANTY_SUPPORT_PHONE } from '@/lib/warranty/e-warranty'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
+import { MAX_SPLIT_TENDERS, TENDER_LABEL, fillLastTender, posTenders, splitProblem, tenderTotalsByMethod, tendersLabel, type PosTenderMethod } from '@/lib/pos-tenders'
 
 // Phones list products as rows, so a page holds twice as many as the old cards.
 const POS_MOBILE_PAGE_SIZE = 12
@@ -172,6 +173,17 @@ function ReceiptPrintView({
         <div className="flex justify-between mt-1 font-bold">
           <span>Amount Paid</span><span>{fmtKes(order.total)}</span>
         </div>
+        {order.splitPayments?.length ? (
+          <div className="mt-2">
+            <div className="flex justify-between"><span>Payment Mode</span><span className="uppercase">Split</span></div>
+            {posTenders(order).map((t, i) => (
+              <div key={i} className="flex justify-between text-[11px]">
+                <span>{TENDER_LABEL[t.method]}{t.method === 'bank' && t.bankAccountId ? ` · ${(() => { const b = bankAccounts?.find(b => b.id === t.bankAccountId); return b ? (b.bankName || b.name) : t.bankAccountId })()}` : ''}{t.reference ? ` · ${t.reference}` : ''}</span>
+                <span>{fmtKes(t.amount)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (<>
         <div className="flex justify-between mt-2">
           <span>Payment Mode</span>
           <span className="uppercase">{order.customerCreditAmount
@@ -189,6 +201,7 @@ function ReceiptPrintView({
             <span>Reference</span><span>{order.paymentReference}</span>
           </div>
         ) : null}
+        </>)}
       </div>
       {warranties && warranties.length > 0 && (
         <div className="pt-3 mb-4" style={{ borderTop: '1px dashed var(--border)' }}>
@@ -298,7 +311,14 @@ export default function PointOfSale() {
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
-  const [payMethod, setPayMethod] = useState<'' | 'cash' | 'mpesa' | 'bank'>('')
+  const [payMethod, setPayMethod] = useState<'' | 'cash' | 'mpesa' | 'bank' | 'split'>('')
+  // Split payment, e.g. 5,000 cash + the rest by bank. A blank last amount takes the rest.
+  type SplitRow = { id: string; method: PosTenderMethod; amount: string; bankAccountId: string; reference: string }
+  const freshSplit = (): SplitRow[] => [
+    { id: 'p1', method: 'cash', amount: '', bankAccountId: '', reference: '' },
+    { id: 'p2', method: 'bank', amount: '', bankAccountId: '', reference: '' },
+  ]
+  const [splitRows, setSplitRows] = useState<SplitRow[]>(freshSplit)
   const [mpesaPhone, setMpesaPhone] = useState('')
   const [darajaReady, setDarajaReady] = useState(false)
   const [stkStatus, setStkStatus] = useState('')
@@ -432,6 +452,17 @@ export default function PointOfSale() {
   const clientCreditToApply = Math.min(requestedClientCredit, maxClientCredit)
   const paymentDue = Math.max(0, cartTotal - clientCreditToApply)
   const pointsToEarn = customerId ? loyaltyPointsEarned(cartTotal, systemSettings.posLoyaltyKesPerPoint) : 0
+  const splitTenders = fillLastTender(splitRows.map(r => ({
+    method: r.method,
+    amount: r.amount.trim() === '' ? null : Number(r.amount),
+    ...(r.method === 'bank' && r.bankAccountId ? { bankAccountId: r.bankAccountId } : {}),
+    ...(r.reference.trim() ? { reference: r.reference.trim() } : {}),
+  })), paymentDue)
+  const splitError = payMethod === 'split' && paymentDue > 0 ? splitProblem(splitTenders, paymentDue) : null
+  /** What the M-Pesa prompt asks for: the whole sale, or its M-Pesa part. */
+  const mpesaDue = payMethod === 'mpesa' ? paymentDue
+    : payMethod === 'split' ? (splitTenders.find(t => t.method === 'mpesa')?.amount ?? 0)
+      : 0
 
   useEffect(() => {
     if (!customerId || storeCredit <= 0) {
@@ -591,10 +622,13 @@ export default function PointOfSale() {
     }
 
     if (!payMethod) {
-      showToast('Select a payment method (M-Pesa, Cash or Bank)', 'error')
+      showToast('Select a payment method (M-Pesa, Cash, Bank or Split)', 'error')
       return
     }
-    const tender = payMethod
+    if (splitError) { showToast(splitError, 'error'); return }
+    const split = payMethod === 'split' && paymentDue > 0 ? splitTenders : undefined
+    // The store sets the headline method from the split.
+    const tender = payMethod === 'split' ? (split?.[0]?.method ?? 'cash') : payMethod
     const selectedBankId = bankAccountId
     if (paymentDue > 0 && payMethod === 'bank' && !selectedBankId) {
       showToast('Select a bank account before charging', 'error')
@@ -602,7 +636,7 @@ export default function PointOfSale() {
     }
 
     let mpesaReceipt: string | undefined
-    if (paymentDue > 0 && payMethod === 'mpesa' && darajaReady) {
+    if (mpesaDue > 0 && darajaReady) {
       const phone = normalizeMpesaPhone(mpesaPhone)
       if (!phone) {
         showToast('Enter the customer M-Pesa number (07XX …)', 'error')
@@ -610,8 +644,8 @@ export default function PointOfSale() {
       }
     }
 
-    if (paidMpesa && (payMethod !== 'mpesa' || Math.abs(paidMpesa.amount - paymentDue) > 0.5)) {
-      showToast(`The customer already paid ${fmtKes(paidMpesa.amount)} by M-Pesa (${paidMpesa.receipt}) for this sale. Charge exactly that amount by M-Pesa, or clear the cart and refund them.`, 'error')
+    if (paidMpesa && (mpesaDue <= 0 || Math.abs(paidMpesa.amount - mpesaDue) > 0.5)) {
+      showToast(`The customer already paid ${fmtKes(paidMpesa.amount)} by M-Pesa (${paidMpesa.receipt}) for this sale. Charge exactly that amount by M-Pesa (alone or as the M-Pesa part of a split), or clear the cart and refund them.`, 'error')
       return
     }
 
@@ -620,12 +654,12 @@ export default function PointOfSale() {
       if (paidMpesa) {
         mpesaReceipt = paidMpesa.receipt
         setStkStatus(`Using M-Pesa payment ${paidMpesa.receipt} already received`)
-      } else if (paymentDue > 0 && payMethod === 'mpesa' && darajaReady) {
+      } else if (mpesaDue > 0 && darajaReady) {
         const phone = normalizeMpesaPhone(mpesaPhone) as string
         setStkStatus('Sending M-Pesa prompt…')
         const pushed = await sendMpesaStk({
           phone,
-          amount: paymentDue,
+          amount: mpesaDue,
           accountReference: 'POS',
           transactionDesc: 'POS sale',
           source: 'pos',
@@ -638,7 +672,7 @@ export default function PointOfSale() {
           return
         }
         mpesaReceipt = settled.mpesaReceipt || settled.checkoutRequestId
-        setPaidMpesa({ amount: paymentDue, receipt: mpesaReceipt })
+        setPaidMpesa({ amount: mpesaDue, receipt: mpesaReceipt })
         setStkStatus(settled.mpesaReceipt ? `Paid ${settled.mpesaReceipt}` : 'M-Pesa confirmed')
       }
 
@@ -666,6 +700,9 @@ export default function PointOfSale() {
           ...(payMethod === 'mpesa' && mpesaReceipt
             ? { paymentReference: mpesaReceipt }
             : {}),
+          ...(split
+            ? { splitPayments: split.map(t => (t.method === 'mpesa' && mpesaReceipt ? { ...t, reference: mpesaReceipt } : t)) }
+            : {}),
           salespersonId: salespersonId || cashier?.id,
           salespersonName: salespersonName || cashier?.name,
           customerCreditAmount: clientCreditToApply || undefined,
@@ -682,6 +719,7 @@ export default function PointOfSale() {
         setRedeemPoints('')
         setPaymentReference('')
         setPayMethod('')
+        setSplitRows(freshSplit())
         setBankAccountId('')
         setUseClientCredit(false)
         setClientCreditInput('')
@@ -1015,8 +1053,8 @@ export default function PointOfSale() {
             <div className="pos-checkout-summary">
               <section className="pos-payment-section">
                 <h3>Payment method</h3>
-                <div className="pos-payment-methods">
-                {(['mpesa', 'cash', 'bank'] as const).map(m => (
+                <div className="pos-payment-methods" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+                {(['mpesa', 'cash', 'bank', 'split'] as const).map(m => (
                   <button key={m} type="button" onClick={() => {
                     setPayMethod(m)
                   }}
@@ -1027,12 +1065,96 @@ export default function PointOfSale() {
                       border: `1px solid ${payMethod === m ? 'var(--primary)' : 'var(--border-lt)'}`,
                       fontWeight: payMethod === m ? 600 : 400,
                     }}>
-                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faBuildingColumns} /> Bank</>}
+                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : m === 'bank' ? <><Fa icon={faBuildingColumns} /> Bank</> : <>Split</>}
                   </button>
                 ))}
                 </div>
               </section>
-              {payMethod === 'mpesa' && darajaReady && (
+              {payMethod === 'split' && (
+                <div className="pos-bank-payment">
+                  <p className="text-[11px] text-t3 mb-2">Paid in parts. Leave the last amount blank to take the rest.</p>
+                  <div className="flex flex-col gap-2">
+                    {splitRows.map((r, i) => {
+                      const last = i === splitRows.length - 1
+                      const filled = splitTenders[i]?.amount ?? 0
+                      const setRow = (p: Partial<SplitRow>) => setSplitRows(rows => rows.map(x => (x.id === r.id ? { ...x, ...p } : x)))
+                      return (
+                        <div key={r.id} className="rounded-lg p-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: splitRows.length > 2 ? '96px minmax(0, 1fr) 20px' : '96px minmax(0, 1fr)', gap: 8, alignItems: 'center' }}>
+                            <select
+                              className="rounded-md px-2 py-1.5 text-[12px]"
+                              style={{ width: '100%', minHeight: 34, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-1)' }}
+                              value={r.method}
+                              aria-label={`Part ${i + 1} paid by`}
+                              onChange={e => setRow({ method: e.target.value as PosTenderMethod })}
+                            >
+                              {(['cash', 'mpesa', 'bank'] as const).map(m => <option key={m} value={m}>{TENDER_LABEL[m]}</option>)}
+                            </select>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              className="min-w-0 rounded-md px-2 py-1.5 text-[12px] tabular-nums"
+                              style={{ width: '100%', minHeight: 34, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-1)' }}
+                              value={r.amount}
+                              placeholder={last ? `Rest: ${fmtKes(filled)}` : 'Amount'}
+                              aria-label={`Part ${i + 1} amount`}
+                              onChange={e => setRow({ amount: e.target.value })}
+                            />
+                            {splitRows.length > 2 ? (
+                              <button type="button" className="text-[12px] px-1" style={{ color: 'var(--text-3)' }} aria-label={`Remove part ${i + 1}`}
+                                onClick={() => setSplitRows(rows => rows.filter(x => x.id !== r.id))}>✕</button>
+                            ) : null}
+                          </div>
+                          {r.method === 'bank' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 6, marginTop: 6 }}>
+                              <select
+                                className="rounded-md px-2 py-1.5 text-[12px]"
+                                style={{ width: '100%', minHeight: 34, border: `1px solid ${r.bankAccountId ? 'var(--border)' : 'var(--warning)'}`, background: 'var(--bg-card)', color: 'var(--text-1)' }}
+                                value={r.bankAccountId}
+                                aria-label={`Part ${i + 1} bank account`}
+                                onChange={e => setRow({ bankAccountId: e.target.value })}
+                              >
+                                <option value="">Bank account…</option>
+                                {tenderBanks.map(b => <option key={b.id} value={b.id}>{bankChoiceLabel(b)}</option>)}
+                              </select>
+                              <input
+                                className="rounded-md px-2 py-1.5 text-[12px]"
+                                style={{ width: '100%', minHeight: 34, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-1)' }}
+                                value={r.reference}
+                                placeholder="Transfer ref (optional)"
+                                aria-label={`Part ${i + 1} transfer reference`}
+                                onChange={e => setRow({ reference: e.target.value })}
+                              />
+                            </div>
+                          )}
+                          {r.method === 'mpesa' && !darajaReady && (
+                            <input
+                              className="rounded-md px-2 py-1.5 text-[12px]"
+                              style={{ width: '100%', minHeight: 34, marginTop: 6, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-1)' }}
+                              value={r.reference}
+                              placeholder="M-Pesa code (optional)"
+                              aria-label={`Part ${i + 1} M-Pesa code`}
+                              onChange={e => setRow({ reference: e.target.value })}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    {splitRows.length < MAX_SPLIT_TENDERS ? (
+                      <button type="button" className="text-[12px] font-semibold" style={{ color: 'var(--navy)' }}
+                        onClick={() => setSplitRows(rows => [...rows, { id: `p${Date.now()}`, method: 'cash', amount: '', bankAccountId: '', reference: '' }])}>
+                        + Add part
+                      </button>
+                    ) : <span />}
+                    <span className="text-[11px] font-semibold" style={{ color: splitError ? 'var(--danger-text)' : 'var(--success-text)' }}>
+                      {paymentDue <= 0 ? '' : splitError ?? `${splitTenders.map(t => `${TENDER_LABEL[t.method]} ${fmtKes(t.amount)}`).join(' + ')} ✓`}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {(payMethod === 'mpesa' || (payMethod === 'split' && mpesaDue > 0)) && darajaReady && (
                 <div className="pos-bank-payment">
                   <Field label="M-Pesa number">
                     <Input
@@ -1209,7 +1331,9 @@ export default function PointOfSale() {
                         : 'Complete sale · No payment due')
                       : payMethod === 'mpesa' && darajaReady
                         ? `Prompt ${fmtKes(paymentDue)}`
-                        : `Charge ${fmtKes(paymentDue)}`)
+                        : payMethod === 'split' && mpesaDue > 0 && darajaReady && !paidMpesa
+                          ? `Prompt M-Pesa ${fmtKes(mpesaDue)} · charge ${fmtKes(paymentDue)}`
+                          : `Charge ${fmtKes(paymentDue)}${payMethod === 'split' ? ' (split)' : ''}`)
                     : 'Add items to cart'}
               </button>
               <div className="pos-checkout-footer-meta">
@@ -1223,7 +1347,7 @@ export default function PointOfSale() {
           {receiptOrder && (
             <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
               {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
-              <div className="pos-payment-success"><div className="pos-payment-success-icon" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+              <div className="pos-payment-success"><div className="pos-payment-success-icon" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{receiptOrder.splitPayments?.length ? `${tendersLabel(receiptOrder, fmtKes)} received` : `${isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase()} Payment Received`}</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
               <PosWarrantyActions order={receiptOrder} />
               <div className="pos-payment-success-actions">
                 <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
@@ -1235,10 +1359,8 @@ export default function PointOfSale() {
           {showCloseSession && (() => {
             const liveSession = posSessions.find(s => s.id === posSessionId)
             const sessionOrders = posOrdersForSession(posOrders, posSessionId || '', liveSession?.openedAt)
-            const tenderAmount = (o: typeof sessionOrders[number]) => Math.max(0, o.total - (o.customerCreditAmount || 0))
-            const totalCash = sessionOrders.filter(o => o.payment === 'cash').reduce((a, o) => a + tenderAmount(o), 0)
-            const totalMpesa = sessionOrders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + tenderAmount(o), 0)
-            const totalBank = sessionOrders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + tenderAmount(o), 0)
+            // Split sales count each part in its own drawer / bank.
+            const { cash: totalCash, mpesa: totalMpesa, bank: totalBank } = tenderTotalsByMethod(sessionOrders)
             const totalSales = sessionOrders.reduce((a, o) => a + o.total, 0)
             const expectedCash = posSessionOpeningCash + totalCash
             // No count, no close: an empty box used to close as KSh 0 and post

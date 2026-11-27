@@ -1,3 +1,4 @@
+import { tendersLabel, type PosTender } from '@/lib/pos-tenders'
 import { isPosBankPayment } from '@/lib/pos-session'
 
 export type PosReceiptLine = {
@@ -20,6 +21,7 @@ export type PosHistoryTicket = {
   invoiceRef?: string
   customerName?: string
   payment?: string
+  splitPayments?: PosTender[]
   customerCreditAmount?: number
   total?: number
   date: string
@@ -97,6 +99,12 @@ export function ticketLines(
 }
 
 export function payLabel(order: PosHistoryTicket): string {
+  // Paid in parts: "Cash 5,000 + Bank 20,000".
+  if (Array.isArray(order.splitPayments) && order.splitPayments.length > 1) {
+    const parts = tendersLabel(order as Parameters<typeof tendersLabel>[0])
+    const credit = Math.max(0, Number(order.customerCreditAmount) || 0)
+    return credit > 0 ? `Client credit + ${parts}` : parts
+  }
   const method = String(order.payment || '').toLowerCase()
   const tender = isPosBankPayment(order.payment)
     ? 'Bank'

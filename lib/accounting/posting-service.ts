@@ -376,6 +376,8 @@ export function buildPosSaleLines(params: {
   orderRef: string
   paymentMethod?: string
   bankAccountId?: string
+  /** A split payment (e.g. cash + bank): one debit per part instead of one tender. */
+  tenders?: Array<{ method: string; amount: number; bankAccountId?: string }>
   revenueLines?: Array<{ account: string; amount: number }>
 }): PostingLineInput[] {
   const total = roundMoney(params.total)
@@ -386,6 +388,23 @@ export function buildPosSaleLines(params: {
   const tenderTotal = Math.max(0, roundMoney(total - customerCredit))
   const bankId = bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId)
   const lines: PostingLineInput[] = []
+  const split = (params.tenders ?? []).filter(t => roundMoney(t.amount) > 0)
+  if (split.length > 1 && tenderTotal > 0) {
+    const sum = roundMoney(split.reduce((a, t) => a + roundMoney(t.amount), 0))
+    if (Math.abs(sum - tenderTotal) > 0.5) throw new Error(`Split payment parts (${sum}) do not add up to the amount due (${tenderTotal})`)
+    split.forEach((t, i) => {
+      const id = bankAccountIdForPaymentMethod(t.method, t.bankAccountId)
+      // The last part takes any rounding so the journal balances to the cent.
+      const amount = i === split.length - 1 ? roundMoney(tenderTotal - split.slice(0, -1).reduce((a, x) => a + roundMoney(x.amount), 0)) : roundMoney(t.amount)
+      lines.push({
+        accountLabel: bankAccountLabelForId(id, t.method),
+        cashBankAccountId: id,
+        description: `POS receipt ${params.orderRef} (${t.method})`,
+        debit: amount,
+        credit: 0,
+      })
+    })
+  } else
   // A fully loyalty/client-credit funded sale has no cash/bank tender.
   if (tenderTotal > 0) {
     lines.push({
@@ -680,11 +699,13 @@ export async function postPosSale(params: {
   bankAccountId?: string
   customerName?: string
   revenueLines?: Array<{ account: string; amount: number }>
+  tenders?: Array<{ method: string; amount: number; bankAccountId?: string }>
   date?: string
   createdById?: string
   tx?: Prisma.TransactionClient
 }) {
   const lines = buildPosSaleLines({
+    tenders: params.tenders,
     total: params.total,
     subtotal: params.subtotal,
     tax: params.tax,
@@ -709,7 +730,9 @@ export async function postPosSale(params: {
     createdById: params.createdById,
     journalCode: tenderTotal <= 0 && credit > 0
       ? 'SAL'
-      : (method === 'cash' || method === 'petty_cash' ? 'CSH' : 'BNK'),
+      : ((params.tenders?.length ?? 0) > 1
+        ? (params.tenders!.every(t => t.method === 'cash') ? 'CSH' : 'BNK')
+        : (method === 'cash' || method === 'petty_cash' ? 'CSH' : 'BNK')),
     tx: params.tx,
   })
 }

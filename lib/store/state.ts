@@ -674,6 +674,8 @@ export interface AppState {
     paymentMeta?: {
       bankAccountId?: string
       paymentReference?: string
+      /** Paid in parts (e.g. cash + bank); they add up to the amount due. */
+      splitPayments?: import('@/lib/pos-tenders').PosTender[]
       salespersonId?: string
       salespersonName?: string
       /** Deed Express agent who brought the customer (no employee commission then). */

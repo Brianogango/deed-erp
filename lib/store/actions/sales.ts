@@ -1,3 +1,4 @@
+import { bankTendersByAccount, primaryTenderMethod, splitProblem, tenderTotalsByMethod, tendersLabel } from '@/lib/pos-tenders'
 import { userCan } from '@/lib/auth/can'
 import type { KilimallOrder, KilimallDispatch, KilimallSettlement, KilimallSettlementLine, Company, ContactPerson, Contact, Opportunity, OpportunityActivity, CustomerContract, Quote, QuoteLineItem, SaleOrder, POSSession, POSOrder } from '../sales'
 import { uid, now } from '../ids'
@@ -3438,10 +3439,8 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         }
         const openSession = store.posSessions.find(s => s.id === sessionId)
         const orders = posOrdersForSession(store.posOrders, sessionId, openSession?.openedAt)
-        const tenderAmount = (order: POSOrder) => Math.max(0, order.total - (order.customerCreditAmount || 0))
-        const totalCash = orders.filter(o => o.payment === 'cash').reduce((a, o) => a + tenderAmount(o), 0)
-        const totalMpesa = orders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + tenderAmount(o), 0)
-        const totalBank = orders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + tenderAmount(o), 0)
+        // Split sales count each part in its own drawer / bank.
+        const { cash: totalCash, mpesa: totalMpesa, bank: totalBank } = tenderTotalsByMethod(orders)
         const totalCard = totalBank // legacy field: bank + historical card
         const totalSales = orders.reduce((a, o) => a + o.total, 0)
         const counted = Math.max(0, Number(closingCash) || 0)
@@ -3472,12 +3471,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           controlLines.push(accountLine('2210 - M-Pesa Paybill', `Session M-Pesa sales ${store.fmtKes(totalMpesa)}`, totalMpesa, 0))
           controlLines.push(accountLine('2210 - M-Pesa Paybill', `Session M-Pesa sales cleared`, 0, totalMpesa))
         }
-        const bankByAccount = new Map<string, number>()
-        for (const o of orders) {
-          if (!isPosBankPayment(o.payment)) continue
-          const id = o.bankAccountId || bankAccountIdForMethod(o.payment)
-          bankByAccount.set(id, (bankByAccount.get(id) || 0) + tenderAmount(o))
-        }
+        const bankByAccount = bankTendersByAccount(orders, m => bankAccountIdForMethod(m))
         for (const [bankId, amt] of bankByAccount) {
           if (amt <= 0) continue
           const label = bankAccountLabel(bankId)
@@ -3605,14 +3599,21 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         }
         const customerCreditAmount = Math.min(requestedCustomerCredit, availableCustomerCredit, total)
         const tenderTotal = Math.max(0, total - customerCreditAmount)
+        // Paid in parts (e.g. cash + bank): the parts must add up to what is due.
+        const split = tenderTotal > 0 && (paymentMeta?.splitPayments?.length ?? 0) > 1 ? paymentMeta!.splitPayments! : undefined
+        if (split) {
+          const problem = splitProblem(split, tenderTotal)
+          if (problem) { store.showToast(problem, 'error'); return null }
+          payment = primaryTenderMethod(split) ?? payment
+        }
         const pointsEarned = customerId
           ? loyaltyPointsEarned(total, store.systemSettings.posLoyaltyKesPerPoint)
           : 0
         const resolvedBankId = tenderTotal > 0 && isPosBankPayment(payment)
-          ? (paymentMeta?.bankAccountId || bankAccountIdForMethod(payment))
+          ? ((split ? split.find(t => t.method === 'bank')?.bankAccountId : paymentMeta?.bankAccountId) || bankAccountIdForMethod(payment))
           : undefined
         const paymentReference = tenderTotal > 0
-          ? ((paymentMeta?.paymentReference || '').trim() || undefined)
+          ? ((split ? split.map(t => t.reference).filter(Boolean).join(' / ') : (paymentMeta?.paymentReference || '').trim()) || undefined)
           : undefined
         const cartKey = [sessionId, ...normalizedLines
           .map(l => `${l.productId}:${l.serialId ?? ''}:${l.qty}`)
@@ -3672,6 +3673,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment,
           bankAccountId: resolvedBankId,
           paymentReference,
+          ...(split ? { splitPayments: split.map(t => ({ method: t.method, amount: Math.round(t.amount * 100) / 100, ...(t.bankAccountId ? { bankAccountId: t.bankAccountId } : {}), ...(t.reference ? { reference: t.reference } : {}) })) } : {}),
           customerId, customerName, date: now(), createdAt: new Date().toISOString(),
           createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
           customerCreditAmount: customerCreditAmount || undefined,
@@ -3818,7 +3820,14 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           posOrderId: order.id,
           bankAccountId: bankAccountIdForMethod(payment, resolvedBankId),
           lines: [
-            ...(tenderTotal > 0 ? [accountLine(
+            ...(split
+              ? split.map(t => accountLine(
+                bankAccountLabel(bankAccountIdForMethod(t.method, t.bankAccountId), t.method),
+                `POS receipt ${order.ref} (${t.method})${t.reference ? ` · ${t.reference}` : ''}`,
+                t.amount,
+                0,
+              ))
+              : tenderTotal > 0 ? [accountLine(
               bankAccountLabel(bankAccountIdForMethod(payment, resolvedBankId), payment),
               paymentReference ? `POS receipt ${order.ref} · ${paymentReference}` : `POS receipt ${order.ref}`,
               tenderTotal,
@@ -3868,6 +3877,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
               pointsRedeemed,
               paymentMethod: payment,
               bankAccountId: posJournal.bankAccountId,
+              ...(split ? { tenders: split.map(t => ({ method: t.method, amount: t.amount, bankAccountId: t.method === 'bank' ? t.bankAccountId : undefined })) } : {}),
               customerName: order.customerName,
               revenueLines: revenueBuckets.length
                 ? revenueBuckets.map(b => ({ account: b.account, amount: b.amount }))
@@ -3897,7 +3907,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           )
         } else {
           store.showToast(
-            `${order.ref} · ${store.fmtKes(order.total)} via ${tenderTotal > 0 ? payLabel : 'CLIENT CREDIT'}`
+            `${order.ref} · ${store.fmtKes(order.total)} via ${split ? tendersLabel(order, n => store.fmtKes(n)) : tenderTotal > 0 ? payLabel : 'CLIENT CREDIT'}`
               + (tenderTotal > 0 && bankLabel ? ` (${bankLabel})` : '')
               + creditLabel
               + (paymentReference ? ` · ${paymentReference}` : ''),
