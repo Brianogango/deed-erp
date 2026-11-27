@@ -10,7 +10,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   purchase: 'Purchase',
   pos: 'Point of Sale',
   repair: 'Repairs',
-  refurbishment: 'Workshop',
+  refurbishment: 'Refurbishment',
   reconfiguration: 'Device Reconfiguration',
   delivery: 'Delivery',
   ecommerce: 'eCommerce',

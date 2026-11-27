@@ -87,7 +87,7 @@ export default function Sidebar() {
     { label: 'Purchases',     href: '/purchases',     id: 'purchase',      icon: faCartShopping },
     { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
     { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },
-    { label: 'Workshop', href: '/refurbishment', id: 'refurbishment', icon: faArrowsRotate },
+    { label: 'Refurbishment', href: '/refurbishment', id: 'refurbishment', icon: faArrowsRotate },
     { label: 'Reconfiguration', href: '/reconfiguration', id: 'reconfiguration', icon: faMicrochip },
     { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },

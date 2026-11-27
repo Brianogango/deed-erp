@@ -33,8 +33,6 @@ import { Fa } from '@/components/icons'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { faRotate, faPlus, faUser, faWrench, faArrowRight, faPencil, faTrash, faBell, faTriangleExclamation, faCheck, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { useCan } from '@/hooks/useCan'
-import WorkshopBoard from '@/components/refurbishment/WorkshopBoard'
-import { useUnitTests } from '@/components/inventory/test-bench/useUnitTests'
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_META: Record<RefurbStatus, { label: string; badgeStatus: string; bg: string; color: string; border: string }> = {
@@ -112,11 +110,8 @@ function RefurbishmentContent() {
     setFilterStatusValue(value, { queryPatch: { page: null } })
   const [jobSearch, setJobSearchValue] = useUrlUiState('q', '')
   const setJobSearch = (value: string) => setJobSearchValue(value, { queryPatch: { page: null } })
-  // Board first: where every machine in the workshop is, at a glance.
-  const [viewValue, setViewValue] = useUrlUiState('view', 'board')
-  const view: 'board' | 'jobs' | 'report' | 'bench' = viewValue === 'report' ? 'report' : viewValue === 'bench' ? 'bench' : viewValue === 'jobs' ? 'jobs' : 'board'
-  const unitTests = useUnitTests(view === 'board')
-  const [boardMine, setBoardMine] = useState(false)
+  const [viewValue, setViewValue] = useUrlUiState('view', 'jobs')
+  const view: 'jobs' | 'report' | 'bench' = viewValue === 'report' ? 'report' : viewValue === 'bench' ? 'bench' : 'jobs'
   const [reportWeekValue, setReportWeek] = useUrlUiState('week', '')
   const reportWeek = /^\d{4}-\d{2}-\d{2}$/.test(reportWeekValue) ? refurbWeekStart(`${reportWeekValue}T12:00:00.000Z`) : refurbWeekStart(new Date())
   const [pageValue, setPageValue] = useUrlUiState('page', '1')
@@ -1081,38 +1076,19 @@ function RefurbishmentContent() {
   return (
     <div className="mod-page">
       <ModuleHeader
-        title="Workshop"
-        subtitle={`Testing and refurbishment · ${stats.inProgress} in progress · ${stats.ready} ready for final test`}
+        title="Refurbishment"
+        subtitle={`${stats.inProgress} in progress · ${stats.ready} ready`}
         icon={<Fa icon={faRotate} />}
         count={refurbishmentJobs.length}
         color="#8B5CF6"
       />
       <TabBar
-        tabs={[{ id: 'board', label: 'Board' }, { id: 'jobs', label: 'Jobs' }, { id: 'bench', label: 'Test bench' }, { id: 'report', label: 'Weekly report' }]}
+        tabs={[{ id: 'jobs', label: 'Jobs' }, { id: 'bench', label: 'Test bench' }, { id: 'report', label: 'Weekly report' }]}
         active={view}
-        onChange={id => setViewValue(id === 'report' ? 'report' : id === 'bench' ? 'bench' : id === 'jobs' ? 'jobs' : 'board')}
-        ariaLabel="Workshop sections"
+        onChange={id => setViewValue(id === 'report' ? 'report' : id === 'bench' ? 'bench' : 'jobs')}
+        ariaLabel="Refurbishment sections"
       />
-      {view === 'board' ? (
-        <div className="mod-body p-3 sm:p-4">
-          <div className="workshop-board__top">
-            <label className="workshop-board__mine">
-              <input type="checkbox" checked={boardMine} onChange={e => setBoardMine(e.target.checked)} /> Only mine
-            </label>
-            {!unitTests.loaded && <span className="text-[11px] text-t3">Loading tests…</span>}
-          </div>
-          <WorkshopBoard
-            jobs={refurbishmentJobs}
-            tests={unitTests.briefs}
-            serials={serials}
-            products={products}
-            onOpenJob={id => setActiveId(id)}
-            onOpenBench={() => setViewValue('bench')}
-            mineOnly={boardMine}
-            currentUserId={currentUserId ?? null}
-          />
-        </div>
-      ) : view === 'bench' ? (
+      {view === 'bench' ? (
         <div className="mod-body p-3 sm:p-4">
           <TestBenchTab
             serials={serials}
