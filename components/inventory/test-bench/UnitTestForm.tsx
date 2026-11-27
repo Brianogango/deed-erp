@@ -25,14 +25,6 @@ const GRADE_GUIDE: Record<UnitGrade, string> = {
   C: 'Visible wear: dents, deep scratches, worn keys',
 }
 
-const seg = (on: boolean, tone: 'pass' | 'fail' | 'na' | 'navy') => {
-  if (!on) return 'bg-[var(--bg-card)] text-[var(--text-3)] border-[var(--border)] hover:text-[var(--text-1)]'
-  if (tone === 'pass') return 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success)]'
-  if (tone === 'fail') return 'bg-[var(--danger-bg)] text-[var(--danger-text)] border-[var(--danger)]'
-  if (tone === 'navy') return 'bg-[var(--navy)] text-white border-[var(--navy)]'
-  return 'bg-[var(--bg-muted)] text-[var(--text-2)] border-[var(--border)]'
-}
-
 const inputCls = 'w-full rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2.5 py-1.5 text-[12px] text-text-1 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30'
 
 function NumberField({ label, value, onChange, suffix, placeholder, disabled }: { label: string; value: number | null | undefined; onChange: (v: number | null) => void; suffix?: string; placeholder?: string; disabled?: boolean }) {
@@ -50,9 +42,9 @@ function NumberField({ label, value, onChange, suffix, placeholder, disabled }: 
 
 function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 mt-4 mb-2">
-      <p className="text-[11px] font-extrabold uppercase tracking-wide text-[var(--navy)]">{children}</p>
-      {hint ? <p className="text-[10px] text-text-4">{hint}</p> : null}
+    <div className="utf-section">
+      <p>{children}</p>
+      {hint ? <span>{hint}</span> : null}
     </div>
   )
 }
@@ -257,7 +249,7 @@ export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canO
   )
 
   return (
-    <Modal title={title} subtitle={subtitle} onClose={() => void closeAndSave()} width={760} footer={footer} variant="enterprise">
+    <Modal title={title} subtitle={subtitle} onClose={() => void closeAndSave()} width={editing ? 920 : 760} footer={footer} variant="enterprise">
       {error ? <p className="text-[12px] text-[var(--danger-text)]">{error}</p> : null}
       {!test && !error ? <p className="text-[12px] text-text-3">Loading…</p> : null}
       {test && (
@@ -297,137 +289,131 @@ export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canO
               )}
             </>
           ) : (
-            <>
-              <SectionTitle hint="Every line needs Pass, Fail or N/A">Checklist</SectionTitle>
-              <div className="rounded-lg border border-[var(--border-lt)] divide-y divide-[var(--border-lt)]">
-                {test.checks.map(c => (
-                  <div key={c.itemId} className="px-3 py-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[12px] font-semibold text-text-1 min-w-0">{c.label}</p>
-                      <div className="flex gap-1" role="radiogroup" aria-label={c.label}>
-                        {(['pass', 'fail', 'na'] as const).map(r => (
-                          <button key={r} type="button" role="radio" aria-checked={c.result === r}
-                            className={`min-h-[32px] px-3 rounded-md border text-[11px] font-bold transition-colors ${seg(c.result === r, r)}`}
-                            onClick={() => setCheck(c.itemId, { result: r, ...(r !== 'fail' ? { note: undefined, cosmetic: undefined } : {}) })}>
-                            {r === 'pass' ? 'Pass' : r === 'fail' ? 'Fail' : 'N/A'}
+            <div className="utf">
+              <div className="utf__col">
+                <SectionTitle hint={`${test.checks.filter(c => c.result).length} of ${test.checks.length} done · Pass, Fail or N/A each`}>Checklist</SectionTitle>
+                <div className="utf-checks">
+                  {test.checks.map(c => (
+                    <div key={c.itemId} className={`utf-check${c.result === 'fail' ? ' is-fail' : ''}`}>
+                      <div className="utf-check__row">
+                        <p className="utf-check__label">{c.label}{c.result === 'fail' && c.cosmetic ? <span className="utf-chip">Cosmetic only</span> : null}</p>
+                        <div className="utf-tri" role="radiogroup" aria-label={c.label}>
+                          {(['pass', 'fail', 'na'] as const).map(r => (
+                            <button key={r} type="button" role="radio" aria-checked={c.result === r}
+                              className={c.result === r ? `is-${r}` : ''}
+                              onClick={() => setCheck(c.itemId, { result: r, ...(r !== 'fail' ? { note: undefined, cosmetic: undefined } : {}) })}>
+                              {r === 'pass' ? 'Pass' : r === 'fail' ? 'Fail' : 'N/A'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {c.result === 'fail' && (
+                        <div className="utf-check__more">
+                          <input className={inputCls} value={c.note ?? ''} placeholder="What is wrong — e.g. 3 dead keys (E, R, T)" onChange={e => setCheck(c.itemId, { note: e.target.value })} />
+                          <label className="utf-inline">
+                            <input type="checkbox" checked={!!c.cosmetic} onChange={e => setCheck(c.itemId, { cosmetic: e.target.checked })} />
+                            Cosmetic only (does not block sale)
+                          </label>
+                        </div>
+                      )}
+                      {c.itemId === 'storage' && c.result !== 'na' && (
+                        <div className="utf-check__more utf-check__more--narrow">
+                          <NumberField label="Storage health" suffix="%" value={test.storageHealth} onChange={v => patch({ storageHealth: v })} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="utf__col">
+                <SectionTitle hint={settings ? `Fails below ${settings.batteryFailBelow}% · noted below ${settings.batteryNoteBelow}%` : undefined}>Battery{test.isLaptop ? ' *' : ''}</SectionTitle>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField label="Health" suffix="%" value={test.batteryHealth} onChange={v => patch({ batteryHealth: v })} placeholder={test.isLaptop ? '' : 'n/a'} />
+                  <NumberField label="Cycles" value={test.batteryCycles} onChange={v => patch({ batteryCycles: v })} placeholder="optional" />
+                </div>
+                {batteryNote ? <p className="utf-note">Passes, but shown on the label (below {settings?.batteryNoteBelow}%).</p> : null}
+
+                <SectionTitle>Grade *</SectionTitle>
+                <div className="utf-grades" role="radiogroup" aria-label="Grade">
+                  {(['A', 'B', 'C'] as const).map(g => (
+                    <button key={g} type="button" role="radio" aria-checked={test.grade === g} className={test.grade === g ? 'is-on' : ''}
+                      onClick={() => patch({ grade: g })}>
+                      <b>{g}</b><span>{GRADE_GUIDE[g].split(':')[0]}</span>
+                    </button>
+                  ))}
+                </div>
+                {test.grade ? <p className="utf-hint">{GRADE_GUIDE[test.grade]}</p> : null}
+
+                <SectionTitle>Installations</SectionTitle>
+                <input className={inputCls} value={test.installs.os ?? ''} placeholder="OS — e.g. Win 11 Pro"
+                  onChange={e => patch({ installs: { ...test.installs, os: e.target.value } })} />
+                <div className="utf-toggles">
+                  {([['osActivated', 'Activated'], ['drivers', 'Drivers'], ['office', 'Office / apps']] as const).map(([k, l]) => (
+                    <button key={k} type="button" aria-pressed={!!test.installs[k]} className={test.installs[k] ? 'is-on' : ''}
+                      onClick={() => patch({ installs: { ...test.installs, [k]: !test.installs[k] } })}>
+                      {test.installs[k] ? '✓ ' : ''}{l}
+                    </button>
+                  ))}
+                </div>
+
+                <SectionTitle hint={unit.specs ? `On record: ${unit.specs}` : undefined}>Spec check *</SectionTitle>
+                <div className="utf-spec">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-text-3">CPU</span>
+                    <input className={inputCls} value={test.spec.cpu ?? ''} placeholder="i5-8365U" onChange={e => patch({ spec: { ...test.spec, cpu: e.target.value } })} />
+                  </label>
+                  <NumberField label="RAM" suffix="GB" value={test.spec.ramGb} onChange={v => patch({ spec: { ...test.spec, ramGb: v } })} />
+                  <NumberField label="Storage" suffix="GB" value={test.spec.storageGb} onChange={v => patch({ spec: { ...test.spec, storageGb: v } })} />
+                </div>
+                <div className="utf-toggles" role="radiogroup" aria-label="Does the spec match the product?">
+                  <button type="button" role="radio" aria-checked={test.spec.matches === true} className={test.spec.matches === true ? 'is-on' : ''}
+                    onClick={() => patch({ spec: { ...test.spec, matches: true } })}>{test.spec.matches === true ? '✓ ' : ''}Matches the product</button>
+                  <button type="button" role="radio" aria-checked={test.spec.matches === false} className={test.spec.matches === false ? 'is-bad' : ''}
+                    onClick={() => patch({ spec: { ...test.spec, matches: false } })}>Doesn&apos;t match</button>
+                </div>
+                {test.spec.matches === false ? (
+                  <p className="utf-note is-bad">Move it to the right product first (close this, then More → Set model &amp; specs), then confirm the spec.</p>
+                ) : null}
+
+                <SectionTitle hint="Anything the checklist didn't cover">Other issues</SectionTitle>
+                <div className="flex flex-col gap-2">
+                  {issues.map((i, n) => (
+                    <div key={i.id} className="utf-issue">
+                      <input className={inputCls} value={i.text} placeholder="e.g. Fan noisy under load"
+                        onChange={e => setIssues(issues.map((x, k) => (k === n ? { ...x, text: e.target.value } : x)))} />
+                      <div className="utf-tri utf-tri--sm">
+                        {(['blocks_sale', 'cosmetic'] as const).map(sv => (
+                          <button key={sv} type="button" className={i.severity === sv ? (sv === 'blocks_sale' ? 'is-fail' : 'is-na') : ''}
+                            onClick={() => setIssues(issues.map((x, k) => (k === n ? { ...x, severity: sv } : x)))}>
+                            {sv === 'blocks_sale' ? 'Blocks sale' : 'Cosmetic'}
                           </button>
                         ))}
                       </div>
+                      <button type="button" className="utf-x" aria-label="Remove issue" onClick={() => setIssues(issues.filter((_, k) => k !== n))}>✕</button>
                     </div>
-                    {c.result === 'fail' && (
-                      <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
-                        <input className={inputCls} value={c.note ?? ''} placeholder="What is wrong — e.g. 3 dead keys (E, R, T)" onChange={e => setCheck(c.itemId, { note: e.target.value })} />
-                        <label className="flex items-center gap-1.5 text-[11px] text-text-2 whitespace-nowrap">
-                          <input type="checkbox" checked={!!c.cosmetic} onChange={e => setCheck(c.itemId, { cosmetic: e.target.checked })} />
-                          Cosmetic only (does not block sale)
-                        </label>
-                      </div>
+                  ))}
+                  <button type="button" className="utf-add" onClick={() => setIssues([...issues, { id: `i${Date.now()}`, text: '', severity: 'blocks_sale' }])}>
+                    + Add issue
+                  </button>
+                </div>
+
+                {live && (
+                  <div className={`utf-verdict ${missing.length ? '' : live.result === 'passed' ? 'is-pass' : 'is-fail'}`} aria-live="polite">
+                    {missing.length ? (
+                      <>
+                        <b>Result appears when the form is complete</b>
+                        <ul>{missing.map(m => <li key={m}>{m}</li>)}</ul>
+                      </>
+                    ) : live.result === 'passed' ? (
+                      <b>✓ Will PASS{test.grade ? ` · Grade ${test.grade}` : ''}{test.batteryHealth != null ? ` · Battery ${test.batteryHealth}%` : ''}</b>
+                    ) : (
+                      <span><b>✗ Will FAIL</b> — {live.reasons.join(' · ')}</span>
                     )}
-                    {c.itemId === 'storage' && c.result !== 'na' && (
-                      <div className="mt-2 max-w-[180px]">
-                        <NumberField label="Storage health" suffix="%" value={test.storageHealth} onChange={v => patch({ storageHealth: v })} />
-                      </div>
-                    )}
                   </div>
-                ))}
+                )}
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <SectionTitle hint={settings ? `Fails below ${settings.batteryFailBelow}%` : undefined}>Battery{test.isLaptop ? ' *' : ''}</SectionTitle>
-                  <div className="grid grid-cols-2 gap-2">
-                    <NumberField label="Health" suffix="%" value={test.batteryHealth} onChange={v => patch({ batteryHealth: v })} placeholder={test.isLaptop ? '' : 'n/a'} />
-                    <NumberField label="Cycles" value={test.batteryCycles} onChange={v => patch({ batteryCycles: v })} placeholder="optional" />
-                  </div>
-                  {batteryNote ? <p className="text-[11px] text-[var(--warning-text)] mt-1">Passes, but shown on the label (below {settings?.batteryNoteBelow}%).</p> : null}
-                </div>
-                <div>
-                  <SectionTitle>Grade *</SectionTitle>
-                  <div className="flex gap-1.5" role="radiogroup" aria-label="Grade">
-                    {(['A', 'B', 'C'] as const).map(g => (
-                      <button key={g} type="button" role="radio" aria-checked={test.grade === g} title={GRADE_GUIDE[g]}
-                        className={`flex-1 min-h-[36px] rounded-md border text-[13px] font-extrabold transition-colors ${seg(test.grade === g, 'navy')}`}
-                        onClick={() => patch({ grade: g })}>
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[11px] text-text-3 mt-1">{test.grade ? GRADE_GUIDE[test.grade] : 'Cosmetic condition — hover for the guide'}</p>
-                </div>
-              </div>
-
-              <SectionTitle>Installations</SectionTitle>
-              <div className="flex flex-wrap items-center gap-3">
-                <input className={`${inputCls} max-w-[200px]`} value={test.installs.os ?? ''} placeholder="OS — e.g. Win 11 Pro"
-                  onChange={e => patch({ installs: { ...test.installs, os: e.target.value } })} />
-                {([['osActivated', 'Activated'], ['drivers', 'Drivers'], ['office', 'Office / apps']] as const).map(([k, l]) => (
-                  <label key={k} className="flex items-center gap-1.5 text-[12px] text-text-2">
-                    <input type="checkbox" checked={!!test.installs[k]} onChange={e => patch({ installs: { ...test.installs, [k]: e.target.checked } })} />
-                    {l}
-                  </label>
-                ))}
-              </div>
-
-              <SectionTitle hint={unit.specs ? `On record: ${unit.specs}` : undefined}>Spec check *</SectionTitle>
-              <div className="grid grid-cols-3 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-text-3">CPU</span>
-                  <input className={inputCls} value={test.spec.cpu ?? ''} placeholder="i5-8365U" onChange={e => patch({ spec: { ...test.spec, cpu: e.target.value } })} />
-                </label>
-                <NumberField label="RAM" suffix="GB" value={test.spec.ramGb} onChange={v => patch({ spec: { ...test.spec, ramGb: v } })} />
-                <NumberField label="Storage" suffix="GB" value={test.spec.storageGb} onChange={v => patch({ spec: { ...test.spec, storageGb: v } })} />
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-2" role="radiogroup" aria-label="Does the spec match the product?">
-                <button type="button" role="radio" aria-checked={test.spec.matches === true}
-                  className={`min-h-[32px] px-3 rounded-md border text-[11px] font-bold ${seg(test.spec.matches === true, 'pass')}`}
-                  onClick={() => patch({ spec: { ...test.spec, matches: true } })}>Matches {unit.productName.length > 40 ? 'the product' : unit.productName}</button>
-                <button type="button" role="radio" aria-checked={test.spec.matches === false}
-                  className={`min-h-[32px] px-3 rounded-md border text-[11px] font-bold ${seg(test.spec.matches === false, 'fail')}`}
-                  onClick={() => patch({ spec: { ...test.spec, matches: false } })}>Doesn&apos;t match</button>
-              </div>
-              {test.spec.matches === false ? (
-                <p className="text-[11px] text-[var(--danger-text)] mt-1">Move it to the right product first (close this, then More → Set model &amp; specs), then confirm the spec.</p>
-              ) : null}
-
-              <SectionTitle hint="Anything the checklist didn't cover">Other issues</SectionTitle>
-              <div className="flex flex-col gap-2">
-                {issues.map((i, n) => (
-                  <div key={i.id} className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                    <input className={inputCls} value={i.text} placeholder="e.g. Fan noisy under load"
-                      onChange={e => setIssues(issues.map((x, k) => (k === n ? { ...x, text: e.target.value } : x)))} />
-                    <div className="flex gap-1 shrink-0">
-                      {(['blocks_sale', 'cosmetic'] as const).map(sv => (
-                        <button key={sv} type="button" className={`min-h-[32px] px-2.5 rounded-md border text-[11px] font-bold ${seg(i.severity === sv, sv === 'blocks_sale' ? 'fail' : 'na')}`}
-                          onClick={() => setIssues(issues.map((x, k) => (k === n ? { ...x, severity: sv } : x)))}>
-                          {sv === 'blocks_sale' ? 'Blocks sale' : 'Cosmetic'}
-                        </button>
-                      ))}
-                      <button type="button" className="min-h-[32px] px-2 text-[11px] text-text-3 hover:text-[var(--danger-text)]" aria-label="Remove issue"
-                        onClick={() => setIssues(issues.filter((_, k) => k !== n))}>✕</button>
-                    </div>
-                  </div>
-                ))}
-                <button type="button" className="self-start text-[12px] font-semibold text-[var(--navy)] hover:underline"
-                  onClick={() => setIssues([...issues, { id: `i${Date.now()}`, text: '', severity: 'blocks_sale' }])}>
-                  + Add issue
-                </button>
-              </div>
-
-              {live && (
-                <div className={`mt-4 rounded-lg px-3 py-2.5 border ${missing.length ? 'bg-[var(--bg-surface)] border-[var(--border-lt)]' : live.result === 'passed' ? 'bg-[var(--success-bg)] border-[var(--success)]/40' : 'bg-[var(--danger-bg)] border-[var(--danger)]/40'}`} aria-live="polite">
-                  {missing.length ? (
-                    <>
-                      <p className="text-[12px] font-bold text-text-2">Result appears when the form is complete</p>
-                      <ul className="mt-1 text-[11px] text-text-3 list-disc pl-4">{missing.map(m => <li key={m}>{m}</li>)}</ul>
-                    </>
-                  ) : live.result === 'passed' ? (
-                    <p className="text-[13px] font-extrabold text-[var(--success-text)]">✓ PASSED{test.grade ? ` · Grade ${test.grade}` : ''}{test.batteryHealth != null ? ` · Battery ${test.batteryHealth}%` : ''}</p>
-                  ) : (
-                    <p className="text-[13px] font-extrabold text-[var(--danger-text)]">✗ FAILED — {live.reasons.join(' · ')}</p>
-                  )}
-                </div>
-              )}
-            </>
+            </div>
           )}
         </div>
       )}
