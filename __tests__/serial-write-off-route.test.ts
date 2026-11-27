@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ stock: vi.fn(), valuation: vi.fn(), audit: vi.fn() }))
+const m = vi.hoisted(() => ({ stock: vi.fn(), valuation: vi.fn(), audit: vi.fn(), user: { id: 'u1', name: 'Faith', role: 'inventory_officer' } as Record<string, string> }))
 vi.mock('@/lib/auth/api', () => ({
-  requirePermission: vi.fn(async () => ({ id: 'u1', name: 'Lead', role: 'technical_lead' })),
+  requirePermission: vi.fn(async () => m.user),
   withApiErrorHandling: (fn: () => unknown) => fn(),
 }))
 vi.mock('@/lib/server-store', () => ({ withAppStateKeyLock: (_k: string, fn: () => unknown) => fn() }))
@@ -15,6 +15,7 @@ import { POST } from '@/app/api/inventory/serial-write-off/route'
 const call = (body: unknown) => POST(new Request('http://x', { method: 'POST', body: JSON.stringify(body) }) as any)
 
 beforeEach(() => {
+  m.user = { id: 'u1', name: 'Faith', role: 'inventory_officer' }
   m.stock.mockReset().mockResolvedValue({ ok: true, productId: 'p1', productName: 'HP 840', serial: 'SN1' })
   m.valuation.mockReset().mockResolvedValue({ ok: true, result: { totalCost: 18250.5 } })
   m.audit.mockReset().mockResolvedValue(undefined)
@@ -27,6 +28,15 @@ describe('POST /api/inventory/serial-write-off', () => {
     expect(m.stock).toHaveBeenCalledWith(expect.objectContaining({ serialId: 's1', action: 'write_off', adjustOnHand: true }))
     expect(m.valuation).toHaveBeenCalledWith(expect.objectContaining({ productId: 'p1', type: 'subtract', qty: 1 }))
     expect((await res.json()).cost).toBe(18250.5)
+  })
+
+  it('a write-off is booked by Inventory or a Director, not the Technical lead who recommends it', async () => {
+    m.user = { id: 'u2', name: 'Lead', role: 'technical_lead' }
+    await expect(call({ serialId: 's1', action: 'write_off', reference: 'REF/0105', reason: 'Board dead' })).rejects.toThrow()
+    expect(m.stock).not.toHaveBeenCalled()
+    // Restoring stays with the people who could before.
+    const res = await call({ serialId: 's1', action: 'restore', reference: 'REF/0105', reason: 'Fixed', unitCost: 100 })
+    expect(res.status).toBe(200)
   })
 
   it('restore: the same cost goes back into inventory against the write-off expense', async () => {

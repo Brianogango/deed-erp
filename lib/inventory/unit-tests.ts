@@ -109,8 +109,10 @@ export interface UnitTest {
   number: number
   status: UnitTestStatus
   /** Why it is being tested: first time, or back after a repair. */
-  source?: 'first' | 'retest_after_repair' | 'retest'
+  /** refurb_final: the final test done inside a refurbishment job. */
+  source?: 'first' | 'retest_after_repair' | 'retest' | 'refurb_final'
   refurbJobRef?: string
+  refurbJobId?: string
   isLaptop: boolean
   /** Who the Technical lead gave it to (and when, and who did). */
   assignedToId?: string

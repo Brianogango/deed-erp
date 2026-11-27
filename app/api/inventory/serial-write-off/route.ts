@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
+import { assertPermission } from '@/lib/auth/authorization'
 import { withAppStateKeyLock } from '@/lib/server-store'
 import { applySerialWriteOffMutation } from '@/lib/inventory/stock-transactions'
 import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
     }
     const serialId = String(body.serialId ?? '').trim()
     const action = body.action === 'restore' ? 'restore' : body.action === 'write_off' ? 'write_off' : null
+    // The person who recommends a write-off (technician, Technical lead) is
+    // not the one who books it: Inventory or a Director does.
+    if (action === 'write_off') assertPermission(user, 'inventory.unit_tests.write_off')
     const reason = String(body.reason ?? '').trim().slice(0, 300)
     const reference = String(body.reference ?? '').trim().slice(0, 60)
     if (!serialId || !action) return NextResponse.json({ error: 'serialId and action (write_off or restore) are required' }, { status: 400 })

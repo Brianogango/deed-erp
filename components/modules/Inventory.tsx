@@ -33,6 +33,7 @@ import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProductModal'
+import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
 import { useCan } from '@/hooks/useCan'
 import { useUnitTests, unitTestAction, type UnitTestBrief } from '@/components/inventory/test-bench/useUnitTests'
 import UnitTestForm from '@/components/inventory/test-bench/UnitTestForm'
@@ -146,7 +147,7 @@ function InventoryContent() {
     importOpeningStock, openingStockPosted,
     getStockByLocation, purchaseOrders, receipts,
     showToast, currentUserId, users, refreshProductCatalog,
-    refurbishmentJobs, createRefurbishmentJob, transferToSell,
+    refurbishmentJobs, createRefurbishmentJob, transferToSell, writeOffRefurbishmentJob, recommendRefurbWriteOff,
     systemSettings,
     bulkStock,
     stockAdjustments, createAdjustment, approveAdjustment, fixAdjustmentNumbers,
@@ -270,6 +271,10 @@ function InventoryContent() {
   // Test bench: the unit whose test form is open, and the ticked tested units.
   const [benchUnit, setBenchUnit] = useState<SerialNumber | null>(null)
   const [placeSel, setPlaceSel] = useState<Set<string>>(new Set())
+  // A technician's write-off recommendation, being decided here.
+  const [writeOffJobId, setWriteOffJobId] = useState<string | null>(null)
+  const [writeOffNote, setWriteOffNote] = useState('')
+  const [harvestJobId, setHarvestJobId] = useState<string | null>(null)
   const [showMachineIntake, setShowMachineIntake] = useState(false)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
   const [warehouseSearch, setWarehouseSearch] = useUrlUiState('warehouseQ', '')
@@ -578,6 +583,9 @@ function InventoryContent() {
   const canPlaceTests = can('inventory.unit_tests.place')
   const canOverrideTests = can('inventory.unit_tests.override')
   const canAssignTests = can('inventory.unit_tests.assign')
+  const canWriteOffUnits = can('inventory.unit_tests.write_off')
+  // Machines a technician says are not worth repairing: Inventory decides.
+  const writeOffRecommended = refurbishmentJobs.filter(j => j.writeOffRecommendation && !['written_off', 'transferred'].includes(j.status))
   const unitTests = useUnitTests(tab === 'warehouse_view')
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = can('inventory.stock_requests')
@@ -1467,7 +1475,7 @@ function InventoryContent() {
         const testedFailed = testedSerials.filter(s => unitTests.bySerial.get(s.id)?.result === 'failed')
         const testingCount = awaitingTestSerials.length + filteredBulkTesting.reduce((s, p) => s + p.qty, 0)
         const benchCount = benchSerials.length
-        const testedCount = testedSerials.length
+        const testedCount = testedSerials.length + writeOffRecommended.length
         const quarantineCount = filteredQuarantineSerials.length + filteredBulkQuarantine.reduce((s, p) => s + p.qty, 0)
         // Top level: what the stock is. Inbound and Held for others open onto
         // their own steps; old links to a step (?location=testing, vendor_stock…)
@@ -1944,7 +1952,7 @@ function InventoryContent() {
                     key={s.id}
                     title={s.productName}
                     meta={(
-                      <>
+                      <div className="min-w-0" style={{ gridColumn: 'span 2' }}>
                       <p className="text-[11px] text-text-2 mt-0.5">
                         <span className="font-mono font-semibold text-text-1">{assetId || s.serial}</span>
                         {' · '}Test #{b?.number ?? 1}{b?.startedByName ? ` · ${b.startedByName}` : ''}
@@ -1953,7 +1961,7 @@ function InventoryContent() {
                         {mins !== null ? <span className="whitespace-nowrap">On the bench {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`}</span> : null}
                         {b?.source === 'retest_after_repair' ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--primary-light)] text-[var(--navy)]">Retest after repair</span> : null}
                       </p>
-                      </>
+                      </div>
                     )}
                     actions={<ActionBtn label={canRecordTests ? 'Open test' : 'View'} tone="primary" ariaLabel={`Open the test for ${s.serial}`} onClick={() => setBenchUnit(s)} />}
                     />
@@ -1974,7 +1982,7 @@ function InventoryContent() {
                     const assetId = (s as typeof s & { assetId?: string }).assetId
                     const failed = b?.result === 'failed'
                     return (
-                      <>
+                      <div className="min-w-0" style={{ gridColumn: 'span 2' }}>
                         <p className="text-[11px] text-text-2 mt-0.5">
                           <span className="font-mono font-semibold text-text-1">{assetId || s.serial}</span>
                           {b?.line ? <span> · {b.line}</span> : null}
@@ -1982,8 +1990,13 @@ function InventoryContent() {
                         {failed && b?.failReasons.length ? <p className="text-[11px] font-semibold text-[var(--danger-text)] mt-0.5">✗ {b.failReasons.join(' · ')}</p> : null}
                         {b?.result === 'passed_override' ? <p className="text-[11px] text-[var(--warning-text)] mt-0.5">Passed anyway: {b.overrideReason}</p> : null}
                         {b?.cosmetic.length ? <p className="text-[10px] text-text-3 mt-0.5">Note: {b.cosmetic.join('; ')}</p> : null}
-                        <p className="text-[10px] text-text-4 mt-0.5">Test #{b?.number}{b?.testedByName ? ` · ${b.testedByName}` : ''}{b?.completedAt ? ` · ${fmtDate(b.completedAt)}` : ''}</p>
-                      </>
+                        <p className="text-[10px] text-text-4 mt-0.5">
+                          Test #{b?.number}{b?.testedByName ? ` · ${b.testedByName}` : ''}{b?.completedAt ? ` · ${fmtDate(b.completedAt)}` : ''}
+                        </p>
+                        {b?.source === 'refurb_final' ? (
+                          <p className="mt-1"><span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--primary-light)] text-[var(--navy)] whitespace-nowrap">Final test · {b.refurbJobRef}</span></p>
+                        ) : null}
+                      </div>
                     )
                   }
                   return (
@@ -2062,7 +2075,7 @@ function InventoryContent() {
                     label="More"
                     actions={[
                     { id: 'view', label: canOverrideTests ? 'View test / pass anyway' : 'View test', onClick: () => setBenchUnit(s) },
-                    { id: 'send-refurb', label: 'Send straight to Refurbishment', hidden: !canPlaceTests, onClick: () => requestSendForRefurbishment(s) },
+                    { id: 'send-refurb', label: unitTests.bySerial.get(s.id)?.source === 'refurb_final' ? 'Back to Refurbishment (new job)' : 'Send straight to Refurbishment', hidden: !canPlaceTests, onClick: () => requestSendForRefurbishment(s) },
                     { id: 'quarantine', label: 'Reject (parts / write-off / return)', hidden: !canPlaceTests, onClick: () => void placeTested([s], 'quarantine') },
                     ]}
                     />
@@ -2070,6 +2083,47 @@ function InventoryContent() {
                     )}
                     />
                     ))}
+                    </Section>
+                    <Section title="Write-off recommended — Inventory decides" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
+                    count={writeOffRecommended.length}
+                    emptyText="No write-off recommendations">
+                    {writeOffRecommended.map(j => {
+                      const rec = j.writeOffRecommendation!
+                      const unitRow = serials.find(x => x.id === j.serialId) as ((typeof serials)[number] & { assetId?: string }) | undefined
+                      return (
+                        <WarehouseRow
+                          key={j.id}
+                          title={j.productName}
+                          meta={(
+                            <div className="min-w-0" style={{ gridColumn: 'span 2' }}>
+                              <p className="text-[11px] text-text-2 mt-0.5">
+                                <span className="font-mono font-semibold text-text-1">{unitRow?.assetId || j.serialNumber}</span>
+                                {' · '}{j.ref} · {rec.harvest ? 'Strip for parts' : 'Write off'} recommended by {rec.byName}{rec.at ? ` · ${fmtDate(rec.at)}` : ''}
+                              </p>
+                              <p className="text-[11px] font-semibold text-[var(--danger-text)] mt-0.5">{rec.reason}</p>
+                              {rec.keepParts ? <p className="text-[10px] text-text-3 mt-0.5">Parts worth keeping: {rec.keepParts}</p> : null}
+                            </div>
+                          )}
+                          actions={canWriteOffUnits ? (
+                            <>
+                              {rec.harvest
+                                ? <ActionBtn label="Strip for parts" tone="danger" ariaLabel={`Strip ${j.serialNumber} for parts`} onClick={() => setHarvestJobId(j.id)} />
+                                : <ActionBtn label="Write off" tone="danger" ariaLabel={`Write off ${j.serialNumber}`} onClick={() => { setWriteOffNote(rec.reason); setWriteOffJobId(j.id) }} />}
+                              <SecondaryActionMenu
+                                ariaLabel={`More actions for ${j.serialNumber}`}
+                                label="More"
+                                actions={[
+                                  rec.harvest
+                                    ? { id: 'writeoff', label: 'Write off instead (no parts kept)', onClick: () => { setWriteOffNote(rec.reason); setWriteOffJobId(j.id) } }
+                                    : { id: 'harvest', label: 'Strip for parts instead', onClick: () => setHarvestJobId(j.id) },
+                                  { id: 'decline', label: 'Disagree — back to the technician', onClick: () => recommendRefurbWriteOff(j.id, null) },
+                                ]}
+                              />
+                            </>
+                          ) : <span className="text-[10px] text-text-4 italic">Inventory or a Director decides</span>}
+                        />
+                      )
+                    })}
                     </Section>
                   </div>
                   )
@@ -4342,6 +4396,32 @@ function InventoryContent() {
           onMoved={() => setModelUnit(null)}
         />
       )}
+      {writeOffJobId && (() => {
+        const j = refurbishmentJobs.find(x => x.id === writeOffJobId)
+        if (!j) return null
+        return (
+          <Modal title={`Write off ${j.serialNumber}`} onClose={() => setWriteOffJobId(null)} width={440}>
+            <p className="text-[11px] text-text-3 mb-3">
+              {j.productName} ({j.ref}). It leaves stock and its cost is booked as a write-off; unused parts taken for it go back to stock. A Director can restore it later from Refurbishment.
+            </p>
+            <Field label="Reason *">
+              <Textarea value={writeOffNote} onChange={setWriteOffNote} rows={3} />
+            </Field>
+            <div className="flex gap-2 justify-end mt-4">
+              <button type="button" className="btn-outline" onClick={() => setWriteOffJobId(null)}>Cancel</button>
+              <button type="button" className="btn-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
+                onClick={() => {
+                  if (!writeOffNote.trim()) { showToast('Enter a reason', 'error'); return }
+                  void writeOffRefurbishmentJob(j.id, writeOffNote.trim()).then(ok => { if (ok) setWriteOffJobId(null) })
+                }}>Write off</button>
+            </div>
+          </Modal>
+        )
+      })()}
+      {harvestJobId && (() => {
+        const j = refurbishmentJobs.find(x => x.id === harvestJobId)
+        return j ? <HarvestPartsModal job={j} onClose={() => setHarvestJobId(null)} onDone={() => setHarvestJobId(null)} /> : null
+      })()}
       {benchUnit && (
         <UnitTestForm
           unit={benchUnit as SerialNumber & { assetId?: string }}

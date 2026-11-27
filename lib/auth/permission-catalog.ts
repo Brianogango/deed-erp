@@ -165,6 +165,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('inventory.serials.manage', 'inventory', 'Write off serials and normalise tags', ['director', 'admin_officer', 'inventory_officer', 'technical_lead']),
       route('inventory.unit_tests.record', 'inventory', 'Test units at the test bench', ['director', 'inventory_officer', 'technical_lead', 'technician']),
       route('inventory.unit_tests.assign', 'inventory', 'Assign units to testers (and test any unit)', ['director', 'technical_lead']),
+      route('inventory.unit_tests.write_off', 'inventory', 'Write off or strip for parts a machine a technician recommended', ['director', 'inventory_officer']),
       route('inventory.unit_tests.place', 'inventory', 'Place tested units (Ready for Sale, With Issues, Rejected)', ['director', 'inventory_officer', 'technical_lead']),
       route('inventory.unit_tests.override', 'inventory', 'Pass a failed unit anyway, with a reason', ['director', 'technical_lead']),
       route('inventory.serials.delete','inventory', 'Delete serials from the system (inventory, With Issues and refurbishment)', ['director']),

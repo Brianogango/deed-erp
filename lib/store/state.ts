@@ -500,6 +500,8 @@ export interface AppState {
   createRefurbishmentJob: (serialId: string, issueDescription: string, opts?: { silent?: boolean; testTasks?: string[]; fromTestNumber?: number }) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
   updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate' | 'productId' | 'productName' | 'testTasks'>>) => void
+  /** Technician: recommend writing it off (or stripping it); null withdraws. Inventory decides. */
+  recommendRefurbWriteOff: (jobId: string, rec: { reason: string; keepParts?: string; harvest: boolean } | null) => void
   /** `request`: ask stores for it straight away (taken from stock, or the lead is alerted). */
   addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>, opts?: { request?: boolean }) => void
   updateRefurbishmentPart: (jobId: string, partId: string, patch: Partial<RefurbPart>) => void
@@ -507,8 +509,10 @@ export interface AppState {
   requestPartFromInventory: (jobId: string, partId: string, part?: RefurbPart) => void   // tech → checks stock; allocates or alerts lead
   allocateRefurbPart: (jobId: string, partId: string) => void         // lead tech → deducts stock, marks allocated
   notifyTechPartAvailable: (jobId: string, partId: string) => void    // lead tech → stamps notified date
-  markRefurbishmentReady: (jobId: string) => void
-  transferToSell: (jobId: string) => void
+  /** True when the job could be marked ready (it says why not otherwise). */
+  markRefurbishmentReady: (jobId: string) => boolean
+  /** Send the repaired unit on: with a final test, to Inventory to be placed. */
+  transferToSell: (jobId: string, opts?: { finalTest?: { number: number; result: 'passed' | 'passed_override' | 'failed' } }) => void
   /** Server write-off: device leaves stock and its cost is booked as a write-off. False if it failed. */
   writeOffRefurbishmentJob: (jobId: string, reason: string) => Promise<boolean>
   /** Bring a written-off device back: stock and the write-off booking are reversed. */
@@ -795,6 +799,8 @@ export type InventoryStoreState = Pick<AppState,
   | 'addAuditLog'
   | 'createRefurbishmentJob'
   | 'transferToSell'
+  | 'writeOffRefurbishmentJob'
+  | 'recommendRefurbWriteOff'
   | 'createAdjustment'
   | 'approveAdjustment'
   | 'fixAdjustmentNumbers'
@@ -1248,6 +1254,7 @@ export type OperationsStoreState = Pick<AppState,
   | 'getAvailableSerials'
   | 'getVisibleRepairs'
   | 'markRefurbishmentReady'
+  | 'recommendRefurbWriteOff'
   | 'notifyTechPartAvailable'
   | 'pickRelease'
   | 'removeRefurbishmentPart'

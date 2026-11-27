@@ -20,6 +20,7 @@ const INVENTORY_ACTIONS = [
     'validateTransfer', 'submitTransfer', 'importOpeningStock', 'intakeProductSerials', 'getStockByLocation',
     'getMonthlyMovements', 'showToast', 'addAuditLog', 'updateSerial', 'releaseSerialToStock',
     'createRefurbishmentJob', 'transferToSell', 'createAdjustment', 'approveAdjustment', 'fixAdjustmentNumbers',
+    'writeOffRefurbishmentJob', 'recommendRefurbWriteOff',
 ] as const
 
 const SALES_ACTIONS = [
@@ -107,6 +108,7 @@ const OPERATIONS_ACTIONS = [
     'updateHoldover', 'updateRefurbishmentJob', 'updateRefurbishmentPart', 'updateRepair', 'updateSerial',
     'verifyReleaseItem', 'voidRelease', 'writeOffRefurbishmentJob', 'restoreRefurbishmentJob', 'fixRefurbJobNumbers',
     'fixAdjustmentNumbers', 'intakeTaggedMachines', 'identifyRefurbUnit', 'harvestRefurbishmentJob', 'deleteRefurbishmentRecords',
+    'recommendRefurbWriteOff',
 ] as const
 
 /** The per-area action bundles the provider hands to the narrow store contexts. */

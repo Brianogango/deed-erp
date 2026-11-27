@@ -1,7 +1,8 @@
 /**
  * The one next step on a refurbishment job, for whoever is looking at it.
  * Shown at the top of the job so the flow reads in order:
- *   queued → assigned → started → issues recorded → parts → ready → retest.
+ *   queued → assigned → started → issues recorded → parts → final test.
+ * The final test is done in the job; the unit then goes to Inventory to be placed.
  *
  * Pure.
  */
@@ -12,6 +13,7 @@ type JobLike = {
   identityPending?: boolean
   issuesFound?: string
   partsNeeded: PartLike[]
+  writeOffRecommendation?: { harvest?: boolean } | null
 }
 
 export type RefurbNextStep = {
@@ -22,7 +24,7 @@ export type RefurbNextStep = {
   mine: boolean
 }
 
-export const REFURB_FLOW_STEPS = ['Assigned', 'Started', 'Issues found', 'Parts', 'Ready', 'Retest'] as const
+export const REFURB_FLOW_STEPS = ['Assigned', 'Started', 'Issues found', 'Parts', 'Ready', 'Final test'] as const
 
 /** Index into REFURB_FLOW_STEPS of the step the job has reached (-1: not assigned). */
 export function refurbFlowProgress(job: JobLike): number {
@@ -45,6 +47,9 @@ export function refurbNextStep(
   const isTech = !!viewer.id && job.assignedTechnicianId === viewer.id
   const actor = isTech || viewer.isLead
   if (job.status === 'written_off' || job.status === 'transferred') return { key: 'none', title: '', detail: '', mine: false }
+  if (job.writeOffRecommendation) {
+    return { key: 'none', title: job.writeOffRecommendation.harvest ? 'Waiting for Inventory: strip for parts' : 'Waiting for Inventory: write-off', detail: 'Inventory decides in Tested — awaiting placement. Withdraw the recommendation to carry on with the repair.', mine: false }
+  }
   if (job.status === 'queued') {
     return { key: 'assign', title: 'Assign a technician', detail: 'The technician opens it up, records what is wrong and asks for the parts needed.', mine: viewer.canAssign }
   }
@@ -52,7 +57,7 @@ export function refurbNextStep(
     return { key: 'start', title: 'Start the job', detail: 'Press Start, then record the issues you find.', mine: actor }
   }
   if (job.status === 'ready') {
-    return { key: 'retest', title: 'Send for retest', detail: 'The lead sends it for retest before it goes back to stock for sale.', mine: viewer.isLead }
+    return { key: 'retest', title: 'Run the final test', detail: 'The same checks as the test bench, done here. Passed or failed, it then goes to Inventory to be placed.', mine: actor }
   }
   // in progress
   if (!job.issuesFound?.trim()) {
@@ -88,10 +93,10 @@ export function refurbNextStep(
   }
   return {
     key: 'mark_ready',
-    title: 'Mark ready',
+    title: 'Run the final test',
     detail: opts.noPrice
-      ? 'Repairs done and parts fitted: mark it ready for retest. Its product has no selling price yet — set one in Inventory before it is sold.'
-      : 'Repairs done and parts fitted: mark it ready for retest.',
+      ? 'Repairs done and parts fitted: run the final test. Its product has no selling price yet — set one in Inventory before it is sold.'
+      : 'Repairs done and parts fitted: run the final test here (same checks as the test bench).',
     mine: actor,
   }
 }

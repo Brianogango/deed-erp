@@ -12,6 +12,8 @@ vi.mock('@/lib/server-store', () => ({
 
 import {
   assignUnitTests,
+  discardFinalTest,
+  startFinalTest,
   briefs,
   unassignUnitTest,
   markUnitTestsPlaced,
@@ -130,5 +132,29 @@ describe('test bench on the server', () => {
     await assignUnitTests(['s1'], { id: 'k', name: 'Kevin' }, lead)
     await markUnitTestsPlaced('pending_testing', 'quarantine', ['s1'], tester)
     expect(store.deed_unitTests[0].status).toBe('cancelled')
+  })
+
+  it('runs the final test inside the refurbishment job, then hands it to placement', async () => {
+    const kevin = { id: 'k', name: 'Kevin' }
+    store.deed_serials[0] = { ...store.deed_serials[0], location: 'repair_unit', status: 'refurbishment' }
+    store.deed_refurbishmentJobs = [{ id: 'j1', ref: 'REF/0219', status: 'ready', serialId: 's1', assignedTechnicianId: 'k' }]
+    expect((await startFinalTest('j1', { id: 'x', name: 'Other' })).ok).toBe(false)
+    const r = await startFinalTest('j1', kevin)
+    if (!r.ok) throw new Error(r.error)
+    expect(r.value).toMatchObject({ source: 'refurb_final', refurbJobRef: 'REF/0219', status: 'in_progress' })
+    // Opening it again returns the same test.
+    const again = await startFinalTest('j1', kevin)
+    expect(again.ok && again.value.id).toBe(r.value.id)
+    const failed = await saveUnitTest(r.value.id, fillPassing(r.value, 40), { complete: true }, kevin)
+    expect(failed.ok && failed.value.result).toBe('failed')
+    // Keep working: the test is set aside and a new one can be started later.
+    expect((await discardFinalTest(r.value.id, kevin)).ok).toBe(true)
+    const second = await startFinalTest('j1', kevin)
+    if (!second.ok) throw new Error(second.error)
+    expect(second.value.id).not.toBe(r.value.id)
+    await saveUnitTest(second.value.id, fillPassing(second.value), { complete: true }, kevin)
+    // The job moves the unit to Inbound: it is then placeable into Ready for Sale.
+    store.deed_serials[0] = { ...store.deed_serials[0], location: 'pending_testing', status: 'available' }
+    expect(await testGateError('pending_testing', 'warehouse', [{ serialIds: ['s1'] }])).toBeNull()
   })
 })

@@ -150,6 +150,59 @@ export async function startUnitTest(serialId: string, actor: Actor, opts: { canA
   })
 }
 
+/**
+ * The final test inside a refurbishment job: the job's technician (or the
+ * Technical lead) tests the repaired unit where it is, with the same form as
+ * the test bench. Passed or failed, the job then sends the unit to Inventory
+ * to be placed.
+ */
+export async function startFinalTest(jobId: string, actor: Actor, opts: { canAssign?: boolean } = {}): Promise<{ ok: true; value: UnitTest } | Fail> {
+  const src = await loadAppState(['deed_serials', 'deed_products', 'deed_refurbishmentJobs'])
+  const job = arr(src.deed_refurbishmentJobs).find(j => j.id === jobId)
+  if (!job) return fail('Refurbishment job not found', 404)
+  if (!['in_progress', 'ready'].includes(String(job.status))) return fail(`${job.ref} is ${job.status}: only a job being worked on gets its final test.`)
+  if (!opts.canAssign && job.assignedTechnicianId !== actor.id) return fail(`${job.ref} is not your job.`, 403)
+  const serial = arr(src.deed_serials).find(s => s.id === job.serialId)
+  if (!serial) return fail('Unit not found', 404)
+  const product = arr(src.deed_products).find(p => p.id === serial.productId)
+  const settings = await loadTestSettings()
+  return mutate(tests => {
+    const mine = testsForSerial(tests, serial.id)
+    const open = mine.find(t => t.refurbJobId === jobId && (t.status === 'in_progress' || t.status === 'completed'))
+    if (open) return { ok: true, tests, value: open }
+    // Anything left from Inbound (an assignment) gives way to the job's test.
+    const cleared = tests.map(t => (t.serialId === serial.id && (t.status === 'assigned' || t.status === 'in_progress')
+      ? { ...t, status: 'cancelled' as const, cancelledAt: new Date().toISOString(), cancelReason: `Final test in ${job.ref}` }
+      : t))
+    const fresh = newUnitTest({
+      id: randomUUID(),
+      serial: { id: serial.id, serial: serial.serial, productId: serial.productId, productName: serial.productName, assetId: serial.assetId },
+      isLaptop: isLaptopProduct(product?.category, serial.productName || product?.name),
+      checklist: settings.checklist,
+      previous: cleared,
+      startedAt: new Date().toISOString(),
+      startedById: actor.id,
+      startedByName: actor.name,
+      source: 'refurb_final',
+      refurbJobRef: job.ref,
+    })
+    const t: UnitTest = { ...fresh, refurbJobId: jobId, assignedToId: actor.id, assignedToName: actor.name }
+    return { ok: true, tests: [...cleared, t], value: t }
+  })
+}
+
+/** "Keep working": a finished final test that failed is set aside and the job carries on. */
+export async function discardFinalTest(testId: string, actor: Actor, opts: { canAssign?: boolean } = {}): Promise<{ ok: true; value: UnitTest } | Fail> {
+  return mutate(tests => {
+    const t = tests.find(x => x.id === testId)
+    if (!t) return fail('Test not found', 404)
+    if (t.source !== 'refurb_final' || t.status !== 'completed') return fail('Only a finished final test still in its job can be set aside.')
+    if (!opts.canAssign && t.startedById !== actor.id) return fail('This test belongs to another tester.', 403)
+    const next: UnitTest = { ...t, status: 'cancelled', cancelledAt: new Date().toISOString(), cancelReason: 'Kept working on it' }
+    return { ok: true, tests: tests.map(x => (x.id === testId ? next : x)), value: next }
+  })
+}
+
 /** Save the form; with `complete`, finish it and work out the result. */
 export async function saveUnitTest(testId: string, patch: Partial<UnitTest>, opts: { complete?: boolean; canAssign?: boolean }, actor: Actor): Promise<{ ok: true; value: UnitTest } | Fail> {
   const settings = await loadTestSettings()

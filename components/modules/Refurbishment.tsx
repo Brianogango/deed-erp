@@ -6,6 +6,10 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { useRouteDataReady } from '@/lib/route-data-ready'
 import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import TestBenchTab from '@/components/refurbishment/TestBenchTab'
+import UnitTestForm from '@/components/inventory/test-bench/UnitTestForm'
+import { unitTestAction } from '@/components/inventory/test-bench/useUnitTests'
+import { printUnitTestLabels } from '@/lib/inventory/unit-test-label'
+import type { UnitTest } from '@/lib/inventory/unit-tests'
 import { RefurbInstallActionField, refurbFitSlotForForm } from '@/components/refurbishment/RefurbInstallActionField'
 import {
   applyRefurbPartsToUnitName,
@@ -70,6 +74,7 @@ function RefurbishmentContent() {
     requestPartFromInventory, allocateRefurbPart, notifyTechPartAvailable,
     markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob, restoreRefurbishmentJob,
     deleteRefurbishmentRecords,
+    recommendRefurbWriteOff,
     showToast,
     fixRefurbJobNumbers,
   } = useOperationsStore()
@@ -121,6 +126,14 @@ function RefurbishmentContent() {
   const [showIdentify, setShowIdentify]             = useState(false)
   const [showChangeProduct, setShowChangeProduct]   = useState(false)
   const [showHarvest, setShowHarvest]               = useState(false)
+  // Final test in the job, and what to do when it fails.
+  const [finalTestOpen, setFinalTestOpen]           = useState(false)
+  const [failedFinal, setFailedFinal]               = useState<UnitTest | null>(null)
+  // Recommend a write-off (Inventory decides).
+  const [showRecommend, setShowRecommend]           = useState(false)
+  const [recReason, setRecReason]                   = useState('')
+  const [recParts, setRecParts]                     = useState('')
+  const [recHarvest, setRecHarvest]                 = useState(false)
   const [editPartId, setEditPartId]                 = useState<string | null>(null)
 
   const [notesText, setNotesText]           = useState('')
@@ -199,9 +212,18 @@ function RefurbishmentContent() {
   const canLogNotes  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
   const canAddParts  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
   const canMarkReady = (j: RefurbishmentJob) => j.status === 'in_progress' && (j.assignedTechnicianId === currentUserId || isLeadTech)
-  const canTransfer  = (j: RefurbishmentJob) => j.status === 'ready' && isLeadTech
-  // A write-off is a loss booked to the accounts: the lead decides it.
-  const canWriteOff  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && isLeadTech
+  // Writing off (or stripping) is Inventory's or a Director's; the
+  // technician and the lead recommend it instead.
+  const canWriteOff  = (j: RefurbishmentJob) => ['assigned', 'in_progress', 'ready'].includes(j.status) && can('inventory.unit_tests.write_off')
+  const canRecommendWriteOff = (j: RefurbishmentJob) => ['assigned', 'in_progress', 'ready'].includes(j.status) && !j.writeOffRecommendation
+    && (j.assignedTechnicianId === currentUserId || isLeadTech)
+  const canFinalTest = (j: RefurbishmentJob) => ['in_progress', 'ready'].includes(j.status) && !j.writeOffRecommendation && !j.identityPending
+    && (j.assignedTechnicianId === currentUserId || isLeadTech) && can('inventory.unit_tests.record')
+  /** Final test: the job is checked as ready (tasks, parts, identity), then the test form opens. */
+  const startFinalTest = (j: RefurbishmentJob) => {
+    if (j.status === 'in_progress' && !markRefurbishmentReady(j.id)) return
+    setFinalTestOpen(true)
+  }
   // The technician on the job (or the lead) records the serial once it reads.
   const canIdentify  = (j: RefurbishmentJob) => !!j.identityPending && !['transferred', 'written_off'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
 
@@ -361,9 +383,9 @@ function RefurbishmentContent() {
                     Identify
                   </PrimaryActionButton>
                 )}
-                {canTransfer(job) && !job.identityPending && !shownBelow('retest') && (
-                  <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
-                    Repair done → send to test bench
+                {canFinalTest(job) && !jobStandIn && !shownBelow('retest') && !shownBelow('mark_ready') && (
+                  <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => startFinalTest(job)} hideLabelOnMobile={false}>
+                    Final test
                   </PrimaryActionButton>
                 )}
                 <SecondaryActionMenu
@@ -378,6 +400,15 @@ function RefurbishmentContent() {
                       onClick: () => markRefurbishmentReady(job.id),
                     },
                     { id: 'product', label: jobStandIn ? 'Match product…' : 'Change product…', hidden: !canFixProduct || shownBelow('match_product'), onClick: () => setShowChangeProduct(true) },
+                    {
+                      id: 'recommend', label: 'Recommend write-off…', hidden: !canRecommendWriteOff(job),
+                      onClick: () => { setRecReason(''); setRecParts(''); setRecHarvest(false); setShowRecommend(true) },
+                    },
+                    {
+                      id: 'withdraw', label: 'Withdraw write-off recommendation',
+                      hidden: !(job.writeOffRecommendation && !['written_off', 'transferred'].includes(job.status) && (job.assignedTechnicianId === currentUserId || isLeadTech)),
+                      onClick: () => recommendRefurbWriteOff(job.id, null),
+                    },
                     { id: 'harvest', label: 'Harvest parts', hidden: !canWriteOff(job), onClick: () => setShowHarvest(true) },
                     {
                       id: 'restore', label: 'Restore to queue', hidden: !(job.status === 'written_off' && job.outcome !== 'harvested' && isLeadTech),
@@ -465,11 +496,11 @@ function RefurbishmentContent() {
                   {next.mine && next.key === 'match_product' && (
                     <button className="btn-primary text-xs py-1.5" onClick={() => setShowChangeProduct(true)}>Match product</button>
                   )}
-                  {next.mine && next.key === 'mark_ready' && (
-                    <button className="btn-primary text-xs py-1.5" onClick={() => markRefurbishmentReady(job.id)}>Mark ready</button>
+                  {next.mine && next.key === 'mark_ready' && canFinalTest(job) && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => startFinalTest(job)}>Final test</button>
                   )}
-                  {next.mine && next.key === 'retest' && !job.identityPending && (
-                    <button className="btn-primary text-xs py-1.5" onClick={() => transferToSell(job.id)}>Repair done → send to test bench</button>
+                  {next.mine && next.key === 'retest' && canFinalTest(job) && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => startFinalTest(job)}>Final test</button>
                   )}
                 </div>
               </div>
@@ -484,6 +515,19 @@ function RefurbishmentContent() {
                 <p className="text-[11px] mt-0.5" style={{ color: 'var(--warning-text)' }}>
                   Once it boots or the sticker is found, record the real serial and model. It cannot be marked ready until then. If it cannot be repaired, harvest its parts or write it off.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {job.writeOffRecommendation && !['written_off', 'transferred'].includes(job.status) && (
+            <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: 'var(--danger-bg)', border: '1px solid #FCA5A5' }}>
+              <Fa icon={faTriangleExclamation} className="mt-0.5" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold" style={{ color: 'var(--danger-text)' }}>
+                  {job.writeOffRecommendation.harvest ? 'Strip for parts' : 'Write-off'} recommended by {job.writeOffRecommendation.byName} — waiting for Inventory
+                </p>
+                <p className="text-[11px] mt-0.5 text-t2">{job.writeOffRecommendation.reason}</p>
+                {job.writeOffRecommendation.keepParts ? <p className="text-[11px] mt-0.5 text-t3">Parts worth keeping: {job.writeOffRecommendation.keepParts}</p> : null}
               </div>
             </div>
           )}
@@ -984,6 +1028,74 @@ function RefurbishmentContent() {
           ) : null
         })()}
         {showHarvest && <HarvestPartsModal job={job} onClose={() => setShowHarvest(false)} onDone={() => { setShowHarvest(false); setActiveId(null) }} />}
+        {finalTestOpen && (() => {
+          const unit = serials.find(s => s.id === job.serialId)
+          if (!unit) return null
+          return (
+            <UnitTestForm
+              unit={unit as typeof unit & { assetId?: string }}
+              finalForJobId={job.id}
+              canRecord
+              canOverride={can('inventory.unit_tests.override')}
+              notify={(m, t) => showToast(m, t ?? 'success')}
+              onChanged={() => {}}
+              onClose={() => setFinalTestOpen(false)}
+              onFinished={t => {
+                setFinalTestOpen(false)
+                if (t.result === 'failed' && !t.override) { setFailedFinal(t); return }
+                transferToSell(job.id, { finalTest: { number: t.number, result: t.override ? 'passed_override' : 'passed' } })
+                void printUnitTestLabels([t])
+              }}
+            />
+          )
+        })()}
+        {failedFinal && (
+          <Modal title="Final test failed" onClose={() => setFailedFinal(null)} width={460}>
+            <p className="text-[12px] text-t2">{job.serialNumber} failed: <span className="font-semibold" style={{ color: 'var(--danger-text)' }}>{(failedFinal.failReasons ?? []).join(' · ')}</span></p>
+            <p className="text-[11px] text-t3 mt-2">Keep working if you can still fix it — this test is set aside. Or send it to Inventory as failed (it goes to With Issues from there).</p>
+            <div className="flex flex-wrap gap-2 justify-end mt-4">
+              <button type="button" className="btn-outline" onClick={async () => {
+                const r = await unitTestAction({ action: 'discard_final', testId: failedFinal.id })
+                if (!r.ok) { showToast(r.error, 'error'); return }
+                updateRefurbishmentJob(job.id, { status: 'in_progress' })
+                setFailedFinal(null)
+                showToast('Test set aside — carry on with the repair')
+              }}>Keep working</button>
+              <button type="button" className="btn-primary" onClick={() => {
+                transferToSell(job.id, { finalTest: { number: failedFinal.number, result: 'failed' } })
+                void printUnitTestLabels([failedFinal])
+                setFailedFinal(null)
+              }}>Send as failed</button>
+            </div>
+          </Modal>
+        )}
+        {showRecommend && (
+          <Modal title="Recommend write-off" onClose={() => setShowRecommend(false)} width={460}>
+            <p className="text-[11px] text-t3 mb-3">Inventory decides: they write it off, strip it for parts, or send it back to you. The unit stays here until then.</p>
+            <div className="flex gap-1.5 mb-3" role="radiogroup" aria-label="Recommendation">
+              {([[false, 'Write off'], [true, 'Strip for parts']] as const).map(([h, l]) => (
+                <button key={l} type="button" role="radio" aria-checked={recHarvest === h}
+                  className={`flex-1 min-h-[34px] rounded-md border text-[12px] font-bold ${recHarvest === h ? 'bg-[var(--navy)] text-white border-[var(--navy)]' : 'bg-[var(--bg-card)] text-t2 border-[var(--border)]'}`}
+                  onClick={() => setRecHarvest(h)}>{l}</button>
+              ))}
+            </div>
+            <Field label="Why it is not worth repairing *">
+              <Textarea value={recReason} onChange={setRecReason} rows={3} placeholder="e.g. Motherboard dead — repair costs more than the unit is worth" />
+            </Field>
+            <Field label={recHarvest ? 'Parts worth keeping *' : 'Parts worth keeping (optional)'}>
+              <Textarea value={recParts} onChange={setRecParts} rows={2} placeholder="e.g. Screen, 8GB RAM, 256GB SSD, battery" />
+            </Field>
+            <div className="flex gap-2 justify-end mt-4">
+              <button type="button" className="btn-outline" onClick={() => setShowRecommend(false)}>Cancel</button>
+              <button type="button" className="btn-primary" onClick={() => {
+                if (recReason.trim().length < 5) { showToast('Say why it is not worth repairing', 'error'); return }
+                if (recHarvest && !recParts.trim()) { showToast('List the parts worth keeping', 'error'); return }
+                recommendRefurbWriteOff(job.id, { reason: recReason, keepParts: recParts, harvest: recHarvest })
+                setShowRecommend(false)
+              }}>Send to Inventory</button>
+            </div>
+          </Modal>
+        )}
         {deleteModal}
       </div>
     )

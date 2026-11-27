@@ -6,6 +6,8 @@ import {
   assignUnitTests,
   briefs,
   cancelUnitTest,
+  discardFinalTest,
+  startFinalTest,
   loadTestSettings,
   loadUnitTests,
   markUnitTestsPlaced,
@@ -92,7 +94,10 @@ export async function POST(req: NextRequest) {
       await markUnitTestsPlaced('pending_testing', 'repair_unit', ids, actor)
       return NextResponse.json({ ok: true })
     }
+    const jobId = String((body as { jobId?: unknown }).jobId ?? '').trim()
     const r = action === 'start' ? await startUnitTest(String(body.serialId ?? '').trim(), actor, { canAssign })
+      : action === 'start_final' ? await startFinalTest(jobId, actor, { canAssign })
+      : action === 'discard_final' ? await discardFinalTest(testId, actor, { canAssign })
       : action === 'save' ? await saveUnitTest(testId, body.patch ?? {}, { canAssign }, actor)
       : action === 'complete' ? await saveUnitTest(testId, body.patch ?? {}, { complete: true, canAssign }, actor)
       : action === 'reopen' ? await reopenUnitTest(testId)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
+import { assertPermission } from '@/lib/auth/authorization'
 import { withAppStateKeyLock } from '@/lib/server-store'
 import { harvestUnit } from '@/lib/refurbishment/unidentified.server'
 import { writeFinancialAudit } from '@/lib/finance-audit'
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
     const user = await requirePermission('refurbishment.intake')
+    // Stripping a machine is a write-off: Inventory or a Director books it.
+    assertPermission(user, 'inventory.unit_tests.write_off')
     const body = await req.json().catch(() => ({})) as Record<string, any>
     const reason = String(body.reason || '').trim().slice(0, 300)
     if (!reason) return NextResponse.json({ error: 'Say why it cannot be repaired' }, { status: 422 })

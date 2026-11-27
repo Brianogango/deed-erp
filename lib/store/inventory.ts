@@ -153,6 +153,14 @@ export interface RefurbishmentJob {
   testTasks?: Array<{ id: string; text: string; done?: boolean; note?: string }>
   /** Which test of the unit the to-do list came from. */
   fromTestNumber?: number
+  /** The final test done in the job (it then went to Inventory to be placed). */
+  finalTestNumber?: number
+  finalTestResult?: 'passed' | 'passed_override' | 'failed'
+  /**
+   * The technician says it is not worth repairing. Only Inventory or a
+   * Director writes it off (or strips it for parts).
+   */
+  writeOffRecommendation?: { reason: string; keepParts?: string; harvest: boolean; byId?: string; byName: string; at: string }
   assignedTechnicianId?: string
   assignedTechnicianName?: string
   assignedDate?: string

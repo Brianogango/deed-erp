@@ -26,7 +26,7 @@ import type { StockReservation } from '@/lib/sales-flow-types'
 import type { StoreDeps } from './deps'
 
 /** inventory actions of the store. `store` reads the provider's current state, setters and helpers. */
-export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHoldover' | 'updateHoldover' | 'initRelease' | 'pickRelease' | 'verifyReleaseItem' | 'completeVerification' | 'completeRelease' | 'voidRelease' | 'addProduct' | 'normalizeInventoryTags' | 'publishProductBulk' | 'updateProduct' | 'updateProductPrice' | 'archiveProduct' | 'unarchiveProduct' | 'deleteProduct' | 'importOpeningStock' | 'intakeProductSerials' | 'getProductSerials' | 'getAvailableSerials' | 'updateSerial' | 'releaseSerialToStock' | 'createRefurbishmentJob' | 'assignRefurbishmentJob' | 'updateRefurbishmentJob' | 'addRefurbishmentPart' | 'updateRefurbishmentPart' | 'removeRefurbishmentPart' | 'requestPartFromInventory' | 'allocateRefurbPart' | 'notifyTechPartAvailable' | 'markRefurbishmentReady' | 'transferToSell' | 'writeOffRefurbishmentJob' | 'restoreRefurbishmentJob' | 'fixRefurbJobNumbers' | 'fixAdjustmentNumbers' | 'intakeTaggedMachines' | 'identifyRefurbUnit' | 'harvestRefurbishmentJob' | 'deleteRefurbishmentRecords' | 'createTransfer' | 'addTransferLine' | 'validateTransfer' | 'submitTransfer' | 'createAdjustment' | 'approveAdjustment' | 'getStockByLocation' | 'getMonthlyMovements' | 'reserveStock' | 'getReservedQty' | 'getAvailableStock' | 'fulfillReservation' | 'cancelReservation'> {
+export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHoldover' | 'updateHoldover' | 'initRelease' | 'pickRelease' | 'verifyReleaseItem' | 'completeVerification' | 'completeRelease' | 'voidRelease' | 'addProduct' | 'normalizeInventoryTags' | 'publishProductBulk' | 'updateProduct' | 'updateProductPrice' | 'archiveProduct' | 'unarchiveProduct' | 'deleteProduct' | 'importOpeningStock' | 'intakeProductSerials' | 'getProductSerials' | 'getAvailableSerials' | 'updateSerial' | 'releaseSerialToStock' | 'createRefurbishmentJob' | 'assignRefurbishmentJob' | 'updateRefurbishmentJob' | 'addRefurbishmentPart' | 'updateRefurbishmentPart' | 'removeRefurbishmentPart' | 'requestPartFromInventory' | 'allocateRefurbPart' | 'notifyTechPartAvailable' | 'markRefurbishmentReady' | 'recommendRefurbWriteOff' | 'transferToSell' | 'writeOffRefurbishmentJob' | 'restoreRefurbishmentJob' | 'fixRefurbJobNumbers' | 'fixAdjustmentNumbers' | 'intakeTaggedMachines' | 'identifyRefurbUnit' | 'harvestRefurbishmentJob' | 'deleteRefurbishmentRecords' | 'createTransfer' | 'addTransferLine' | 'validateTransfer' | 'submitTransfer' | 'createAdjustment' | 'approveAdjustment' | 'getStockByLocation' | 'getMonthlyMovements' | 'reserveStock' | 'getReservedQty' | 'getAvailableStock' | 'fulfillReservation' | 'cancelReservation'> {
   return {
     addHoldover: (h) => {
         store.setHoldovers(prev => [h, ...prev])
@@ -1163,21 +1163,21 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
 
     markRefurbishmentReady: (jobId) => {
         const job = store.refurbishmentJobs.find(j => j.id === jobId)
-        if (!job) return
+        if (!job) return false
         if (job.identityPending || awaitingIdentification(store.serialRef.current.find(s => s.id === job.serialId))) {
-          store.showToast(`Identify ${job.serialNumber} first: record its real serial and model.`, 'error'); return
+          store.showToast(`Identify ${job.serialNumber} first: record its real serial and model.`, 'error'); return false
         }
         // Filed under a stand-in ("lenovo tm", "Laptop — unidentified"): it is
         // matched to its real product line before it can go back on sale.
         const jobProduct = store.prodRef.current.find(p => p.id === job.productId)
         const jobUnit = store.serialRef.current.find(s => s.id === job.serialId) as (SerialNumber & { intakeTag?: string; identityPending?: boolean }) | undefined
         if (isStandInProduct(jobProduct, job.productName, { cameInUnidentified: cameInUnidentified(job, jobUnit) })) {
-          store.showToast(`${job.productName} is a stand-in: match ${job.serialNumber} to its product line first (More → Change product).`, 'error'); return
+          store.showToast(`${job.productName} is a stand-in: match ${job.serialNumber} to its product line first (More → Change product).`, 'error'); return false
         }
         // Every repair task from the failed test is done, or says why not.
         const openTasks = (job.testTasks ?? []).filter(t => !t.done && !String(t.note ?? '').trim())
         if (openTasks.length) {
-          store.showToast(`Tick or explain each repair task first: ${openTasks.map(t => t.text).join(', ')}`, 'error'); return
+          store.showToast(`Tick or explain each repair task first: ${openTasks.map(t => t.text).join(', ')}`, 'error'); return false
         }
         // A machine is not ready while parts are still on their way, or were
         // taken for it and never fitted (mark them used, or remove them).
@@ -1188,7 +1188,7 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           store.showToast(waiting.length
             ? `Still waiting for parts: ${list(waiting)}. Remove them if they are no longer needed.`
             : `Mark the fitted parts as used first: ${list(unfitted)} (or remove them).`, 'error')
-          return
+          return false
         }
         const serial = store.serialRef.current.find(s => s.id === job.serialId)
         const upgrade = refurbishmentSellingNamePatch({
@@ -1209,12 +1209,45 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
         if (upgrade) {
           store.setSerials(p => p.map(s => s.id === job.serialId ? { ...s, specs: upgrade.specs } : s))
           store.showToast(`Ready to sell as ${upgrade.sellingName}. Reprint the serial label.`)
-          return
+          return true
         }
-        store.showToast(`${job.serialNumber} marked as ready — transfer to sales when needed`)
+        store.showToast(`${job.serialNumber} is ready for its final test`)
+        return true
       },
 
-    transferToSell: (jobId) => {
+    recommendRefurbWriteOff: (jobId, rec) => {
+        const job = store.refurbishmentJobs.find(j => j.id === jobId)
+        if (!job) return
+        const me = store.currentUser()
+        if (!rec) {
+          store.setRefurbishmentJobs(p => p.map(j => (j.id !== jobId ? j : { ...j, writeOffRecommendation: undefined })))
+          store.addAuditLog('refurb_writeoff_withdrawn', job.ref, `Write-off recommendation withdrawn for ${job.serialNumber}`)
+          store.showToast('Recommendation withdrawn — the job carries on')
+          return
+        }
+        const reason = rec.reason.trim()
+        if (reason.length < 5) { store.showToast('Say why it is not worth repairing', 'error'); return }
+        store.setRefurbishmentJobs(p => p.map(j => (j.id !== jobId ? j : {
+          ...j,
+          writeOffRecommendation: { reason, keepParts: rec.keepParts?.trim() || undefined, harvest: !!rec.harvest, byId: me?.id, byName: me?.name ?? 'Technician', at: now() },
+        })))
+        store.addAuditLog('refurb_writeoff_recommended', job.ref, `${rec.harvest ? 'Strip for parts' : 'Write-off'} recommended for ${job.serialNumber}: ${reason}`)
+        store.notifyUsers({
+          recipientRoles: ['inventory_officer'],
+          recipients: userIdsWithRoles(store.users, ['inventory_officer'], store.currentUserId),
+          type: 'repair',
+          title: rec.harvest ? 'Strip for parts recommended' : 'Write-off recommended',
+          body: `${job.ref} — ${job.productName} (${job.serialNumber}): ${reason}. Decide in Inventory › Inbound › Tested — awaiting placement.`,
+          module: 'inventory',
+          path: '?tab=warehouse&location=tested',
+          icon: '🗑️',
+          entityKey: `refurb:${jobId}:writeoff_recommended`,
+          excludeUserId: store.currentUserId,
+        })
+        store.showToast('Sent to Inventory to decide — the unit stays here until then')
+      },
+
+    transferToSell: (jobId, opts) => {
         const job = store.refurbishmentJobs.find(j => j.id === jobId)
         if (!job) return
         if (job.identityPending || awaitingIdentification(store.serialRef.current.find(s => s.id === job.serialId))) {
@@ -1241,9 +1274,14 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           ...j,
           status: 'transferred',
           transferDate: now(),
+          ...(opts?.finalTest ? { finalTestNumber: opts.finalTest.number, finalTestResult: opts.finalTest.result } : {}),
           specsAtIntake: typeof j.specsAtIntake === 'string' ? j.specsAtIntake : intake,
           ...(upgrade ? { specs: upgrade.specs, productName: upgrade.sellingName } : {}),
         }))
+        if (opts?.finalTest) {
+          store.showToast(`${job.serialNumber} ${opts.finalTest.result === 'failed' ? 'FAILED' : 'PASSED'} its final test — sent to Inventory to be placed${upgrade ? ` (selling name: ${upgrade.sellingName})` : ''}`)
+          return
+        }
         if (upgrade) {
           store.showToast(`${job.serialNumber} sent for retest — selling name is now ${upgrade.sellingName}`)
           return

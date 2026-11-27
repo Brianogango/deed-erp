@@ -121,13 +121,17 @@ export function UnitTestReport({ test, previous }: { test: UnitTest; previous?: 
  * on the bench), saves as it goes, and on finish works out PASSED/FAILED
  * and prints the bench label.
  */
-export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canOverride, notify }: {
+export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canOverride, notify, finalForJobId, onFinished }: {
   unit: Unit
   onClose: () => void
   onChanged: () => void
   canRecord: boolean
   canOverride: boolean
   notify: (msg: string, tone?: 'success' | 'error' | 'info') => void
+  /** The final test of a refurbishment job (done in the job, not at the bench). */
+  finalForJobId?: string
+  /** Called once the test is finished (the job then sends the unit on). */
+  onFinished?: (test: UnitTest) => void
 }) {
   const [test, setTest] = useState<UnitTest | null>(null)
   const [history, setHistory] = useState<UnitTest[]>([])
@@ -147,6 +151,16 @@ export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canO
       setSettings(h.settings)
       const mine = testsForSerial(h.tests, unit.id)
       setHistory(mine)
+      if (finalForJobId) {
+        const r = await unitTestAction({ action: 'start_final', jobId: finalForJobId })
+        if (!live) return
+        if (!r.ok) { setError(r.error); return }
+        setTest(r.data.test)
+        // Finished earlier but never sent on (closed the window): finish now.
+        if (r.data.test.status === 'completed') onFinished?.(r.data.test)
+        onChanged()
+        return
+      }
       const open = mine.find(t => t.status === 'in_progress') ?? mine.find(t => t.status === 'completed')
       if (open) { setTest(open); return }
       if (!canRecord) { setError('This unit has not been tested yet.'); return }
@@ -195,6 +209,7 @@ export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canO
     if (missing.length) { notify(`Not finished: ${missing[0]}`, 'error'); return }
     const done = await run({ action: 'complete', testId: test.id, patch: formPatch(test) })
     if (done) {
+      if (onFinished) { onFinished(done); return }
       notify(done.result === 'passed' ? `${unit.serial} PASSED — label printing` : `${unit.serial} FAILED — label printing`, done.result === 'passed' ? 'success' : 'info')
       void printUnitTestLabels([done])
     }
@@ -207,7 +222,7 @@ export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canO
   const issues = test?.issues ?? []
   const setIssues = (next: UnitTestIssue[]) => patch({ issues: next })
 
-  const title = `Test bench — ${unit.assetId || unit.serial}`
+  const title = `${finalForJobId ? 'Final test' : 'Test bench'} — ${unit.assetId || unit.serial}`
   const subtitle = `${unit.productName}${unit.assetId && unit.serial !== unit.assetId ? ` · S/N ${unit.serial}` : ''}${test ? ` · Test #${test.number}` : ''}`
 
   const footer = !test ? null : editing ? (
@@ -247,10 +262,10 @@ export default function UnitTestForm({ unit, onClose, onChanged, canRecord, canO
       {!test && !error ? <p className="text-[12px] text-text-3">Loading…</p> : null}
       {test && (
         <div className="flex flex-col">
-          {(test.source === 'retest_after_repair' || previous) && (
+          {(test.source === 'retest_after_repair' || test.source === 'refurb_final' || previous) && (
             <div className="rounded-lg border border-[var(--primary)]/30 bg-[var(--primary-light)] px-3 py-2 mb-2">
               <p className="text-[12px] font-bold text-[var(--navy)]">
-                {test.source === 'retest_after_repair' ? `Retest after repair${test.refurbJobRef ? ` (${test.refurbJobRef})` : ''}` : 'Tested before'}
+                {test.source === 'refurb_final' ? `Final test of ${test.refurbJobRef ?? 'the repair'} — same checks as the test bench` : test.source === 'retest_after_repair' ? `Retest after repair${test.refurbJobRef ? ` (${test.refurbJobRef})` : ''}` : 'Tested before'}
               </p>
               {previous ? (
                 <p className="text-[11px] text-text-2 mt-0.5">
