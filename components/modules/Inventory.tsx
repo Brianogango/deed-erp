@@ -577,6 +577,7 @@ function InventoryContent() {
   const canRecordTests = can('inventory.unit_tests.record')
   const canPlaceTests = can('inventory.unit_tests.place')
   const canOverrideTests = can('inventory.unit_tests.override')
+  const canAssignTests = can('inventory.unit_tests.assign')
   const unitTests = useUnitTests(tab === 'warehouse_view')
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = can('inventory.stock_requests')
@@ -1454,7 +1455,9 @@ function InventoryContent() {
           const b = unitTests.bySerial.get(id)
           return b?.status === 'in_progress' ? 'bench' : b?.status === 'completed' ? 'tested' : 'awaiting'
         }
-        const cameBackFrom = (b?: UnitTestBrief) => b?.status === 'placed' && ['shop', 'repair_unit', 'quarantine'].includes(String(b.placedTo))
+        // Back after With Issues / Refurbishment / Rejected: its last finished test was placed there.
+        const lastPlaced = (b?: UnitTestBrief) => (b?.status === 'placed' ? { placedTo: b.placedTo, failReasons: b.failReasons } : b?.previous)
+        const cameBackFrom = (b?: UnitTestBrief) => ['shop', 'repair_unit', 'quarantine'].includes(String(lastPlaced(b)?.placedTo))
         const awaitingTestSerials = filteredTestingSerials
           .filter(s => benchStage(s.id) === 'awaiting')
           .sort((a, b) => Number(cameBackFrom(unitTests.bySerial.get(b.id))) - Number(cameBackFrom(unitTests.bySerial.get(a.id))))
@@ -1878,7 +1881,7 @@ function InventoryContent() {
                     emptyText={q ? 'No Pending Testing stock matches this search' : 'Nothing waiting to be tested'}>
                     {awaitingTestSerials.map(s => {
                     const b = unitTests.bySerial.get(s.id)
-                    const tag = cameBackFrom(b) ? (b?.placedTo === 'repair_unit' || b?.placedTo === 'shop' ? 'Retest after repair' : 'Retest') : b ? 'Retest' : 'New'
+                    const tag = cameBackFrom(b) ? (lastPlaced(b)?.placedTo === 'quarantine' ? 'Retest' : 'Retest after repair') : lastPlaced(b) ? 'Retest' : 'New'
                     const assetId = (s as typeof s & { assetId?: string }).assetId
                     return (
                     <WarehouseRow
@@ -1889,17 +1892,22 @@ function InventoryContent() {
                         {assetId ? <span className="font-semibold text-text-1">{assetId}</span> : null}
                         <span>{assetId && assetId !== s.serial ? `S/N ${s.serial}` : assetId ? '' : s.serial}</span>
                         <span className={`font-sans text-[10px] font-bold px-1.5 py-0.5 rounded ${tag === 'New' ? 'bg-[var(--bg-muted)] text-text-3' : 'bg-[var(--primary-light)] text-[var(--navy)]'}`}>{tag}</span>
-                        {b?.status === 'placed' && b.failReasons.length ? <span className="font-sans text-[10px] text-text-3">last failed: {b.failReasons.join(' · ')}</span> : null}
+                        {lastPlaced(b)?.failReasons.length ? <span className="font-sans text-[10px] text-text-3">last failed: {lastPlaced(b)!.failReasons.join(' · ')}</span> : null}
                       </p>
                     )}
-                    actions={canRecordTests ? (
+                    actions={(
+                    <>
+                    {b?.status === 'assigned' ? <span className="text-[10px] font-semibold text-text-2 whitespace-nowrap">Assigned to {b.assignedToName}</span> : null}
+                    {canRecordTests && (canAssignTests || (b?.status === 'assigned' && b.assignedToId === currentUserId)) ? (
                     <ActionBtn
-                    label="Send to test bench"
+                    label={b?.status === 'assigned' ? 'Start test' : 'Send to test bench'}
                     tone="primary"
                     ariaLabel={`Put ${s.serial} on the test bench`}
                     onClick={() => setBenchUnit(s)}
                     />
-                    ) : <span className="text-[10px] text-text-4 italic">Waiting for a tester</span>}
+                    ) : b?.status !== 'assigned' ? <a href="/refurbishment?view=bench" className="text-[10px] text-text-3 hover:underline whitespace-nowrap">Waiting for the Technical lead to assign</a> : null}
+                    </>
+                    )}
                     />
                     )
                     })}

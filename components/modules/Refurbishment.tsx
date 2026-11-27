@@ -5,6 +5,7 @@ import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { useRouteDataReady } from '@/lib/route-data-ready'
 import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
+import TestBenchTab from '@/components/refurbishment/TestBenchTab'
 import { RefurbInstallActionField, refurbFitSlotForForm } from '@/components/refurbishment/RefurbInstallActionField'
 import {
   applyRefurbPartsToUnitName,
@@ -106,7 +107,7 @@ function RefurbishmentContent() {
   const [jobSearch, setJobSearchValue] = useUrlUiState('q', '')
   const setJobSearch = (value: string) => setJobSearchValue(value, { queryPatch: { page: null } })
   const [viewValue, setViewValue] = useUrlUiState('view', 'jobs')
-  const view: 'jobs' | 'report' = viewValue === 'report' ? 'report' : 'jobs'
+  const view: 'jobs' | 'report' | 'bench' = viewValue === 'report' ? 'report' : viewValue === 'bench' ? 'bench' : 'jobs'
   const [reportWeekValue, setReportWeek] = useUrlUiState('week', '')
   const reportWeek = /^\d{4}-\d{2}-\d{2}$/.test(reportWeekValue) ? refurbWeekStart(`${reportWeekValue}T12:00:00.000Z`) : refurbWeekStart(new Date())
   const [pageValue, setPageValue] = useUrlUiState('page', '1')
@@ -1001,12 +1002,24 @@ function RefurbishmentContent() {
         color="#8B5CF6"
       />
       <TabBar
-        tabs={[{ id: 'jobs', label: 'Jobs' }, { id: 'report', label: 'Weekly report' }]}
+        tabs={[{ id: 'jobs', label: 'Jobs' }, { id: 'bench', label: 'Test bench' }, { id: 'report', label: 'Weekly report' }]}
         active={view}
-        onChange={id => setViewValue(id === 'report' ? 'report' : 'jobs')}
+        onChange={id => setViewValue(id === 'report' ? 'report' : id === 'bench' ? 'bench' : 'jobs')}
         ariaLabel="Refurbishment sections"
       />
-      {view === 'report' ? (
+      {view === 'bench' ? (
+        <div className="mod-body p-3 sm:p-4">
+          <TestBenchTab
+            serials={serials}
+            techs={techs.map(t => ({ id: t.id, name: t.name }))}
+            currentUserId={currentUserId ?? null}
+            canAssign={can('inventory.unit_tests.assign')}
+            canRecord={can('inventory.unit_tests.record')}
+            canOverride={can('inventory.unit_tests.override')}
+            notify={(m, t) => showToast(m, t ?? 'success')}
+          />
+        </div>
+      ) : view === 'report' ? (
         <div className="mod-body p-3 sm:p-4">
           <RefurbWeeklyReport
             jobs={refurbishmentJobs}

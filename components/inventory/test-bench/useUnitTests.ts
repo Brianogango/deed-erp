@@ -23,6 +23,11 @@ export interface UnitTestBrief {
   source?: UnitTest['source']
   refurbJobRef?: string
   overrideReason?: string
+  assignedToId?: string
+  assignedToName?: string
+  assignedAt?: string
+  testedById?: string
+  previous?: { number: number; result: UnitTestBrief['result']; failReasons: string[]; placedTo?: string }
 }
 
 export async function unitTestAction<T = { test: UnitTest }>(body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; error: string }> {

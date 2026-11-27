@@ -95,7 +95,8 @@ export interface UnitTestOverride {
   at: string
 }
 
-export type UnitTestStatus = 'in_progress' | 'completed' | 'placed' | 'cancelled'
+/** assigned: the Technical lead gave it to a tester, who has not started yet. */
+export type UnitTestStatus = 'assigned' | 'in_progress' | 'completed' | 'placed' | 'cancelled'
 
 export interface UnitTest {
   id: string
@@ -111,6 +112,11 @@ export interface UnitTest {
   source?: 'first' | 'retest_after_repair' | 'retest'
   refurbJobRef?: string
   isLaptop: boolean
+  /** Who the Technical lead gave it to (and when, and who did). */
+  assignedToId?: string
+  assignedToName?: string
+  assignedAt?: string
+  assignedByName?: string
   startedAt: string
   startedById?: string
   startedByName?: string
@@ -265,6 +271,21 @@ export function inboundStage(tests: UnitTest[], serialId: string): InboundStage 
   if (mine.some(t => t.status === 'in_progress')) return 'on_bench'
   if (mine.some(t => t.status === 'completed')) return 'tested'
   return 'awaiting'
+}
+
+/** The tester a unit waiting in Inbound has been given to, if any. */
+export function assignmentOf(tests: UnitTest[], serialId: string): UnitTest | null {
+  return testsForSerial(tests, serialId).find(t => t.status === 'assigned' || t.status === 'in_progress') ?? null
+}
+
+/**
+ * May this person open this unit's test? The Technical lead (and Directors)
+ * may test anything; anyone else only what was given to them.
+ */
+export function mayTestUnit(tests: UnitTest[], serialId: string, actorId: string, canAssign: boolean): boolean {
+  if (canAssign) return true
+  const a = assignmentOf(tests, serialId)
+  return !!a && (a.assignedToId === actorId || (a.status === 'in_progress' && a.startedById === actorId))
 }
 
 /** The open test on the bench, or the finished one waiting for placement. */

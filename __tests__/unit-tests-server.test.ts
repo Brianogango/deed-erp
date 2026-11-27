@@ -11,7 +11,9 @@ vi.mock('@/lib/server-store', () => ({
 }))
 
 import {
+  assignUnitTests,
   briefs,
+  unassignUnitTest,
   markUnitTestsPlaced,
   overrideUnitTest,
   saveUnitTest,
@@ -97,6 +99,35 @@ describe('test bench on the server', () => {
   it('cancels a test left on the bench when the unit leaves Inbound', async () => {
     const r = await startUnitTest('s1', tester)
     if (!r.ok) throw new Error(r.error)
+    await markUnitTestsPlaced('pending_testing', 'quarantine', ['s1'], tester)
+    expect(store.deed_unitTests[0].status).toBe('cancelled')
+  })
+
+  it('lets the Technical lead assign units; a tester opens only their own', async () => {
+    const kevin = { id: 'k', name: 'Kevin' }
+    const jane = { id: 'j', name: 'Jane' }
+    const a = await assignUnitTests(['s1', 's2'], kevin, lead)
+    expect(a.ok && a.value).toEqual({ assigned: 1, skipped: ['SN2'] })
+    expect(briefs(store.deed_unitTests)[0]).toMatchObject({ status: 'assigned', assignedToName: 'Kevin' })
+    // Jane was not given it; Kevin was; the lead may test anything.
+    expect((await startUnitTest('s1', jane, { canAssign: false })).ok).toBe(false)
+    const k = await startUnitTest('s1', kevin, { canAssign: false })
+    if (!k.ok) throw new Error(k.error)
+    expect(k.value).toMatchObject({ status: 'in_progress', number: 1, assignedToName: 'Kevin', startedByName: 'Kevin' })
+    expect(k.value.checks.length).toBeGreaterThan(0)
+    expect(store.deed_unitTests).toHaveLength(1)
+    expect((await saveUnitTest(k.value.id, {}, { canAssign: false }, jane)).ok).toBe(false)
+    expect((await saveUnitTest(k.value.id, fillPassing(k.value), { complete: true, canAssign: false }, kevin)).ok).toBe(true)
+  })
+
+  it('reassigns, unassigns, and drops the assignment when the unit leaves Inbound', async () => {
+    await assignUnitTests(['s1'], { id: 'k', name: 'Kevin' }, lead)
+    await assignUnitTests(['s1'], { id: 'j', name: 'Jane' }, lead)
+    expect(store.deed_unitTests).toHaveLength(1)
+    expect(store.deed_unitTests[0].assignedToName).toBe('Jane')
+    expect((await unassignUnitTest('s1')).ok).toBe(true)
+    expect(store.deed_unitTests).toHaveLength(0)
+    await assignUnitTests(['s1'], { id: 'k', name: 'Kevin' }, lead)
     await markUnitTestsPlaced('pending_testing', 'quarantine', ['s1'], tester)
     expect(store.deed_unitTests[0].status).toBe('cancelled')
   })
