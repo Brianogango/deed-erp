@@ -497,9 +497,9 @@ export interface AppState {
   logReturnPickup: (returnId: string, collectedByUserId: string, collectedByName: string, collectedDate: string, pickupNotes?: string) => void
 
   // Refurbishment
-  createRefurbishmentJob: (serialId: string, issueDescription: string, opts?: { silent?: boolean }) => void
+  createRefurbishmentJob: (serialId: string, issueDescription: string, opts?: { silent?: boolean; testTasks?: string[]; fromTestNumber?: number }) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
-  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate' | 'productId' | 'productName'>>) => void
+  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate' | 'productId' | 'productName' | 'testTasks'>>) => void
   /** `request`: ask stores for it straight away (taken from stock, or the lead is alerted). */
   addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>, opts?: { request?: boolean }) => void
   updateRefurbishmentPart: (jobId: string, partId: string, patch: Partial<RefurbPart>) => void

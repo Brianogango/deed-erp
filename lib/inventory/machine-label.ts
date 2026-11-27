@@ -29,6 +29,8 @@ export type MachineLabelInput = {
   receivedDate?: string | null
   /** A finished refurb is still on the bench but gets the customer sticker. */
   forSale?: boolean
+  /** From the unit's passing test: "Grade B · Battery 87%". */
+  testLine?: string | null
   currentConfig?: { processor?: string | null; processorGeneration?: string | null; totalRamGb?: number | null; primaryStorageGb?: number | null } | null
 }
 
@@ -41,6 +43,8 @@ export type MachineLabelView = {
   serial: string
   code: string
   dateIn: string
+  /** Grade and battery from its test (sale stickers only). */
+  test: string
 }
 
 /** Not ready for a customer: With Issues, on the bench, or not identified yet. */
@@ -119,5 +123,6 @@ export function buildMachineLabelView(input: MachineLabelInput): MachineLabelVie
     serial: internal || serial === code ? '' : serial,
     code,
     dateIn: internal ? dateIn(input.receivedDate) : '',
+    test: internal ? '' : String(input.testLine ?? '').trim(),
   }
 }

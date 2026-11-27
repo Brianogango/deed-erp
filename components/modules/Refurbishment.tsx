@@ -20,7 +20,6 @@ import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyRepor
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
 import { cameInUnidentified, isStandInProduct } from '@/lib/refurbishment/unidentified'
 import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
-import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
 import { StatusBadge, RecordHeader, PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProductModal'
@@ -166,10 +165,6 @@ function RefurbishmentContent() {
     return a ? [[s.id, a] as const] : []
   })), [serials])
   const unitInfo = (s: SerialNumber) => s as SerialNumber & { assetId?: string; intakeIssue?: string; identityPending?: boolean }
-  const printStickers = (list: SerialNumber[], forSale = false) => {
-    if (!list.length) return
-    void printLabelsForSerialUnits({ serials: list, products, forSale })
-  }
   // One toast for the batch; each machine keeps its own intake issue unless one is given here.
   // What is already known about a machine's fault: noted when it came in, its
   // condition notes, or the issue on its last job. The lead is not asked again.
@@ -367,7 +362,7 @@ function RefurbishmentContent() {
                 )}
                 {canTransfer(job) && !job.identityPending && !shownBelow('retest') && (
                   <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
-                    Send for retest
+                    Repair done → send to test bench
                   </PrimaryActionButton>
                 )}
                 <SecondaryActionMenu
@@ -382,10 +377,6 @@ function RefurbishmentContent() {
                       onClick: () => markRefurbishmentReady(job.id),
                     },
                     { id: 'product', label: jobStandIn ? 'Match product…' : 'Change product…', hidden: !canFixProduct || shownBelow('match_product'), onClick: () => setShowChangeProduct(true) },
-                    {
-                      id: 'print', label: 'Print sale label', hidden: !(['ready', 'transferred'].includes(job.status) && !job.identityPending && unit),
-                      onClick: () => { if (unit) printStickers([unit], true) },
-                    },
                     { id: 'harvest', label: 'Harvest parts', hidden: !canWriteOff(job), onClick: () => setShowHarvest(true) },
                     {
                       id: 'restore', label: 'Restore to queue', hidden: !(job.status === 'written_off' && job.outcome !== 'harvested' && isLeadTech),
@@ -477,7 +468,7 @@ function RefurbishmentContent() {
                     <button className="btn-primary text-xs py-1.5" onClick={() => markRefurbishmentReady(job.id)}>Mark ready</button>
                   )}
                   {next.mine && next.key === 'retest' && !job.identityPending && (
-                    <button className="btn-primary text-xs py-1.5" onClick={() => transferToSell(job.id)}>Send for retest</button>
+                    <button className="btn-primary text-xs py-1.5" onClick={() => transferToSell(job.id)}>Repair done → send to test bench</button>
                   )}
                 </div>
               </div>
@@ -495,6 +486,40 @@ function RefurbishmentContent() {
               </div>
             </div>
           )}
+
+          {/* The failed test's issues are the repair to-do list. */}
+          {(job.testTasks?.length ?? 0) > 0 && (() => {
+            const tasks = job.testTasks ?? []
+            const editable = !['ready', 'transferred', 'written_off'].includes(job.status) && canLogNotes(job)
+            const left = tasks.filter(t => !t.done && !String(t.note ?? '').trim()).length
+            const setTask = (id: string, p: { done?: boolean; note?: string }) =>
+              updateRefurbishmentJob(job.id, { testTasks: tasks.map(t => (t.id === id ? { ...t, ...p } : t)) })
+            return (
+              <div className="card p-4">
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <p className="text-xs font-bold text-t1">To do — from test{job.fromTestNumber ? ` #${job.fromTestNumber}` : ''}</p>
+                  <p className="text-[11px] text-t3">{left ? `${left} left` : 'All done — send it to the test bench'}</p>
+                </div>
+                <ul className="flex flex-col divide-y divide-[var(--border-lt)]">
+                  {tasks.map(t => (
+                    <li key={t.id} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                      <label className="flex items-center gap-2 min-w-0 flex-1 text-[12px] text-t1">
+                        <input type="checkbox" checked={!!t.done} disabled={!editable} onChange={e => setTask(t.id, { done: e.target.checked })} />
+                        <span className={t.done ? 'line-through text-t3' : ''}>{t.text}</span>
+                      </label>
+                      <input
+                        className="w-full sm:w-64 rounded-md border border-[var(--border)] bg-[var(--bg-card)] px-2 py-1 text-[11px] text-t1"
+                        placeholder={t.done ? 'Note (optional)' : 'Not fixed? Say why'}
+                        defaultValue={t.note ?? ''}
+                        disabled={!editable}
+                        onBlur={e => { if (e.target.value !== (t.note ?? '')) setTask(t.id, { note: e.target.value.slice(0, 200) }) }}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()}
 
           {/* Info grid */}
           <div className="refurb-info-grid grid grid-cols-1 md:grid-cols-3 gap-4">

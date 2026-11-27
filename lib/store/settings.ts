@@ -98,6 +98,12 @@ export interface SystemSettings {
   invDefaultMinStock: number
   /** Default warranty period (months) when a new product does not set one. */
   invDefaultWarrantyMonths: number
+  /** Test bench checklist (Settings › Inventory). Unset: the built-in list. */
+  invUnitTestChecklist?: Array<{ id: string; label: string; short: string; laptopOnly?: boolean; inactive?: boolean }>
+  /** A laptop fails its test below this battery health %. Unset: 60. */
+  invBatteryFailBelow?: number
+  /** Passes, but the label calls the battery out, below this %. Unset: 80. */
+  invBatteryNoteBelow?: number
   /** Feature flag for Device Reconfiguration work orders. Default true when unset. */
   reconfigurationEnabled: boolean
   /**

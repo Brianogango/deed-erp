@@ -38,6 +38,7 @@ function machineLabelHtml(v: MachineLabelView): string {
     <div class="ml-model">${esc(v.model)}</div>
     ${v.specs ? `<div class="ml-specs">${esc(v.specs)}</div>` : ''}
     ${v.serial ? `<div class="ml-sn">S/N: ${esc(v.serial)}</div>` : ''}
+    ${v.test ? `<div class="ml-test">${esc(v.test)}</div>` : ''}
     <div class="ml-code-wrap">
       ${barcode(v.code)}
       <div class="ml-code">${esc(v.code)}</div>
@@ -59,6 +60,7 @@ const CSS = `
   .ml-model { font-size: 10.2pt; font-weight: 800; line-height: 1.12; max-height: 2.3em; overflow: hidden; }
   .ml-specs { font-size: 9pt; font-weight: 700; line-height: 1.15; margin-top: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ml-sn { font-size: 7.6pt; margin-top: 0.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ml-test { font-size: 7.4pt; font-weight: 700; margin-top: 0.4mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ml-code-wrap { margin-top: auto; display: flex; flex-direction: column; align-items: center; }
   .ml-bar { display: block; width: 40mm; height: 9.5mm; object-fit: fill; }
   .ml-bar-text { font-family: monospace; font-size: 9pt; text-align: center; }

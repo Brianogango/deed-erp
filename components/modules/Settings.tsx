@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useMemo, useEffect, useCallback } 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { MarginPolicySettings } from '@/components/modules/settings/MarginPolicySettings'
 import { CommissionRatesSettings } from '@/components/modules/settings/CommissionRatesSettings'
+import { UnitTestChecklistSettings } from '@/components/modules/settings/UnitTestChecklistSettings'
 import { normalizePricingMarginPolicy, DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
@@ -1249,6 +1250,9 @@ export default function Settings() {
                 <SettingRow label="Default Warranty (months)" desc="Warranty period pre-filled on new products and bulk imports">
                   <Input type="number" value={String(ss.invDefaultWarrantyMonths ?? 6)} onChange={v => updateSystemSettings({ invDefaultWarrantyMonths: Math.max(0, Number(v) || 0) })} />
                 </SettingRow>
+              </SectionCard>
+              <SectionCard title="Test bench">
+                <UnitTestChecklistSettings settings={ss as unknown as Record<string, unknown>} onChange={patch => updateSystemSettings(patch)} />
               </SectionCard>
             </>
           )}

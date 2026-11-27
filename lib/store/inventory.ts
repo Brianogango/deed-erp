@@ -149,6 +149,10 @@ export interface RefurbishmentJob {
   receiptRef?: string
   intakeDate: string
   intakeIssueDescription: string   // issue flagged on receipt
+  /** The repair to-do list from the failed test (test bench); each is ticked or given a note. */
+  testTasks?: Array<{ id: string; text: string; done?: boolean; note?: string }>
+  /** Which test of the unit the to-do list came from. */
+  fromTestNumber?: number
   assignedTechnicianId?: string
   assignedTechnicianName?: string
   assignedDate?: string

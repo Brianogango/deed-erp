@@ -34,6 +34,8 @@ import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProductModal'
 import { useCan } from '@/hooks/useCan'
+import { useUnitTests, unitTestAction, type UnitTestBrief } from '@/components/inventory/test-bench/useUnitTests'
+import UnitTestForm from '@/components/inventory/test-bench/UnitTestForm'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
@@ -265,6 +267,9 @@ function InventoryContent() {
   // A With Issues machine being given its model and specs.
   const [modelUnit, setModelUnit] = useState<(typeof serials)[number] | null>(null)
   const [issueSel, setIssueSel] = useState<Set<string>>(new Set())
+  // Test bench: the unit whose test form is open, and the ticked tested units.
+  const [benchUnit, setBenchUnit] = useState<SerialNumber | null>(null)
+  const [placeSel, setPlaceSel] = useState<Set<string>>(new Set())
   const [showMachineIntake, setShowMachineIntake] = useState(false)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
   const [warehouseSearch, setWarehouseSearch] = useUrlUiState('warehouseQ', '')
@@ -569,6 +574,10 @@ function InventoryContent() {
   }, [tab, customPermissions, currentUser?.permissions])
   const can = useCan()
   const canTransfer = can('manageInventoryApprovals')
+  const canRecordTests = can('inventory.unit_tests.record')
+  const canPlaceTests = can('inventory.unit_tests.place')
+  const canOverrideTests = can('inventory.unit_tests.override')
+  const unitTests = useUnitTests(tab === 'warehouse_view')
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = can('inventory.stock_requests')
   const canApproveAdj = can('manageInventoryApprovals')
@@ -1290,6 +1299,21 @@ function InventoryContent() {
           submitTransfer(from, to, productId, productName, qty, serialId ? [serialId] : [], `${LOCATIONS[from].name} → ${LOCATIONS[to].name}`)
         }
 
+        // Placing tested units: one transfer per product, then the sale
+        // label for units going on sale.
+        async function placeTested(list: Array<(typeof serials)[number]>, to: LocationId, printSaleLabels = false) {
+          const byProduct = new Map<string, Array<(typeof serials)[number]>>()
+          for (const u of list) byProduct.set(u.productId, [...(byProduct.get(u.productId) ?? []), u])
+          const moved: Array<(typeof serials)[number]> = []
+          for (const units of byProduct.values()) {
+            const ok = await submitTransfer('pending_testing', to, units[0].productId, units[0].productName, units.length, units.map(u => u.id), `Tested → ${LOCATIONS[to].name}`)
+            if (ok) moved.push(...units)
+          }
+          setPlaceSel(new Set())
+          void unitTests.refresh()
+          if (printSaleLabels && moved.length) void printLabelsForSerialUnits({ serials: moved.map(u => ({ ...u, location: to })), products })
+        }
+
         function requestSendToInbound(s: (typeof serials)[number]) {
           setPendingConfirm({
             title: 'Send to Inbound for testing?',
@@ -1424,22 +1448,40 @@ function InventoryContent() {
         const refurbCount = filteredRepairSerials.length + filteredBulkRepair.reduce((s, p) => s + p.qty, 0)
         const computerAidCount = serials.filter(s => s.location === 'computer_aid' && s.status !== 'sold').length
           + bulkStock.filter(row => row.location === 'computer_aid').reduce((sum, row) => sum + Math.max(0, Number(row.qty) || 0), 0)
-        const testingCount = filteredTestingSerials.length + filteredBulkTesting.reduce((s, p) => s + p.qty, 0)
+        // Inbound splits by each unit's test: waiting, on the bench, or tested
+        // and waiting for the inventory officer to place it.
+        const benchStage = (id: string) => {
+          const b = unitTests.bySerial.get(id)
+          return b?.status === 'in_progress' ? 'bench' : b?.status === 'completed' ? 'tested' : 'awaiting'
+        }
+        const cameBackFrom = (b?: UnitTestBrief) => b?.status === 'placed' && ['shop', 'repair_unit', 'quarantine'].includes(String(b.placedTo))
+        const awaitingTestSerials = filteredTestingSerials
+          .filter(s => benchStage(s.id) === 'awaiting')
+          .sort((a, b) => Number(cameBackFrom(unitTests.bySerial.get(b.id))) - Number(cameBackFrom(unitTests.bySerial.get(a.id))))
+        const benchSerials = filteredTestingSerials.filter(s => benchStage(s.id) === 'bench')
+        const testedSerials = filteredTestingSerials.filter(s => benchStage(s.id) === 'tested')
+        const testedPassed = testedSerials.filter(s => ['passed', 'passed_override'].includes(String(unitTests.bySerial.get(s.id)?.result)))
+        const testedFailed = testedSerials.filter(s => unitTests.bySerial.get(s.id)?.result === 'failed')
+        const testingCount = awaitingTestSerials.length + filteredBulkTesting.reduce((s, p) => s + p.qty, 0)
+        const benchCount = benchSerials.length
+        const testedCount = testedSerials.length
         const quarantineCount = filteredQuarantineSerials.length + filteredBulkQuarantine.reduce((s, p) => s + p.qty, 0)
         // Top level: what the stock is. Inbound and Held for others open onto
         // their own steps; old links to a step (?location=testing, vendor_stock…)
         // still land on it.
         const GROUP_DEFAULT: Record<string, string> = { inbound: 'testing', held: 'computer_aid' }
         const requestedLocation = GROUP_DEFAULT[warehouseLocation] ?? warehouseLocation
-        const activeWarehouseLocation = ['testing', 'warehouse', 'issues', 'refurbishment', 'quarantine', 'computer_aid', 'vendor_stock'].includes(requestedLocation)
-          ? requestedLocation as 'testing' | 'warehouse' | 'issues' | 'refurbishment' | 'quarantine' | 'computer_aid' | 'vendor_stock'
+        const activeWarehouseLocation = ['testing', 'bench', 'tested', 'warehouse', 'issues', 'refurbishment', 'quarantine', 'computer_aid', 'vendor_stock'].includes(requestedLocation)
+          ? requestedLocation as 'testing' | 'bench' | 'tested' | 'warehouse' | 'issues' | 'refurbishment' | 'quarantine' | 'computer_aid' | 'vendor_stock'
           : 'warehouse'
         const WAREHOUSE_GROUPS = [
           {
             id: 'inbound', label: 'Inbound', sublabel: 'Not sellable yet — testing & repair', icon: faMagnifyingGlass,
-            count: testingCount + refurbCount + quarantineCount as number | null,
+            count: testingCount + benchCount + testedCount + refurbCount + quarantineCount as number | null,
             steps: [
-              { id: 'testing', label: 'Awaiting tests', count: testingCount as number | null },
+              { id: 'testing', label: 'Awaiting test', count: testingCount as number | null },
+              { id: 'bench', label: 'On test bench', count: benchCount as number | null },
+              { id: 'tested', label: 'Tested — awaiting placement', count: testedCount as number | null },
               { id: 'refurbishment', label: 'Work in progress', count: refurbCount as number | null },
               { id: 'quarantine', label: 'Rejected', count: quarantineCount as number | null },
             ],
@@ -1636,7 +1678,19 @@ function InventoryContent() {
                                 <WarehouseRow
                                   key={s.id}
                                   title={s.serial}
-                                  meta={s.specs ? <p className="text-[10px] text-text-3 mt-0.5 truncate">{String(s.specs)}</p> : null}
+                                  meta={(
+                                    <>
+                                      {s.specs ? <p className="text-[10px] text-text-3 mt-0.5 truncate">{String(s.specs)}</p> : null}
+                                      {(() => {
+                                        const b = unitTests.bySerial.get(s.id)
+                                        const passed = b && (b.result === 'passed' || b.result === 'passed_override')
+                                        if (!unitTests.loaded) return null
+                                        return passed
+                                          ? <p className="text-[11px] text-[var(--success-text)] mt-0.5 font-semibold">✓ {b!.line}{b!.result === 'passed_override' ? ' · passed anyway' : ''}</p>
+                                          : <p className="text-[10px] text-text-4 mt-0.5">Untested (legacy)</p>
+                                      })()}
+                                    </>
+                                  )}
                                   actions={(
                                     <>
                                       <ActionBtn
@@ -1650,6 +1704,7 @@ function InventoryContent() {
                                         label="More"
                                         actions={[
                                           { id: 'inbound', label: 'Send to Inbound for testing', onClick: () => requestSendToInbound(s) },
+                                          { id: 'view-test', label: 'View test report', hidden: !unitTests.bySerial.get(s.id), onClick: () => window.open(`/inventory/unit-test/${encodeURIComponent(s.id)}`, '_blank', 'noopener') },
                                           { id: 'move-issues', label: 'Move to With Issues', onClick: () => requestMoveToIssues(s) },
                                           { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
                                         ]}
@@ -1726,25 +1781,51 @@ function InventoryContent() {
                           {unit(s).assetId ? <span className="font-semibold text-text-1">{unit(s).assetId}</span> : null}
                           {unit(s).assetId ? (unit(s).identityPending ? ' · no serial yet' : s.serial !== unit(s).assetId ? ` · S/N ${s.serial}` : '') : s.serial}
                         </p>
-                        {unit(s).intakeIssue ? <p className="text-[10px] text-text-3 mt-0.5 truncate" title={unit(s).intakeIssue}>{unit(s).intakeIssue}</p> : null}
+                        {(() => {
+                          // The failed test's issues travel with the unit.
+                          const b = unitTests.bySerial.get(s.id)
+                          if (!b || b.result !== 'failed' || !b.failReasons.length) {
+                            return unit(s).intakeIssue ? <p className="text-[10px] text-text-3 mt-0.5 truncate" title={unit(s).intakeIssue}>{unit(s).intakeIssue}</p> : null
+                          }
+                          return (
+                            <div className="mt-1 flex flex-col gap-0.5">
+                              {b.failReasons.map(r => <p key={r} className="text-[11px] text-[var(--danger-text)]"><span aria-hidden="true">✗ </span>{r} <span className="text-[10px] text-text-4">blocks sale</span></p>)}
+                              {b.cosmetic.map(r => <p key={r} className="text-[11px] text-text-3"><span aria-hidden="true">• </span>{r} <span className="text-[10px] text-text-4">cosmetic</span></p>)}
+                              <p className="text-[10px] text-text-4">Failed test #{b.number}{b.testedByName ? ` · ${b.testedByName}` : ''}{b.completedAt ? ` · ${fmtDate(b.completedAt)}` : ''}</p>
+                            </div>
+                          )
+                        })()}
                       </>
                     )}
                     actions={(
                     <>
                     <ActionBtn
-                    label="Return to Warehouse"
-                    tone="success"
-                    ariaLabel={`Return ${s.serial} to warehouse`}
-                    onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)}
+                    label="Send for Refurbishment"
+                    tone="warning"
+                    ariaLabel={`Send ${s.serial} for refurbishment`}
+                    onClick={() => requestSendForRefurbishment(s)}
                     />
                     <SecondaryActionMenu
                     ariaLabel={`More actions for ${s.serial}`}
                     label="More"
                     actions={[
                     {
-                    id: 'send-refurb',
-                    label: 'Send for Refurbishment',
-                    onClick: () => requestSendForRefurbishment(s),
+                    // Ready for Sale only through a passing test: a unit
+                    // someone thinks is fine goes back to be tested.
+                    id: 'retest',
+                    label: 'Retest (back to Inbound)',
+                    onClick: () => quickMove(s.productId, s.productName, 'shop', 'pending_testing', s.id),
+                    },
+                    {
+                    id: 'view-test',
+                    label: 'View test',
+                    hidden: !unitTests.bySerial.get(s.id),
+                    onClick: () => setBenchUnit(s),
+                    },
+                    {
+                    id: 'reject',
+                    label: 'Reject (parts / write-off / return)',
+                    onClick: () => quickMove(s.productId, s.productName, 'shop', 'quarantine', s.id),
                     },
                     {
                     // The model and specs are often unknown when a machine
@@ -1792,35 +1873,36 @@ function InventoryContent() {
                         Import delivery
                       </button>
                     </div>
-                    <Section title="Awaiting tests — not sellable until it passes" icon={<Fa icon={faMagnifyingGlass} />} tone="info"
+                    <Section title="Awaiting test — not sellable until it passes the test bench" icon={<Fa icon={faMagnifyingGlass} />} tone="info"
                     count={testingCount}
                     emptyText={q ? 'No Pending Testing stock matches this search' : 'Nothing waiting to be tested'}>
-                    {filteredTestingSerials.map(s => (
+                    {awaitingTestSerials.map(s => {
+                    const b = unitTests.bySerial.get(s.id)
+                    const tag = cameBackFrom(b) ? (b?.placedTo === 'repair_unit' || b?.placedTo === 'shop' ? 'Retest after repair' : 'Retest') : b ? 'Retest' : 'New'
+                    const assetId = (s as typeof s & { assetId?: string }).assetId
+                    return (
                     <WarehouseRow
                     key={s.id}
                     title={s.productName}
-                    meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
-                    actions={(
-                    <>
-                    <ActionBtn
-                    label="Passed — Ready for Sale"
-                    tone="success"
-                    ariaLabel={`${s.serial} passed testing: move to Ready for Sale`}
-                    onClick={() => quickMove(s.productId, s.productName, 'pending_testing', 'warehouse', s.id)}
-                    />
-                    <SecondaryActionMenu
-                    ariaLabel={`Test outcome for ${s.serial}`}
-                    label="Failed…"
-                    actions={[
-                    { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
-                    { id: 'with-issues', label: 'Move to With Issues', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'shop', s.id) },
-                    { id: 'quarantine', label: 'Reject (parts / write-off / return)', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'quarantine', s.id) },
-                    ]}
-                    />
-                    </>
+                    meta={(
+                      <p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5 flex flex-wrap items-center gap-1.5">
+                        {assetId ? <span className="font-semibold text-text-1">{assetId}</span> : null}
+                        <span>{assetId && assetId !== s.serial ? `S/N ${s.serial}` : assetId ? '' : s.serial}</span>
+                        <span className={`font-sans text-[10px] font-bold px-1.5 py-0.5 rounded ${tag === 'New' ? 'bg-[var(--bg-muted)] text-text-3' : 'bg-[var(--primary-light)] text-[var(--navy)]'}`}>{tag}</span>
+                        {b?.status === 'placed' && b.failReasons.length ? <span className="font-sans text-[10px] text-text-3">last failed: {b.failReasons.join(' · ')}</span> : null}
+                      </p>
                     )}
+                    actions={canRecordTests ? (
+                    <ActionBtn
+                    label="Send to test bench"
+                    tone="primary"
+                    ariaLabel={`Put ${s.serial} on the test bench`}
+                    onClick={() => setBenchUnit(s)}
                     />
-                    ))}
+                    ) : <span className="text-[10px] text-text-4 italic">Waiting for a tester</span>}
+                    />
+                    )
+                    })}
                     {filteredBulkTesting.map(p => (
                     <WarehouseRow
                     key={p.id}
@@ -1839,6 +1921,151 @@ function InventoryContent() {
                     </Section>
                   </div>
                 )}
+                {activeWarehouseLocation === 'bench' && (
+                  <div className="w-full min-w-0">
+                    <Section title="On the test bench" icon={<Fa icon={faWrench} />} tone="info"
+                    count={benchCount}
+                    emptyText={q ? 'No unit on the bench matches this search' : 'Nothing on the test bench'}>
+                    {benchSerials.map(s => {
+                    const b = unitTests.bySerial.get(s.id)
+                    const since = b?.startedAt ? new Date(b.startedAt) : null
+                    const mins = since ? Math.max(0, Math.round((Date.now() - since.getTime()) / 60000)) : null
+                    const assetId = (s as typeof s & { assetId?: string }).assetId
+                    return (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    meta={(
+                      <>
+                      <p className="text-[11px] text-text-2 mt-0.5">
+                        <span className="font-mono font-semibold text-text-1">{assetId || s.serial}</span>
+                        {' · '}Test #{b?.number ?? 1}{b?.startedByName ? ` · ${b.startedByName}` : ''}
+                      </p>
+                      <p className="text-[10px] text-text-3 mt-0.5 flex flex-wrap items-center gap-1.5">
+                        {mins !== null ? <span className="whitespace-nowrap">On the bench {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`}</span> : null}
+                        {b?.source === 'retest_after_repair' ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--primary-light)] text-[var(--navy)]">Retest after repair</span> : null}
+                      </p>
+                      </>
+                    )}
+                    actions={<ActionBtn label={canRecordTests ? 'Open test' : 'View'} tone="primary" ariaLabel={`Open the test for ${s.serial}`} onClick={() => setBenchUnit(s)} />}
+                    />
+                    )
+                    })}
+                    </Section>
+                  </div>
+                )}
+                {activeWarehouseLocation === 'tested' && (() => {
+                  const pickedPassed = testedPassed.filter(s => placeSel.has(s.id))
+                  const pickedFailed = testedFailed.filter(s => placeSel.has(s.id))
+                  const tick = (s: (typeof serials)[number]) => canPlaceTests ? (
+                    <input type="checkbox" className="shrink-0" aria-label={`Select ${s.serial}`} checked={placeSel.has(s.id)}
+                      onChange={e => setPlaceSel(prev => { const next = new Set(prev); if (e.target.checked) next.add(s.id); else next.delete(s.id); return next })} />
+                  ) : undefined
+                  const testedMeta = (s: (typeof serials)[number]) => {
+                    const b = unitTests.bySerial.get(s.id)
+                    const assetId = (s as typeof s & { assetId?: string }).assetId
+                    const failed = b?.result === 'failed'
+                    return (
+                      <>
+                        <p className="text-[11px] text-text-2 mt-0.5">
+                          <span className="font-mono font-semibold text-text-1">{assetId || s.serial}</span>
+                          {b?.line ? <span> · {b.line}</span> : null}
+                        </p>
+                        {failed && b?.failReasons.length ? <p className="text-[11px] font-semibold text-[var(--danger-text)] mt-0.5">✗ {b.failReasons.join(' · ')}</p> : null}
+                        {b?.result === 'passed_override' ? <p className="text-[11px] text-[var(--warning-text)] mt-0.5">Passed anyway: {b.overrideReason}</p> : null}
+                        {b?.cosmetic.length ? <p className="text-[10px] text-text-3 mt-0.5">Note: {b.cosmetic.join('; ')}</p> : null}
+                        <p className="text-[10px] text-text-4 mt-0.5">Test #{b?.number}{b?.testedByName ? ` · ${b.testedByName}` : ''}{b?.completedAt ? ` · ${fmtDate(b.completedAt)}` : ''}</p>
+                      </>
+                    )
+                  }
+                  return (
+                  <div className="w-full min-w-0 flex flex-col gap-3">
+                    {!canPlaceTests && testedCount > 0 ? (
+                      <p className="text-[11px] text-text-3 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">Inventory, the Technical lead or a Director places tested units.</p>
+                    ) : null}
+                    <Section title="Passed — ready to go on sale" icon={<Fa icon={faIndustry} />} tone="navy"
+                    count={testedPassed.length}
+                    emptyText={q ? 'No passed unit matches this search' : 'No passed units waiting'}>
+                    {canPlaceTests && testedPassed.length > 1 ? (
+                      <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-[var(--bg-surface)]">
+                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-2 cursor-pointer select-none">
+                          <input type="checkbox" checked={pickedPassed.length === testedPassed.length}
+                            onChange={e => setPlaceSel(prev => { const next = new Set(prev); testedPassed.forEach(u => (e.target.checked ? next.add(u.id) : next.delete(u.id))); return next })} />
+                          Select all
+                        </label>
+                        {pickedPassed.length > 0 ? (
+                          <button type="button" className="btn-primary text-[11px]" onClick={() => void placeTested(pickedPassed, 'warehouse', true)}>
+                            Move {pickedPassed.length} to Ready for Sale &amp; print labels
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {testedPassed.map(s => (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    leading={tick(s)}
+                    meta={testedMeta(s)}
+                    actions={(
+                    <>
+                    {canPlaceTests ? <ActionBtn label="Ready for Sale + label" tone="success" ariaLabel={`Move ${s.serial} to Ready for Sale and print its sale label`} onClick={() => void placeTested([s], 'warehouse', true)} /> : null}
+                    <SecondaryActionMenu
+                    ariaLabel={`More actions for ${s.serial}`}
+                    label="More"
+                    actions={[
+                    { id: 'view', label: 'View test', onClick: () => setBenchUnit(s) },
+                    { id: 'ready-no-label', label: 'Ready for Sale (no label)', hidden: !canPlaceTests, onClick: () => void placeTested([s], 'warehouse') },
+                    { id: 'with-issues', label: 'Move to With Issues', hidden: !canPlaceTests, onClick: () => void placeTested([s], 'shop') },
+                    ]}
+                    />
+                    </>
+                    )}
+                    />
+                    ))}
+                    </Section>
+                    <Section title="Failed — to With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
+                    count={testedFailed.length}
+                    emptyText={q ? 'No failed unit matches this search' : 'No failed units waiting'}>
+                    {canPlaceTests && testedFailed.length > 1 ? (
+                      <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-[var(--bg-surface)]">
+                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-2 cursor-pointer select-none">
+                          <input type="checkbox" checked={pickedFailed.length === testedFailed.length}
+                            onChange={e => setPlaceSel(prev => { const next = new Set(prev); testedFailed.forEach(u => (e.target.checked ? next.add(u.id) : next.delete(u.id))); return next })} />
+                          Select all
+                        </label>
+                        {pickedFailed.length > 0 ? (
+                          <button type="button" className="btn-secondary text-[11px]" onClick={() => void placeTested(pickedFailed, 'shop')}>
+                            Move {pickedFailed.length} to With Issues
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {testedFailed.map(s => (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    leading={tick(s)}
+                    meta={testedMeta(s)}
+                    actions={(
+                    <>
+                    {canPlaceTests ? <ActionBtn label="With Issues" tone="warning" ariaLabel={`Move ${s.serial} to With Issues`} onClick={() => void placeTested([s], 'shop')} /> : null}
+                    <SecondaryActionMenu
+                    ariaLabel={`More actions for ${s.serial}`}
+                    label="More"
+                    actions={[
+                    { id: 'view', label: canOverrideTests ? 'View test / pass anyway' : 'View test', onClick: () => setBenchUnit(s) },
+                    { id: 'send-refurb', label: 'Send straight to Refurbishment', hidden: !canPlaceTests, onClick: () => requestSendForRefurbishment(s) },
+                    { id: 'quarantine', label: 'Reject (parts / write-off / return)', hidden: !canPlaceTests, onClick: () => void placeTested([s], 'quarantine') },
+                    ]}
+                    />
+                    </>
+                    )}
+                    />
+                    ))}
+                    </Section>
+                  </div>
+                  )
+                })()}
                 {activeWarehouseLocation === 'quarantine' && (
                   <div className="w-full min-w-0">
                     <Section title="Rejected — for parts, write-off or return to supplier" icon={<Fa icon={faBox} />} tone="warning"
@@ -1848,13 +2075,20 @@ function InventoryContent() {
                     <WarehouseRow
                     key={s.id}
                     title={s.productName}
-                    meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
+                    meta={(
+                      <>
+                        <p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>
+                        {unitTests.bySerial.get(s.id)?.failReasons.length ? (
+                          <p className="text-[11px] text-[var(--danger-text)] mt-0.5">✗ {unitTests.bySerial.get(s.id)!.failReasons.join(' · ')}</p>
+                        ) : null}
+                      </>
+                    )}
                     actions={(
                     <SecondaryActionMenu
                     ariaLabel={`More actions for ${s.serial}`}
                     label="More"
                     actions={[
-                    { id: 'retest', label: 'Back to Awaiting tests', onClick: () => quickMove(s.productId, s.productName, 'quarantine', 'pending_testing', s.id) },
+                    { id: 'retest', label: 'Retest (back to Awaiting test)', onClick: () => quickMove(s.productId, s.productName, 'quarantine', 'pending_testing', s.id) },
                     { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
                     ]}
                     />
@@ -4100,11 +4334,26 @@ function InventoryContent() {
           onMoved={() => setModelUnit(null)}
         />
       )}
+      {benchUnit && (
+        <UnitTestForm
+          unit={benchUnit as SerialNumber & { assetId?: string }}
+          onClose={() => { setBenchUnit(null); void unitTests.refresh() }}
+          onChanged={() => { void unitTests.refresh() }}
+          canRecord={canRecordTests}
+          canOverride={canOverrideTests}
+          notify={(m, t) => showToast(m, t ?? 'success')}
+        />
+      )}
       {refurbUnits.length > 0 && (() => {
         const n = refurbUnits.length
         const info = (u: (typeof serials)[number]) => u as (typeof serials)[number] & { assetId?: string; intakeIssue?: string }
         // Machines leaving sellable stock need a reason; With Issues ones keep their own and the technician adds what they find.
-        const needsReason = refurbUnits.some(u => u.location !== 'shop' && !info(u).intakeIssue)
+        // A failed test's issues become the job's to-do list.
+        const testTasks = (u: (typeof serials)[number]) => {
+          const b = unitTests.bySerial.get(u.id)
+          return b && b.result === 'failed' ? b.failReasons : []
+        }
+        const needsReason = refurbUnits.some(u => u.location !== 'shop' && !info(u).intakeIssue && !testTasks(u).length)
         const close = () => { setRefurbUnits([]); setRefurbIssueDesc('') }
         return (
         <Modal title={n === 1 ? 'Send for Refurbishment' : `Send ${n} machines for Refurbishment`} onClose={close} width={460}>
@@ -4113,8 +4362,9 @@ function InventoryContent() {
               <div key={u.id} className="min-w-0">
                 <p className="text-xs font-semibold text-t1 truncate">{u.productName}</p>
                 <p className="font-mono text-[11px] text-t3 truncate">
-                  {info(u).assetId ? `${info(u).assetId} · ` : ''}S/N: {u.serial}{info(u).intakeIssue ? ` · ${info(u).intakeIssue}` : ''}
+                  {info(u).assetId ? `${info(u).assetId} · ` : ''}S/N: {u.serial}{!testTasks(u).length && info(u).intakeIssue ? ` · ${info(u).intakeIssue}` : ''}
                 </p>
+                {testTasks(u).length ? <p className="text-[11px] text-[var(--danger-text)] truncate">To fix: {testTasks(u).join(' · ')}</p> : null}
               </div>
             ))}
           </div>
@@ -4136,7 +4386,13 @@ function InventoryContent() {
               className="btn-primary"
               onClick={() => {
                 if (needsReason && !refurbIssueDesc.trim()) { showToast('Enter an issue description', 'error'); return }
-                refurbUnits.forEach(u => createRefurbishmentJob(u.id, refurbIssueDesc.trim(), { silent: true }))
+                refurbUnits.forEach(u => {
+                  const tasks = testTasks(u)
+                  createRefurbishmentJob(u.id, refurbIssueDesc.trim() || tasks.join('; '), { silent: true, testTasks: tasks, fromTestNumber: unitTests.bySerial.get(u.id)?.number })
+                })
+                // Straight from Inbound: their tests are used up (the job moves them, not a transfer).
+                const fromInbound = refurbUnits.filter(u => u.location === 'pending_testing').map(u => u.id)
+                if (fromInbound.length) void unitTestAction({ action: 'sent_to_refurbishment', serialIds: fromInbound }).then(() => unitTests.refresh())
                 setIssueSel(new Set())
                 close()
                 showToast(n === 1 ? 'Sent to refurbishment' : `${n} machines sent to refurbishment`)

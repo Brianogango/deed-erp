@@ -1009,6 +1009,10 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           intakeDate: new Date().toISOString(),
           // What was noted when it came in, unless a reason is given now.
           intakeIssueDescription: issueDescription || x.intakeIssue || '',
+          ...(opts?.testTasks?.length ? {
+            testTasks: opts.testTasks.map((text, i) => ({ id: `t${i + 1}`, text })),
+            ...(opts.fromTestNumber ? { fromTestNumber: opts.fromTestNumber } : {}),
+          } : {}),
           partsNeeded: [],
           // A machine from With Issues keeps its tag and intake cost on the job.
           ...(x.identityPending ? { identityPending: true, intakeTag: x.intakeTag || ser.serial } : {}),
@@ -1169,6 +1173,11 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
         const jobUnit = store.serialRef.current.find(s => s.id === job.serialId) as (SerialNumber & { intakeTag?: string; identityPending?: boolean }) | undefined
         if (isStandInProduct(jobProduct, job.productName, { cameInUnidentified: cameInUnidentified(job, jobUnit) })) {
           store.showToast(`${job.productName} is a stand-in: match ${job.serialNumber} to its product line first (More → Change product).`, 'error'); return
+        }
+        // Every repair task from the failed test is done, or says why not.
+        const openTasks = (job.testTasks ?? []).filter(t => !t.done && !String(t.note ?? '').trim())
+        if (openTasks.length) {
+          store.showToast(`Tick or explain each repair task first: ${openTasks.map(t => t.text).join(', ')}`, 'error'); return
         }
         // A machine is not ready while parts are still on their way, or were
         // taken for it and never fitted (mark them used, or remove them).

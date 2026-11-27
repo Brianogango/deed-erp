@@ -25,6 +25,24 @@ async function ensureAssetIds(serials: SerialNumber[]): Promise<Record<string, s
   }
 }
 
+/** Grade and battery from each unit's newest passing test; {} when offline. */
+async function testLines(): Promise<Record<string, string>> {
+  try {
+    const res = await fetch('/api/inventory/unit-tests', { cache: 'no-store' })
+    const data = await res.json().catch(() => ({})) as { briefs?: Array<{ serialId: string; result: string; grade?: string | null; batteryHealth?: number | null }> }
+    if (!res.ok || !Array.isArray(data.briefs)) return {}
+    const out: Record<string, string> = {}
+    for (const b of data.briefs) {
+      if (b.result !== 'passed' && b.result !== 'passed_override') continue
+      const line = [b.grade ? `Grade ${b.grade}` : '', b.batteryHealth != null ? `Battery ${b.batteryHealth}%` : '', 'Tested'].filter(Boolean).join(' · ')
+      out[b.serialId] = line
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
 /** Print the 58 × 38 mm machine stickers (lib/inventory/machine-label-template.ts). */
 export async function printLabelsForSerialUnits(opts: {
   serials: SerialNumber[]
@@ -36,7 +54,7 @@ export async function printLabelsForSerialUnits(opts: {
   if (!serials.length) return
 
   const productById = new Map(products.map(p => [p.id, p]))
-  const assigned = await ensureAssetIds(serials)
+  const [assigned, tested] = await Promise.all([ensureAssetIds(serials), testLines()])
 
   const views = await Promise.all(
     serials.map(async s => {
@@ -57,6 +75,7 @@ export async function printLabelsForSerialUnits(opts: {
         status: s.status,
         receivedDate: s.receivedDate,
         forSale,
+        testLine: tested[s.id] || null,
       })
     }),
   )
