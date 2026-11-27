@@ -39,7 +39,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/purchases':   { label: 'Purchases',      desc: 'Purchase orders & bills' },
   '/delivery':    { label: 'Delivery',       desc: 'Riders & delivery tracking' },
   '/repairs':     { label: 'Repairs',        desc: 'Device repairs & service jobs' },
-  '/refurbishment': { label: 'Workshop', desc: 'Testing and refurbishment' },
+  '/refurbishment': { label: 'Refurbishment', desc: 'Internal device refurbishing' },
   '/reconfiguration': { label: 'Reconfiguration', desc: 'Device upgrades & component swaps' },
   '/outsource':   { label: 'Outsource',      desc: 'External repair vendors' },
   '/aftersales':  { label: 'After-Sales',    desc: 'Warranties & RMAs' },

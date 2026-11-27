@@ -24,7 +24,7 @@ export const MOBILE_TAB_MODULES: Partial<Record<ModuleId, { href: string; label:
   purchase: { href: '/purchases', label: 'Purchases' },
   delivery: { href: '/delivery', label: 'Delivery' },
   repair: { href: '/repairs', label: 'Repairs' },
-  refurbishment: { href: '/refurbishment', label: 'Workshop' },
+  refurbishment: { href: '/refurbishment', label: 'Refurb' },
   reconfiguration: { href: '/reconfiguration', label: 'Reconfig' },
   outsource: { href: '/outsource', label: 'Outsource' },
   after_sales: { href: '/aftersales', label: 'After-sales' },

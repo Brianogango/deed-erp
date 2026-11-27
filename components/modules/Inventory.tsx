@@ -1480,11 +1480,10 @@ function InventoryContent() {
         // Top level: what the stock is. Inbound and Held for others open onto
         // their own steps; old links to a step (?location=testing, vendor_stock…)
         // still land on it.
-        // On the bench and in refurbishment are one step here ("In workshop"); the Workshop module works them.
-        const GROUP_DEFAULT: Record<string, string> = { inbound: 'testing', held: 'computer_aid', bench: 'workshop', refurbishment: 'workshop' }
+        const GROUP_DEFAULT: Record<string, string> = { inbound: 'testing', held: 'computer_aid' }
         const requestedLocation = GROUP_DEFAULT[warehouseLocation] ?? warehouseLocation
-        const activeWarehouseLocation = ['testing', 'workshop', 'tested', 'warehouse', 'issues', 'quarantine', 'computer_aid', 'vendor_stock'].includes(requestedLocation)
-          ? requestedLocation as 'testing' | 'workshop' | 'tested' | 'warehouse' | 'issues' | 'quarantine' | 'computer_aid' | 'vendor_stock'
+        const activeWarehouseLocation = ['testing', 'bench', 'tested', 'warehouse', 'issues', 'refurbishment', 'quarantine', 'computer_aid', 'vendor_stock'].includes(requestedLocation)
+          ? requestedLocation as 'testing' | 'bench' | 'tested' | 'warehouse' | 'issues' | 'refurbishment' | 'quarantine' | 'computer_aid' | 'vendor_stock'
           : 'warehouse'
         const WAREHOUSE_GROUPS = [
           {
@@ -1492,8 +1491,9 @@ function InventoryContent() {
             count: testingCount + benchCount + testedCount + refurbCount + quarantineCount as number | null,
             steps: [
               { id: 'testing', label: 'Awaiting test', count: testingCount as number | null },
-              { id: 'workshop', label: 'In workshop', count: benchCount + refurbCount as number | null },
+              { id: 'bench', label: 'On test bench', count: benchCount as number | null },
               { id: 'tested', label: 'Tested — awaiting placement', count: testedCount as number | null },
+              { id: 'refurbishment', label: 'Work in progress', count: refurbCount as number | null },
               { id: 'quarantine', label: 'Rejected', count: quarantineCount as number | null },
             ],
           },
@@ -1937,13 +1937,7 @@ function InventoryContent() {
                     </Section>
                   </div>
                 )}
-                {activeWarehouseLocation === 'workshop' && (
-                  <div className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-[12px] text-text-2">Machines being tested or repaired. The Workshop works them; they come back here as <strong>Tested — awaiting placement</strong>.</p>
-                    <a href="/refurbishment" className="btn-secondary shrink-0 text-[11px] text-center">Open the Workshop board</a>
-                  </div>
-                )}
-                {activeWarehouseLocation === 'workshop' && (
+                {activeWarehouseLocation === 'bench' && (
                   <div className="w-full min-w-0">
                     <Section title="On the test bench" icon={<Fa icon={faWrench} />} tone="info"
                     count={benchCount}
@@ -2180,7 +2174,7 @@ function InventoryContent() {
                 {activeWarehouseLocation === 'vendor_stock' && (
                   <VendorStockPanel />
                 )}
-                {activeWarehouseLocation === 'workshop' && (() => {
+                {activeWarehouseLocation === 'refurbishment' && (() => {
                   // In the repair unit with no open job: these belong in With Issues,
                   // from where Inventory sends machines to Refurbishment.
                   const hasOpenJob = (id: string) => refurbishmentJobs.some(j => j.serialId === id && !['transferred', 'written_off'].includes(j.status))
@@ -2193,11 +2187,11 @@ function InventoryContent() {
                   <div className="w-full min-w-0">
                     {noJob.length > 0 && canTransfer ? (
                       <div className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--warning)]/40 bg-[var(--warning-bg)] p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-[12px] text-[var(--warning-text)]"><strong>{noJob.length}</strong> machine{noJob.length === 1 ? '' : 's'} here with no refurbishment job. The Workshop only takes machines sent from With Issues.</p>
+                        <p className="text-[12px] text-[var(--warning-text)]"><strong>{noJob.length}</strong> machine{noJob.length === 1 ? '' : 's'} here with no refurbishment job. Refurbishment only takes machines sent from With Issues.</p>
                         <button type="button" className="btn-secondary shrink-0 text-[11px]" onClick={() => toWithIssues(noJob)}>Move {noJob.length} to With Issues</button>
                       </div>
                     ) : null}
-                    <Section title="In refurbishment" icon={<Fa icon={faWrench} />} tone="info"
+                    <Section title="Work in progress — refurbishment (retested before sale)" icon={<Fa icon={faWrench} />} tone="info"
                     count={refurbCount}
                     emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
                     {filteredRepairSerials.map(s => {
@@ -2229,7 +2223,7 @@ function InventoryContent() {
                     {refurbJob && (
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-text-4 flex-wrap">
                     <span>Job: <span className="font-mono font-bold text-primary-600">{refurbJob.ref}</span></span>
-                    {refurbJob.assignedTechnicianName ? <span>Tech: {refurbJob.assignedTechnicianName}</span> : <span className="italic">Unassigned — assign in the Workshop</span>}
+                    {refurbJob.assignedTechnicianName ? <span>Tech: {refurbJob.assignedTechnicianName}</span> : <span className="italic">Unassigned - manage in Refurbishment module</span>}
                     </div>
                     )}
                     </>
