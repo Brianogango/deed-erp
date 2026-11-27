@@ -147,7 +147,7 @@ function InventoryContent() {
     importOpeningStock, openingStockPosted,
     getStockByLocation, purchaseOrders, receipts,
     showToast, currentUserId, users, refreshProductCatalog,
-    refurbishmentJobs, createRefurbishmentJob, transferToSell, writeOffRefurbishmentJob, recommendRefurbWriteOff,
+    refurbishmentJobs, createRefurbishmentJob, writeOffRefurbishmentJob, recommendRefurbWriteOff, updateSerial,
     systemSettings,
     bulkStock,
     stockAdjustments, createAdjustment, approveAdjustment, fixAdjustmentNumbers,
@@ -2174,8 +2174,23 @@ function InventoryContent() {
                 {activeWarehouseLocation === 'vendor_stock' && (
                   <VendorStockPanel />
                 )}
-                {activeWarehouseLocation === 'refurbishment' && (
+                {activeWarehouseLocation === 'refurbishment' && (() => {
+                  // In the repair unit with no open job: these belong in With Issues,
+                  // from where Inventory sends machines to Refurbishment.
+                  const hasOpenJob = (id: string) => refurbishmentJobs.some(j => j.serialId === id && !['transferred', 'written_off'].includes(j.status))
+                  const noJob = filteredRepairSerials.filter(s => !hasOpenJob(s.id))
+                  const toWithIssues = (list: Array<(typeof serials)[number]>) => {
+                    list.forEach(u => updateSerial(u.id, { location: 'shop', status: 'available' }))
+                    showToast(`${list.length} machine${list.length === 1 ? '' : 's'} moved to With Issues`)
+                  }
+                  return (
                   <div className="w-full min-w-0">
+                    {noJob.length > 0 && canTransfer ? (
+                      <div className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--warning)]/40 bg-[var(--warning-bg)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[12px] text-[var(--warning-text)]"><strong>{noJob.length}</strong> machine{noJob.length === 1 ? '' : 's'} here with no refurbishment job. Refurbishment only takes machines sent from With Issues.</p>
+                        <button type="button" className="btn-secondary shrink-0 text-[11px]" onClick={() => toWithIssues(noJob)}>Move {noJob.length} to With Issues</button>
+                      </div>
+                    ) : null}
                     <Section title="Work in progress — refurbishment (retested before sale)" icon={<Fa icon={faWrench} />} tone="info"
                     count={refurbCount}
                     emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
@@ -2214,12 +2229,12 @@ function InventoryContent() {
                     </>
                     )}
                     actions={
-                    refurbJob?.status === 'ready' && canTransfer ? (
+                    !hasOpenJob(s.id) && canTransfer ? (
                     <ActionBtn
-                    label="Send for retest"
-                    tone="success"
-                    ariaLabel={`Send ${s.serial} for retest before sale`}
-                    onClick={() => transferToSell(refurbJob.id)}
+                    label="Move to With Issues"
+                    tone="warning"
+                    ariaLabel={`Move ${s.serial} to With Issues`}
+                    onClick={() => toWithIssues([s])}
                     />
                     ) : undefined
                     }
@@ -2245,7 +2260,8 @@ function InventoryContent() {
                     )}
                     </Section>
                   </div>
-                )}
+                  )
+                })()}
               </div>
             </div>
           </div>

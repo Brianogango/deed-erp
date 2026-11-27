@@ -617,7 +617,8 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           id: uid(), ref: store.tradeInRef('BBK'),
           customerId, customerName, originalSOId, originalSORef,
           status: 'draft', date: now(),
-          lines: bbLines, total, destinationLocation: destination, notes,
+          // Bought-back machines always go to With Issues (tested from there).
+          lines: bbLines, total, destinationLocation: 'shop', notes,
         }
         store.setBuyBacks(p => [bb, ...p])
         store.showToast(`Buy-back created for ${customerName}`)
@@ -795,8 +796,11 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
             }
           }
         }
+        // Every bought-back machine lands in With Issues, whatever the buy-back
+        // said when it was drafted; Inventory sends it on from there.
+        const dest: LocationId = 'shop'
         lines.forEach(line => {
-          // Restore serials — good/fair → available, poor → refurbishment
+          // Restore serials into With Issues.
           // A serial still on a product that no longer exists (the line was
           // relinked above) moves with the line, or it would sit in stock
           // under a product nobody can see.
@@ -806,7 +810,7 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
               ? {
                   ...s,
                   ...(productExists(s.productId) ? {} : { productId: line.productId, productName: line.productName }),
-                  status: line.condition === 'poor' ? 'refurbishment' : 'available', location: bb.destinationLocation, soldDate: undefined, saleOrderId: undefined,
+                  status: 'available', location: dest, soldDate: undefined, saleOrderId: undefined,
                 }
               : s
             ))
@@ -814,21 +818,20 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           // Non-serialized: increase stock
           if (line.serialIds.length === 0) {
             store.setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
-            store.setBulkStock(prev => store.upsertBulkStock(prev, line.productId, bb.destinationLocation, line.qty))
+            store.setBulkStock(prev => store.upsertBulkStock(prev, line.productId, dest, line.qty))
           } else {
             store.setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
           }
-          store.addMove(line.productId, line.productName, line.qty, 'in', `Buy-back ${bb.ref}`, bb.ref, 'customer', bb.destinationLocation, line.serialIds.map(id => store.serialRef.current.find(s => s.id === id)?.serial ?? id))
+          store.addMove(line.productId, line.productName, line.qty, 'in', `Buy-back ${bb.ref}`, bb.ref, 'customer', dest, line.serialIds.map(id => store.serialRef.current.find(s => s.id === id)?.serial ?? id))
         })
-        const toRefurb = store.openTradeInRefurbJobs(lines.flatMap(line => line.serialIds
-          .filter(sid => line.condition === 'poor' || awaitingIdentification(store.serialRef.current.find(s => s.id === sid)))
+        const toIssues = store.sendIntakeToWithIssues(lines.flatMap(line => line.serialIds
           .map(sid => ({
             serialId: sid,
             cost: line.unitPrice,
             sourceRef: bb.ref,
             issue: awaitingIdentification(store.serialRef.current.find(s => s.id === sid))
               ? `Trade-in ${bb.ref} (${bb.customerName}) — serial unknown, not yet identified${line.notes ? `: ${line.notes}` : ''}`
-              : `Trade-in ${bb.ref} (${bb.customerName}) in poor condition${line.notes ? `: ${line.notes}` : ''}`,
+              : `Trade-in ${bb.ref} (${bb.customerName})${line.condition ? `, ${line.condition} condition` : ''}${line.notes ? `: ${line.notes}` : ''}`,
           }))))
         store.setBuyBacks(p => p.map(b => b.id === id ? { ...b, lines, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
         // The machines take their trade-in cost into inventory (Dr Inventory,
@@ -838,9 +841,9 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           body: JSON.stringify({ buyBackId: bb.id }),
         }).then(res => { if (!res.ok) store.showToast(`${bb.ref} is stocked, but its stock value was not posted — tell Finance`, 'error') })
           .catch(() => store.showToast(`${bb.ref} is stocked, but its stock value was not posted — tell Finance`, 'error'))
-        store.addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}${toRefurb ? ` — ${toRefurb} to refurbishment` : ''}`)
+        store.addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}${toIssues ? ` — ${toIssues} to With Issues` : ''}`)
         store.cancelWarrantiesForTradeIn(lines.flatMap(l => l.serialIds), bb.ref, `Bought back from ${bb.customerName} (${bb.ref})`)
-        store.showToast(`${bb.ref} stocked — inventory updated${toRefurb ? `; ${toRefurb} machine${toRefurb === 1 ? '' : 's'} sent to Refurbishment` : ''}`)
+        store.showToast(`${bb.ref} stocked into With Issues${toIssues ? ` (${toIssues} machine${toIssues === 1 ? '' : 's'})` : ''} — test or refurbish from there`)
       },
 
     deleteBuyBack: (id) => {
@@ -978,14 +981,14 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           }
         }
 
-        // Donated machines with no readable serial go to Refurbishment to be identified.
+        // Donated machines with no readable serial go to With Issues to be identified.
         const toRefurb = don.type === 'in'
-          ? store.openTradeInRefurbJobs(don.lines.flatMap(line => line.serialIds
+          ? store.sendIntakeToWithIssues(don.lines.flatMap(line => line.serialIds
             .filter(sid => awaitingIdentification(store.serialRef.current.find(s => s.id === sid)))
             .map(sid => ({ serialId: sid, cost: 0, sourceRef: don.ref, issue: `Donated in ${don.ref} (${don.party}) — serial unknown, not yet identified` }))))
           : 0
         store.setDonations(p => p.map(d => d.id === id ? { ...d, status: 'confirmed', confirmedByName: user.name, confirmedDate: now() } : d))
-        store.showToast(`Donation ${don.ref} confirmed — stock updated${toRefurb ? `; ${toRefurb} sent to Refurbishment` : ''}`)
+        store.showToast(`Donation ${don.ref} confirmed — stock updated${toRefurb ? `; ${toRefurb} without a serial put in With Issues to be identified` : ''}`)
       },
 
     deleteDonation: (id) => {
@@ -1080,11 +1083,11 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           store.addMove(line.productId, line.productName, line.qty, 'in', `Exchange return ${exc.ref}`, exc.ref, 'customer', returnLocation, line.serialIds.map(id => store.serialRef.current.find(s => s.id === id)?.serial ?? id))
         })
   
-        // Machines handed in with no readable serial go to Refurbishment to be identified.
-        const excToRefurb = store.openTradeInRefurbJobs(exc.returnLines.flatMap(line => line.serialIds
+        // Machines handed in with no readable serial are noted in With Issues to be identified.
+        const excToRefurb = store.sendIntakeToWithIssues(exc.returnLines.flatMap(line => line.serialIds
           .filter(sid => awaitingIdentification(store.serialRef.current.find(s => s.id === sid)))
           .map(sid => ({ serialId: sid, cost: line.unitPrice, sourceRef: exc.ref, issue: `Exchange ${exc.ref} (${exc.customerName}) — serial unknown, not yet identified` }))))
-        if (excToRefurb) store.addAuditLog('exchange_refurb', exc.ref, `${excToRefurb} machine(s) without serial sent to Refurbishment`)
+        if (excToRefurb) store.addAuditLog('exchange_refurb', exc.ref, `${excToRefurb} machine(s) without serial put in With Issues to be identified`)
   
         // New items → out to customer
         exc.newLines.forEach(line => {

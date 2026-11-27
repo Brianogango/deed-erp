@@ -255,7 +255,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const [customerId, setCustomerId]   = useState('')
   const [customerName, setCustomerName] = useState('')
   const [originalSORef, setOriginalSORef] = useState('')
-  const [destination, setDestination] = useState<LocationId | ''>('')
+  // Bought-back machines always go to With Issues; Inventory tests or refurbishes them from there.
+  const [destination, setDestination] = useState<LocationId | ''>('shop')
   const [notes, setNotes]             = useState('')
   const [lines, setLines]             = useState<BBLine[]>([])
   const [payModal, setPayModal]       = useState<string | null>(null)
@@ -271,7 +272,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     originalSORef ? saleOrders.find(s => (s.ref ?? '').toLowerCase() === originalSORef.toLowerCase()) : undefined,
     [originalSORef, saleOrders])
 
-  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination(''); setNotes(''); setLines([]); clearFormDraft('buyback', currentUserId ?? '') }
+  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination('shop'); setNotes(''); setLines([]); clearFormDraft('buyback', currentUserId ?? '') }
   function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
   // A half-filled buy-back survives leaving the page: its machine's serial is
@@ -284,7 +285,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     const d = loadFormDraft<BuyBackDraft>('buyback', currentUserId)
     if (!d || (!d.customerId && !(d.lines ?? []).length)) return
     setCustomerId(d.customerId ?? ''); setCustomerName(d.customerName ?? ''); setOriginalSORef(d.originalSORef ?? '')
-    setDestination(d.destination ?? ''); setNotes(d.notes ?? ''); setLines(Array.isArray(d.lines) ? d.lines : [])
+    setDestination('shop'); setNotes(d.notes ?? ''); setLines(Array.isArray(d.lines) ? d.lines : [])
     setShowNew(true)
     showToast('Your unfinished buy-back was kept — finish it or cancel it', 'info')
   }, [currentUserId, showToast])
@@ -345,7 +346,9 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
         const customer = findContact(contacts, customerRaw)
         const product = findProduct(products, productRaw)
         const originalSO = findSaleOrder(saleOrders, originalSORefRaw)
-        const destination = (['warehouse', 'shop'] as LocationId[]).includes(destinationRaw as LocationId) ? destinationRaw as LocationId : 'warehouse'
+        // Whatever the sheet says, buy-backs land in With Issues.
+        void destinationRaw
+        const destination: LocationId = 'shop'
         const condition = (['good', 'fair', 'poor'].includes(conditionRaw) ? conditionRaw : 'good') as 'good'|'fair'|'poor'
         const serialResult = product ? parseSerialIds(serialRaw, product, serials, qty, 'customer_return', undefined, true) : { serialIds: [], pendingIntake: [], errors: [] }
         const errors: string[] = []
@@ -703,8 +706,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
               </Field>
             </RowGrid>
             <RowGrid>
-              <Field label="Destination Location *">
-                <Select value={destination} onChange={v => setDestination(v as LocationId | '')} options={[{ value: '', label: 'Select…' }, ...DEST_OPTS]} />
+              <Field label="Goes to">
+                <p className="text-[12px] text-t2 py-2">With Issues — tested or sent to Refurbishment from there</p>
               </Field>
               <Field label="Notes">
                 <Input value={notes} onChange={setNotes} placeholder="Optional notes" />

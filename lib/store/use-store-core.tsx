@@ -56,7 +56,6 @@ import { refurbPartRequest, refurbPartAfterRequest } from '@/lib/refurbishment/p
 import { isProvisionalDocRef, recordsNeedingNumbers } from '@/lib/doc-number-repair'
 import { useRouteDataReady } from '@/lib/route-data-ready'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
-import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { quoteMatchesCustomer, shouldSyncQuoteCustomer, applyCustomerToQuote, shouldSyncSaleOrderCustomer, applyCustomerToSaleOrder, shouldSyncInvoiceCustomer, applyCustomerToInvoice } from '@/lib/sync-customer-documents'
 import { buildInvoicePostingJournal, journalFromPpeDraft } from './journals'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
@@ -1144,38 +1143,21 @@ export function useStoreCore({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageDataReady, pagePath, currentUserId, stockTransfers.length, returnOrders.length, donations.length])
-  const openTradeInRefurbJobs = (units: Array<{ serialId: string; issue: string; cost?: number; sourceRef: string }>) => {
-    const open = new Set(refurbishmentJobs.filter(j => j.status !== 'transferred' && j.status !== 'written_off').map(j => j.serialId))
-    const jobs: RefurbishmentJob[] = []
-    for (const u of units) {
-      const ser = serialRef.current.find(s => s.id === u.serialId)
-      if (!ser || open.has(ser.id)) continue
-      open.add(ser.id)
-      const tagged = awaitingIdentification(ser)
-      const prod = prodRef.current.find(p => p.id === ser.productId)
-      jobs.push({
-        id: uid(), ref: allocateDocNumberSync('REF'),
-        status: 'queued',
-        serialId: ser.id, serialNumber: ser.serial,
-        productId: ser.productId, productName: ser.productName,
-        specs: ser.specs || (tagged ? '' : prod?.description),
-        specsAtIntake: ser.specs || (tagged ? '' : prod?.description || ''),
-        intakeDate: new Date().toISOString(),
-        intakeIssueDescription: u.issue,
-        partsNeeded: [],
-        intakeSource: 'trade_in',
-        intakeSourceRef: u.sourceRef,
-        ...(u.cost != null ? { intakeCost: u.cost } : {}),
-        ...(tagged ? { identityPending: true, intakeTag: ser.intakeTag || ser.serial } : {}),
-      })
-    }
-    if (!jobs.length) return 0
-    const ids = new Set(jobs.map(j => j.serialId))
-    const costs = new Map(units.map(u => [u.serialId, u.cost]))
-    setSerials(p => p.map(s => !ids.has(s.id) ? s : { ...s, location: 'repair_unit', status: 'refurbishment', ...(costs.get(s.id) != null ? { intakeCost: costs.get(s.id) } : {}) }))
-    setRefurbishmentJobs(p => [...p, ...jobs])
-    numberRefurbJobs(jobs.map(j => j.id))
-    return jobs.length
+  /**
+   * Machines taken in from customers (trade-ins, buy-backs, exchanges,
+   * donations) go to With Issues with what is known about them. Refurbishment
+   * is only for machines Inventory sends there from With Issues; it no longer
+   * opens jobs for them on its own.
+   */
+  const sendIntakeToWithIssues = (units: Array<{ serialId: string; issue: string; cost?: number; sourceRef: string }>) => {
+    const byId = new Map(units.map(u => [u.serialId, u]))
+    if (!byId.size) return 0
+    setSerials(p => p.map(s => {
+      const u = byId.get(s.id)
+      if (!u) return s
+      return { ...s, location: 'shop', status: 'available', intakeIssue: u.issue, ...(u.cost != null ? { intakeCost: u.cost } : {}) } as SerialNumber
+    }))
+    return byId.size
   }
 
   /** Put a part that was taken for a job and never fitted back into the warehouse. */
@@ -1647,7 +1629,7 @@ const storeDeps = {
   get numberDonations() { return numberDonations },
   get numberRefundPayments() { return numberRefundPayments },
   get numberReturns() { return numberReturns },
-  get openTradeInRefurbJobs() { return openTradeInRefurbJobs },
+  get sendIntakeToWithIssues() { return sendIntakeToWithIssues },
   get orcRef() { return orcRef },
   get postSystemJournal() { return postSystemJournal },
   get prodRef() { return prodRef },

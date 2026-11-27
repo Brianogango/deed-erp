@@ -68,7 +68,6 @@ function RefurbishmentContent() {
   const {
     refurbishmentJobs, serials, products,
     users, currentUserId,
-    createRefurbishmentJob,
     assignRefurbishmentJob, updateRefurbishmentJob,
     addRefurbishmentPart, updateRefurbishmentPart, removeRefurbishmentPart,
     requestPartFromInventory, allocateRefurbPart, notifyTechPartAvailable,
@@ -156,22 +155,6 @@ function RefurbishmentContent() {
 
   const job = activeId ? refurbishmentJobs.find(j => j.id === activeId) ?? null : null
 
-  const activeJobSerialIds = new Set(
-    refurbishmentJobs
-      .filter(j => j.status !== 'transferred' && j.status !== 'written_off')
-      .map(j => j.serialId)
-  )
-  // Machines waiting for refurbishment with no open job. A written-off or
-  // sold machine left in the repair unit is not one: written-off devices
-  // used to come back here as "no job created yet".
-  const orphanedSerials = useMemo(() =>
-    serials.filter(s =>
-      (s.status === 'refurbishment' || (s.location === 'repair_unit' && s.status === 'available')) &&
-      !activeJobSerialIds.has(s.id)
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serials, refurbishmentJobs]
-  )
   // "With Issues" stock still in our hands (the location is called shop).
   // The sticker number follows the machine onto its job.
   const assetIdBySerialId = useMemo(() => new Map(serials.flatMap(s => {
@@ -179,23 +162,9 @@ function RefurbishmentContent() {
     return a ? [[s.id, a] as const] : []
   })), [serials])
   const unitInfo = (s: SerialNumber) => s as SerialNumber & { assetId?: string; intakeIssue?: string; identityPending?: boolean }
-  // One toast for the batch; each machine keeps its own intake issue unless one is given here.
-  // What is already known about a machine's fault: noted when it came in, its
-  // condition notes, or the issue on its last job. The lead is not asked again.
-  const knownIssueFor = (s: SerialNumber): string => {
-    const own = unitInfo(s).intakeIssue?.trim() || s.accessoryNotes?.trim()
-    if (own) return own
-    const last = [...refurbishmentJobs].filter(j => j.serialId === s.id && j.intakeIssueDescription?.trim())
-      .sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0]
-    return last?.intakeIssueDescription?.trim() ?? ''
-  }
-
-  // A machine already in the repair unit: open its job straight away.
-  const createJobNow = (s: SerialNumber) => {
-    const issue = knownIssueFor(s)
-    createRefurbishmentJob(s.id, issue, { silent: true })
-    showToast(issue ? `Job created · issue: ${issue.length > 60 ? `${issue.slice(0, 60)}…` : issue}` : 'Job created · the technician adds what they find')
-  }
+  // Refurbishment shows jobs only: machines get one when Inventory sends
+  // them from With Issues. Machines in the repair unit with no job are dealt
+  // with in Inventory › Inbound › Work in progress.
 
   const filtered = useMemo(() => {
     const list = filterStatus === 'all'
@@ -1196,56 +1165,6 @@ function RefurbishmentContent() {
             </div>
           )
         })()}
-
-        {/* Orphaned serials */}
-        {orphanedSerials.length > 0 && (
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #FDE68A' }}>
-            <div className="flex items-center gap-2 px-4 py-2.5"
-              style={{ background: 'var(--warning-bg)', borderBottom: '1px solid #FDE68A' }}>
-              <span aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
-              <p className="text-xs font-bold" style={{ color: 'var(--warning-text)' }}>
-                {orphanedSerials.length} device{orphanedSerials.length > 1 ? 's' : ''} in repair unit — no job created yet
-              </p>
-              {/* A batch that came in together gets its jobs together, instead
-                  of one Create Job tap per machine. */}
-              {isLeadTech && orphanedSerials.length > 1 && (
-                <button
-                  type="button"
-                  className="ml-auto shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold"
-                  style={{ background: 'var(--warning)', color: '#fff', border: 'none', cursor: 'pointer' }}
-                  onClick={() => setPendingConfirm({
-                    msg: `Create a refurbishment job for each of the ${orphanedSerials.length} machines? Each keeps the issue noted when it came in; technicians add what they find.`,
-                    action: () => { orphanedSerials.forEach(s => createRefurbishmentJob(s.id, knownIssueFor(s), { silent: true })); showToast(`${orphanedSerials.length} jobs created`) },
-                  })}
-                >
-                  Create all {orphanedSerials.length} jobs
-                </button>
-              )}
-            </div>
-            <div className="bg-white grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
-              {orphanedSerials.map(s => (
-                <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2"
-                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-t1 truncate" title={s.productName}>{s.productName}</p>
-                    <p className="font-mono text-[10px] text-t3">{s.serial}</p>
-                  </div>
-                  {isLeadTech && (
-                    <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--warning)', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                      onClick={() => createJobNow(s)}>
-                      + Create Job
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            {!isLeadTech && (
-              <div className="px-4 py-2 text-[10px]" style={{ background: 'var(--warning-bg)', color: '#B45309', borderTop: '1px solid #FDE68A' }}>
-                Ask the lead technician to create a job for these devices.
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Jobs table */}
         <div className="card overflow-hidden">
