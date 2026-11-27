@@ -1,0 +1,53 @@
+/* ── Workshop board (components/refurbishment/WorkshopBoard.tsx) ───────── */
+.workshop-board__top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+.workshop-board__mine { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.workshop-board { display: flex; flex-direction: column; gap: 0.75rem; }
+.workshop-board__steps { display: none; }
+.workshop-board__empty { margin: 0; padding: 1.5rem 1rem; border: 1px dashed var(--border-lt); border-radius: var(--radius-md); color: var(--text-3); font-size: 13px; text-align: center; }
+.workshop-board__cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.625rem; align-items: start; }
+.workshop-col { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; padding: 0.625rem; border-radius: var(--radius-md); background: var(--bg-surface); }
+.workshop-col header h3 { display: flex; align-items: center; justify-content: space-between; margin: 0; color: var(--text-1); font-size: 13px; font-weight: 700; }
+.workshop-col header h3 span { min-width: 1.5rem; padding: 0 0.375rem; border-radius: 999px; background: var(--bg-card); color: var(--text-2); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+.workshop-col header p { margin: 0.125rem 0 0; color: var(--text-3); font-size: 11px; }
+.workshop-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.375rem; }
+.workshop-col__empty { margin: 0; color: var(--text-4); font-size: 12px; }
+.workshop-card {
+  display: flex; flex-direction: column; gap: 0.125rem; width: 100%;
+  padding: 0.5rem 0.625rem; border: 1px solid var(--border-lt); border-left: 3px solid var(--border-lt); border-radius: var(--radius-sm);
+  background: var(--bg-card); text-align: left; cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.workshop-card:hover { border-color: var(--border); box-shadow: 0 1px 3px rgb(0 0 0 / 0.06); }
+.workshop-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.workshop-card.is-slow { border-left-color: var(--warning); }
+.workshop-card.is-late { border-left-color: var(--danger); }
+.workshop-card strong { color: var(--text-1); font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
+.workshop-card__serial { color: var(--text-2); font-family: ui-monospace, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.workshop-card__meta { color: var(--text-3); font-size: 11px; }
+.workshop-card__meta em { font-style: normal; color: var(--warning-text); font-weight: 600; }
+.workshop-card__note { color: var(--text-3); font-size: 10px; }
+.workshop-board__legend { display: flex; align-items: center; gap: 0.5rem; margin: 0; color: var(--text-3); font-size: 11px; }
+.workshop-board__legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.workshop-board__legend i.is-slow { background: var(--warning); }
+.workshop-board__legend i.is-late { background: var(--danger); margin-left: 0.5rem; }
+
+@media (max-width: 1100px) {
+  .workshop-board__cols { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Phones: pick a step, see its list. */
+@media (max-width: 720px) {
+  .workshop-board__steps { display: flex; gap: 0.25rem; overflow-x: auto; padding: 0.1875rem; border-radius: var(--radius-sm); background: var(--bg-surface); scrollbar-width: none; }
+  .workshop-board__steps::-webkit-scrollbar { display: none; }
+  .workshop-board__steps button {
+    flex-shrink: 0; min-height: 38px; padding: 0 0.75rem; border: 0; border-radius: calc(var(--radius-sm) - 2px);
+    background: none; color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  }
+  .workshop-board__steps button b { margin-left: 0.25rem; color: var(--text-3); font-weight: 700; }
+  .workshop-board__steps button.is-active { background: var(--bg-card); color: var(--text-1); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  .workshop-board__cols { grid-template-columns: minmax(0, 1fr); }
+  .workshop-col { display: none; background: none; padding: 0; }
+  .workshop-col.is-current { display: flex; }
+  .workshop-col header h3 span { display: none; }
+  .workshop-card { padding: 0.625rem 0.75rem; }
+  .workshop-card strong { font-size: 13px; }
+}
