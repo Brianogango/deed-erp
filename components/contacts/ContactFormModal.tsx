@@ -29,6 +29,8 @@ const PAYMENT_TERMS_DAY_OPTIONS = [
   { value: '90', label: '90 days' },
 ] as const
 
+import { contactSavePayload } from '@/lib/contacts/contact-save-payload'
+
 export type ContactFormValues = Omit<Contact, 'id' | 'createdAt'>
 
 export function blankCompanyContact(overrides: Partial<ContactFormValues> = {}): ContactFormValues {
@@ -259,27 +261,7 @@ export default function ContactFormModal({
     setFieldErrors({})
     setSaving(true)
     try {
-      const payload: ContactFormValues = {
-        ...form,
-        name: form.name.trim(),
-        country: (form.country ?? '').trim() || 'Kenya',
-        ...(form.type === 'company' && canSetCreditTerms ? { creditLimit: creditLimitNum } : {}),
-        ...(forceCustomer ? { isCustomer: true } : {}),
-        ...(forceVendor ? { isVendor: true } : {}),
-      }
-      if (form.type === 'individual') {
-        payload.tradingName = undefined
-        payload.registrationNumber = undefined
-        payload.industry = undefined
-        payload.postalAddress = undefined
-        payload.bankName = undefined
-        payload.bankAccount = undefined
-        payload.bankBranch = undefined
-      } else {
-        payload.jobTitle = undefined
-        payload.idNumber = undefined
-        payload.companyId = undefined
-      }
+      const payload: ContactFormValues = contactSavePayload(form, { canSetCreditTerms, creditLimit: creditLimitNum, forceCustomer, forceVendor })
       const contact = editId
         ? await updateContact(editId, payload)
         : await addContact(payload)
