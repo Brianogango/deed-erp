@@ -34,7 +34,7 @@ type Editing = { employeeId: string; workDate: string; clockIn: string; clockOut
  */
 export default function HRAttendanceTab() {
   const { showToast, users, currentUserId } = useApp() as any
-  const { employees } = useHrStore()
+  const { employees, leaveRequests } = useHrStore()
   const me = (users ?? []).find((u: any) => u.id === currentUserId) ?? null
   const canPay = userCan(me, 'managePayroll')
   const today = nairobiDate()
@@ -47,7 +47,9 @@ export default function HRAttendanceTab() {
   const [payEdit, setPayEdit] = useState<{ employeeId: string; name: string; basis: PayBasis; rate: string } | null>(null)
   const [netLabel, setNetLabel] = useState('')
   const [busy, setBusy] = useState(false)
-  const [view, setView] = useState<'review' | 'month' | 'office'>('review')
+  const [view, setView] = useState<'today' | 'month' | 'office'>('today')
+  const [leftAt, setLeftAt] = useState<Record<string, string>>({})
+  const [countAs, setCountAs] = useState<Record<string, 'full' | 'half' | 'none'>>({})
 
   const active = useMemo(() => employees.filter(e => e.status !== 'exited').sort((a, b) => a.fullName.localeCompare(b.fullName)), [employees])
   const nameOf = (id: string) => employees.find(e => e.id === id)?.fullName ?? 'Unknown employee'
@@ -130,59 +132,169 @@ export default function HRAttendanceTab() {
     return d.clockOut ? `${time(d.clockIn)}–${time(d.clockOut)} · ${hours.toFixed(1)}h` : `In ${time(d.clockIn)} · no clock-out yet`
   }
 
+  // ── HR mock G: who is in today, and each problem day on a time bar ──
+  const OFFICE_START = 8, OFFICE_END = 17, BAR_FROM = 7, BAR_TO = 19
+  const hourOf = (iso: string | null) => {
+    if (!iso) return null
+    const [h, m] = time(iso).split(':').map(Number)
+    return h + m / 60
+  }
+  const pct = (h: number) => `${Math.max(0, Math.min(100, ((h - BAR_FROM) / (BAR_TO - BAR_FROM)) * 100))}%`
+  const todays = days.filter(d => d.workDate === today)
+  const onLeave = new Set(leaveRequests.filter(r => r.status === 'approved' && r.startDate <= today && r.endDate >= today).map(r => r.employeeId))
+  const board = active.map(e => {
+    const d = todays.find(x => x.employeeId === e.id)
+    const inAt = hourOf(d?.clockIn ?? null)
+    const state = onLeave.has(e.id) ? 'leave' : !d?.clockIn ? 'out' : inAt !== null && inAt > OFFICE_START + 0.25 ? 'late' : 'in'
+    const how = d ? (d.inVerified ? 'fingerprint' : d.inOffice ? 'office' : 'outside') : ''
+    return { e, d, state, how }
+  })
+  const count = (st: string) => board.filter(b => b.state === st).length
+  const short = (name: string) => { const [a1, b1] = name.split(/\s+/); return b1 ? `${a1} ${b1[0]}.` : a1 }
+  const ini = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('')
+  const color = (name: string) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return ['#db2777', '#2563eb', '#0d9488', '#ea580c', '#7c3aed', '#0891b2', '#b45309', '#4f46e5'][h % 8] }
+  const [boardAll, setBoardAll] = useState(false)
+  const shownBoard = boardAll ? board : board.slice(0, 7)
+
+  // A day's value from its hours, as payroll counts it.
+  const valueOf = (d: AttendanceDay, out?: string) => {
+    const end = out ? toIso(d.workDate, out) : d.clockOut
+    const h = hoursBetween(d.clockIn, end)
+    return h >= 6 ? 'full' : h >= 3 ? 'half' : 'none'
+  }
+  const decide = async (d: AttendanceDay, approve: boolean, auto = false) => {
+    const out = leftAt[d.id]
+    const choice = countAs[d.id] ?? valueOf(d, out)
+    const reject = !approve || choice === 'none'
+    setBusy(true)
+    try {
+      await send('/api/attendance', 'PATCH', {
+        employeeId: d.employeeId, workDate: d.workDate, status: reject ? 'rejected' : 'approved',
+        reason: reject ? 'Not worked — reviewed by supervisor' : auto ? 'Approved in bulk: hours look fine' : out && !d.clockOut ? `Left at ${out} (set by supervisor)` : 'Approved by supervisor',
+        clockIn: d.clockIn, clockOut: out && !d.clockOut ? toIso(d.workDate, out) : d.clockOut,
+      })
+      if (!auto) showToast(reject ? 'Day marked not worked' : 'Day approved', 'success')
+      return true
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Could not save', 'error'); return false } finally { setBusy(false) }
+  }
+  const fine = toReview.filter(d => d.status === 'pending' && d.clockOut && hoursBetween(d.clockIn, d.clockOut) >= 3)
+  const approveFine = async () => {
+    let ok = 0
+    for (const d of fine) if (await decide(d, true, true)) ok += 1
+    showToast(`${ok} day${ok === 1 ? '' : 's'} approved`, 'success')
+    void load()
+  }
+
   return (
-    <div className="hr-attendance">
-      <div className="hr-attendance__bar">
-        <div className="hr-attendance__tabs" role="tablist" aria-label="Attendance views">
-          {([['review', `To review${toReview.length ? ` (${toReview.length})` : ''}`], ['month', 'Month'], ['office', 'Office connections']] as const).map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={view === id} className={view === id ? 'is-active' : ''} onClick={() => setView(id)}>{label}</button>
-          ))}
-        </div>
-        {view !== 'office' && (
-          <div className="hr-attendance__month">
-            <input type="month" className="form-input" value={month} max={today.slice(0, 7)} onChange={e => e.target.value && setMonth(e.target.value)} aria-label="Month" />
-            {!lockedBy && <button type="button" className="btn-outline" onClick={() => setEditing({ employeeId: active[0]?.id ?? '', workDate: today, day: null, clockIn: '08:00', clockOut: '17:00', status: 'approved', reason: '' })}>Add a day</button>}
-          </div>
-        )}
-      </div>
-
-      {lockedBy && view !== 'office' && <p className="hr-attendance__note">Payroll {lockedBy} covers this month, so its attendance can no longer change.</p>}
-
-      {view === 'review' && (
-        toReview.length === 0 ? <p className="hr-attendance__empty">Nothing to review for this month.</p> : (
-          <ul className="hr-attendance__list">
-            {toReview.map(d => (
-              <li key={d.id}>
-                <div>
-                  <strong>{nameOf(d.employeeId)}</strong>
-                  <span>{fmtDay(d.workDate)} · {dayLine(d)}</span>
-                  {/* These are the reason the row is here at all, so they are
-                      read at the same size as the day and marked as the
-                      exception they describe — they used to be 11px grey,
-                      quieter than the date they qualify. */}
-                  {(() => {
-                    const problems = dayProblems(d, today, d.workDate)
-                    if (problems.length === 0) {
-                      return <small className="hr-attendance__why">Waiting for approval</small>
-                    }
-                    return (
-                      <small className="hr-attendance__why is-flagged">
-                        {problems.map(pr => <span key={pr} className="hr-attendance__flag">{PROBLEM_TEXT[pr]}</span>)}
-                      </small>
-                    )
-                  })()}
-                </div>
-                {!lockedBy && (
-                  <div className="hr-attendance__actions">
-                    <button type="button" className="btn-primary" onClick={() => openEdit(d.employeeId, d.workDate, d, 'approved')}>{d.clockOut ? 'Approve' : 'Set clock-out'}</button>
-                    <button type="button" className="btn-outline" onClick={() => openEdit(d.employeeId, d.workDate, d, 'rejected')}>Reject</button>
+    <div className="hr-attendance hrg">
+      {view === 'today' && (
+        <>
+          <section className="hra-card">
+            <div className="hra-ch">
+              <div><b className="hrc-title">Today · {fmtDay(today)}</b><div className="hrg-sub">Office day 08:00 – 17:00</div></div>
+              <div className="hrf-tools">
+                <button type="button" className="hrb-btn" onClick={() => setView('month')}>Month ▾</button>
+                <button type="button" className="hrb-btn" onClick={() => setView('office')}>⚙ Office connections</button>
+              </div>
+            </div>
+            <div className="hrg-chips">
+              <span className="hra-chip is-g">In · {count('in')}</span>
+              <span className="hra-chip is-a">Late · {count('late')}</span>
+              <span className="hra-chip is-s">Not in · {count('out')}</span>
+              <span className="hra-chip is-b">On leave · {count('leave')}</span>
+            </div>
+            <div className="hrg-board">
+              {shownBoard.map(({ e, d, state, how }) => (
+                <div key={e.id} className="hrg-pp">
+                  <span className="hrg-av" style={{ background: color(e.fullName) }}>{ini(e.fullName)}<i className={`is-${state}`} /></span>
+                  <div className="min-w-0">
+                    <b>{short(e.fullName)}</b>
+                    <small className={state === 'late' ? 'is-late' : ''}>
+                      {state === 'leave' ? 'On leave' : state === 'out' ? 'Not in yet' : `In ${time(d!.clockIn)} · ${state === 'late' ? 'late' : how}`}
+                    </small>
                   </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )
+                </div>
+              ))}
+              {!boardAll && board.length > 7 && (
+                <button type="button" className="hrg-pp hrg-more" onClick={() => setBoardAll(true)}>+ {board.length - 7} more</button>
+              )}
+            </div>
+          </section>
+
+          <section className="hra-card">
+            <div className="hra-ch">
+              <div><b className="hrc-title">{toReview.length ? `${toReview.length} day${toReview.length === 1 ? '' : 's'} need your decision` : 'No days need a decision'}</b><div className="hrg-sub">They are not paid until approved</div></div>
+              {!lockedBy && fine.length > 0 && <button type="button" className="hrb-btn is-g" disabled={busy} onClick={() => void approveFine()}>Approve all that look fine</button>}
+            </div>
+            {lockedBy && <p className="hrb-empty">Payroll {lockedBy} covers this month, so its attendance can no longer change.</p>}
+            {toReview.map(d => {
+              const inH = hourOf(d.clockIn)
+              const outH = d.clockOut ? hourOf(d.clockOut) : leftAt[d.id] ? Number(leftAt[d.id].split(':')[0]) + Number(leftAt[d.id].split(':')[1]) / 60 : null
+              const problems = dayProblems(d, today, d.workDate)
+              const mins = d.clockIn && d.clockOut ? Math.round((new Date(d.clockOut).getTime() - new Date(d.clockIn).getTime()) / 60000) : null
+              const value = countAs[d.id] ?? valueOf(d, leftAt[d.id])
+              const hours = hoursBetween(d.clockIn, leftAt[d.id] && !d.clockOut ? toIso(d.workDate, leftAt[d.id]) : d.clockOut)
+              return (
+                <div key={d.id} className="hrg-rv">
+                  <div className="hra-who"><span className="hra-av" style={{ background: color(nameOf(d.employeeId)) }}>{ini(nameOf(d.employeeId))}</span><div className="min-w-0"><b>{nameOf(d.employeeId)}</b><small>{fmtDay(d.workDate)}</small></div></div>
+                  <div className="min-w-0">
+                    <div className="hrg-tl">
+                      <div className="hrg-work" style={{ left: pct(OFFICE_START), width: `calc(${pct(OFFICE_END)} - ${pct(OFFICE_START)})` }} />
+                      {inH !== null && (
+                        <div className={`hrg-seg${d.clockOut || leftAt[d.id] ? '' : ' is-open'}`}
+                          style={{ left: pct(inH), width: `max(4px, calc(${pct(outH ?? OFFICE_END)} - ${pct(inH)}))` }} />
+                      )}
+                    </div>
+                    <div className="hrg-ticks"><span>7</span><span>9</span><span>11</span><span>13</span><span>15</span><span>17</span><span>19</span></div>
+                    <div className="hrg-flags">
+                      {mins !== null && mins < 60 && <span className="hra-chip is-r">Only {mins} minute{mins === 1 ? '' : 's'}</span>}
+                      {problems.map(pr => (
+                        <span key={pr} className={`hra-chip ${pr === 'no_clock_out' ? 'is-r' : pr === 'outside_office' ? 'is-a' : 'is-s'}`}>
+                          {pr === 'no_clock_out' ? 'Never clocked out' : pr === 'outside_office' ? 'Off office Wi-Fi' : pr === 'no_fingerprint' ? 'No fingerprint' : PROBLEM_TEXT[pr]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {!lockedBy && (
+                    <div className="hrg-dec">
+                      {d.clockOut ? (
+                        <div className="hra-seg" role="radiogroup" aria-label="Counts as">
+                          {([['full', 'Full day'], ['half', 'Half'], ['none', 'Not worked']] as const).map(([v, l]) => {
+                            const possible = v === 'none' || (v === 'half' ? hours >= 3 : hours >= 6)
+                            return <button key={v} type="button" role="radio" aria-checked={value === v} aria-selected={value === v} disabled={!possible} title={possible ? undefined : 'The hours clocked are too few for this'} onClick={() => setCountAs(c => ({ ...c, [d.id]: v }))}>{l}</button>
+                          })}
+                        </div>
+                      ) : (
+                        <label className="hrg-left"><span>Left at</span><input type="time" value={leftAt[d.id] ?? ''} onChange={e => setLeftAt(m => ({ ...m, [d.id]: e.target.value }))} /></label>
+                      )}
+                      <div className="hrg-btns">
+                        <button type="button" className="hrb-btn" disabled={busy} onClick={() => void decide(d, false).then(ok => { if (ok) void load() })}>Reject</button>
+                        <button type="button" className="hrb-btn is-g" disabled={busy || (!d.clockOut && !leftAt[d.id])} onClick={() => void decide(d, true).then(ok => { if (ok) void load() })}>
+                          {!d.clockOut ? (leftAt[d.id] ? (value === 'none' ? 'Mark not worked' : `Approve ${hours.toFixed(1)} h`) : 'Approve') : value === 'none' ? 'Mark not worked' : 'Approve'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </section>
+        </>
       )}
+
+      {view !== 'today' && (
+        <div className="hr-attendance__bar">
+          <button type="button" className="hrb-btn" onClick={() => setView('today')}>‹ Today</button>
+          {view === 'month' && (
+            <div className="hr-attendance__month">
+              <input type="month" className="form-input" value={month} max={today.slice(0, 7)} onChange={e => e.target.value && setMonth(e.target.value)} aria-label="Month" />
+              {!lockedBy && <button type="button" className="btn-outline" onClick={() => setEditing({ employeeId: active[0]?.id ?? '', workDate: today, day: null, clockIn: '08:00', clockOut: '17:00', status: 'approved', reason: '' })}>Add a day</button>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {lockedBy && view === 'month' && <p className="hr-attendance__note">Payroll {lockedBy} covers this month, so its attendance can no longer change.</p>}
 
       {view === 'month' && (
         <div className="hr-attendance__table-wrap">
