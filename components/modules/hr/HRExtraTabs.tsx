@@ -198,6 +198,29 @@ export function HRDocumentsTab({ prefill, onPrefillUsed }: { prefill?: { employe
   }
 
   const { expiring, expired } = expiryCounts(hrDocuments)
+  /** Open the form for one person and type, filled in (Upload / Renew). */
+  const openFor = (employeeId: string, type: string) => {
+    const label = DOC_TYPES.find(t => t.value === type)?.label ?? ''
+    setForm({ ...emptyDocForm(), employeeId, type, title: `${label} — ${empName(employeeId)}` })
+    setShow(true)
+  }
+  // What HR has to do about papers, most urgent first: the two every
+  // person must have on file, then anything expired or about to.
+  const needs = [
+    ...employees.filter(e => e.status !== 'exited').flatMap(e => (['contract', 'id_copy'] as const)
+      .filter(type => !hrDocuments.some(d => d.employeeId === e.id && d.type === type))
+      .map(type => ({ id: `${e.id}:${type}`, employeeId: e.id, type, what: type === 'contract' ? 'Signed contract' : 'ID copy', problem: 'Missing', tone: 'bad' as const, rank: 0, action: 'Upload' }))),
+    ...hrDocuments
+      .filter(d => employees.some(e => e.id === d.employeeId && e.status !== 'exited'))
+      .map(d => ({ d, x: documentExpiry(d.expiryDate) }))
+      .filter(({ x }) => x.status !== 'active')
+      .map(({ d, x }) => ({
+        id: d.id, employeeId: d.employeeId, type: d.type, what: d.title,
+        problem: x.status === 'expired' ? 'Expired' : `Ends in ${x.daysLeft} days`,
+        tone: x.status === 'expired' ? 'bad' as const : 'warn' as const, rank: x.status === 'expired' ? 1 : 2, action: 'Renew',
+      })),
+  ].sort((a, b) => a.rank - b.rank || empName(a.employeeId).localeCompare(empName(b.employeeId)))
+  const [showAllNeeds, setShowAllNeeds] = useState(false)
   const visibleDocs = filter === 'attention'
     ? hrDocuments.filter(d => documentExpiry(d.expiryDate).status !== 'active')
     : hrDocuments
@@ -232,6 +255,22 @@ export function HRDocumentsTab({ prefill, onPrefillUsed }: { prefill?: { employe
         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faFileLines} /> HR Documents</h3>
         <button className="btn-primary flex items-center gap-2" onClick={() => { setForm(emptyDocForm()); setShow(true) }}><Fa icon={faPlus} /> Add Document</button>
       </div>
+      {needs.length > 0 && (
+        <section className="hr-needs" aria-label="Documents needing action">
+          <header><b>Needs action · {needs.length}</b><small>Every person needs a signed contract and an ID copy on file</small></header>
+          <ul>
+            {(showAllNeeds ? needs : needs.slice(0, 6)).map(n => (
+              <li key={n.id}>
+                <span className="hr-needs__who">{empName(n.employeeId)}</span>
+                <span className="hr-needs__what">{n.what}</span>
+                <span className={`hr-needs__chip is-${n.tone}`}>{n.problem}</span>
+                <button type="button" className="btn-outline text-[11px]" onClick={() => openFor(n.employeeId, n.type)}>{n.action}</button>
+              </li>
+            ))}
+          </ul>
+          {needs.length > 6 && <button type="button" className="hr-needs__more" onClick={() => setShowAllNeeds(v => !v)}>{showAllNeeds ? 'Show fewer' : `Show all ${needs.length}`}</button>}
+        </section>
+      )}
       {(expiring > 0 || expired > 0) && (
         <div className="hr-submodule-alert m-4 mb-0 rounded-xl p-3 flex items-center justify-between gap-3 text-[12px]" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', color: 'var(--warning-text)' }}>
           <span>

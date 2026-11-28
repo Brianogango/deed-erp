@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { faUsers, faUserPlus, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
+import { faUserPlus, faPen } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore, refreshHrListsFromBrowser } from '@/hooks/useHrStore'
@@ -19,14 +19,13 @@ import HRMyPortal from './hr/HRMyPortal'
 import HRDepartments from './hr/HRDepartments'
 import HREmployeeSummary from './hr/HREmployeeSummary'
 import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
-import { Badge, Confirm, Field, Input, Modal, Select, ModuleSkeleton, useMounted, TabBar, ModuleHeader } from '@/components/ui'
-import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { Confirm, Field, Input, Modal, Select, ModuleSkeleton, useMounted } from '@/components/ui'
+import { SecondaryActionMenu } from '@/components/erp'
 import { type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
-import HREmployeeProfile from './hr/HREmployeeProfile'
+import HREmployeeProfile, { avatarColor } from './hr/HREmployeeProfile'
 import { employeeSetup, type EmployeeSetup } from '@/lib/hr/employee-setup'
 import { documentExpiry } from '@/lib/hr/document-status'
 import { userCan } from '@/lib/auth/can'
@@ -60,12 +59,13 @@ const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 
 /** HR's sections, grouped the way the work is: who people are, their time, their pay, their growth. */
 const TAB_GROUPS: Array<{ id: string; label: string; tabs: Array<{ id: HRTab; label: string }> }> = [
   { id: 'portal', label: 'My portal', tabs: [{ id: 'self_service', label: 'My portal' }] },
-  { id: 'people', label: 'People', tabs: [{ id: 'employees', label: 'Employees' }, { id: 'org_chart', label: 'Org chart' }, { id: 'departments', label: 'Departments' }, { id: 'documents', label: 'Documents' }, { id: 'assets', label: 'Equipment' }] },
+  { id: 'people', label: 'People', tabs: [{ id: 'employees', label: 'Employees' }, { id: 'departments', label: 'Departments' }, { id: 'documents', label: 'Documents' }, { id: 'assets', label: 'Equipment' }, { id: 'org_chart', label: 'Org chart' }] },
   { id: 'time', label: 'Time', tabs: [{ id: 'attendance', label: 'Attendance' }, { id: 'leave', label: 'Leave' }] },
   { id: 'pay', label: 'Pay', tabs: [{ id: 'payroll', label: 'Payroll' }, { id: 'salary_advances', label: 'Salary advances' }] },
   { id: 'growth', label: 'Growth', tabs: [{ id: 'performance', label: 'Performance' }, { id: 'training', label: 'Training' }, { id: 'recruitment', label: 'Recruitment' }] },
   { id: 'reports', label: 'Reports', tabs: [{ id: 'reports', label: 'Reports' }] },
 ]
+const DOC_TYPE_SHORT: Record<string, string> = { contract: 'Contract', nda: 'NDA', id_copy: 'ID', certification: 'Certificate', work_permit: 'Work permit', other: 'Paper' }
 const STAFF_TAB_LABELS: Partial<Record<HRTab, string>> = { self_service: 'My portal', leave: 'My leave', salary_advances: 'Salary advance', payroll: 'Payslips' }
 
 
@@ -75,20 +75,6 @@ const STAFF_TAB_LABELS: Partial<Record<HRTab, string>> = { self_service: 'My por
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * A stable tint index for a person's avatar, derived from their name.
- *
- * Thirteen identically coloured circles carry no information and cost the
- * widest column 32px each. A colour that never changes for a given person is
- * something the eye learns, so a familiar row is found by shape before the
- * name is read. Six low-saturation tints only — this is a directory, not a
- * palette (see --hr-tint-* in globals.css).
- */
-function avatarTint(name: string): number {
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
-  return hash % 6
-}
 
 export default function HR() {
   return (
@@ -120,6 +106,7 @@ function HRContent() {
     hrDocuments,
     addEmployee,
     updateEmployee,
+    leaveBalances,
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -186,10 +173,7 @@ function HRContent() {
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [empSearch, setEmpSearchValue] = useUrlUiState('employeeQ', '')
-  const [empPageValue, setEmpPageValue] = useUrlUiState('employeePage', '1')
-  const empPage = Math.max(1, Number.parseInt(empPageValue, 10) || 1)
   const setEmpSearch = (value: string) => setEmpSearchValue(value, { queryPatch: { employeePage: null } })
-  const setEmpPage = (page: number) => setEmpPageValue(String(Math.max(1, page)))
   const [viewEmpId, setViewEmpId] = useUrlRecordId({ param: 'emp' })
   const [editEmpId, setEditEmpId] = useState<string | null>(null)
 
@@ -335,13 +319,32 @@ function HRContent() {
 
   // Which people the list shows: active, records still incomplete, leavers, or everyone.
   const [peopleFilterValue, setPeopleFilterValue] = useUrlUiState('people', 'active')
-  const peopleFilter = (['active', 'incomplete', 'leavers', 'all'] as const).includes(peopleFilterValue as never)
-    ? peopleFilterValue as 'active' | 'incomplete' | 'leavers' | 'all'
+  const peopleFilter = (['active', 'onboarding', 'leavers', 'all'] as const).includes(peopleFilterValue as never)
+    ? peopleFilterValue as 'active' | 'onboarding' | 'leavers' | 'all'
     : 'active'
-  const setPeopleFilter = (v: 'active' | 'incomplete' | 'leavers' | 'all') => setPeopleFilterValue(v, { queryPatch: { employeePage: null } })
+  const setPeopleFilter = (v: 'active' | 'onboarding' | 'leavers' | 'all') => setPeopleFilterValue(v, { queryPatch: { employeePage: null } })
   // A person's checklist opens the document / equipment form already filled in.
   const [docPrefill, setDocPrefill] = useState<{ employeeId: string; type: string } | null>(null)
   const [assignPrefill, setAssignPrefill] = useState<string | null>(null)
+  // Daily or monthly per person (Pay column, onboarding "Payroll set up").
+  const [payBasisById, setPayBasisById] = useState<Map<string, { basis: 'monthly' | 'daily'; dailyRate: number }>>(new Map())
+  // Reviews waiting in an open cycle ("Reviews due").
+  const [reviewsDue, setReviewsDue] = useState<{ due: number; openCycle: boolean } | null>(null)
+  useEffect(() => {
+    if (!canManageHR) return
+    let live = true
+    fetch('/api/attendance/pay-basis', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => {
+      if (!live || !Array.isArray(d?.payBasis)) return
+      setPayBasisById(new Map(d.payBasis.map((r: { employeeId: string; basis: 'monthly' | 'daily'; dailyRate: number }) => [r.employeeId, { basis: r.basis, dailyRate: Number(r.dailyRate) || 0 }])))
+    }).catch(() => {})
+    fetch('/api/appraisals', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => {
+      if (!live || !d) return
+      const open = new Set((Array.isArray(d.cycles) ? d.cycles : []).filter((c: { status: string }) => c.status !== 'closed').map((c: { id: string }) => c.id))
+      const due = (Array.isArray(d.appraisals) ? d.appraisals : []).filter((a: { status: string; cycleId?: string }) => a.status !== 'completed' && (!a.cycleId || open.has(a.cycleId))).length
+      setReviewsDue({ due, openCycle: open.size > 0 })
+    }).catch(() => {})
+    return () => { live = false }
+  }, [canManageHR])
   const heldAssets = useMemo(() => {
     const by = new Map<string, typeof employeeAssetAssignments>()
     for (const a of employeeAssetAssignments) {
@@ -352,90 +355,20 @@ function HRContent() {
   }, [employeeAssetAssignments])
   const setupById = useMemo(() => {
     const out = new Map<string, EmployeeSetup>()
-    for (const e of employees) out.set(e.id, employeeSetup(e, hrDocuments, heldAssets.get(e.id)?.length ?? 0))
+    for (const e of employees) out.set(e.id, employeeSetup(e, hrDocuments, heldAssets.get(e.id)?.length ?? 0, payBasisById.get(e.id)))
     return out
-  }, [employees, hrDocuments, heldAssets])
+  }, [employees, hrDocuments, heldAssets, payBasisById])
 
   const filteredEmployees = employees.filter(e => {
     const left = e.status === 'exited'
     if (peopleFilter === 'active' && left) return false
     if (peopleFilter === 'leavers' && !left) return false
-    if (peopleFilter === 'incomplete' && (left || setupById.get(e.id)?.complete)) return false
+    if (peopleFilter === 'onboarding' && (left || setupById.get(e.id)?.complete)) return false
     const q = empSearch.toLowerCase()
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
   })
 
-  const employeeColumns: ColumnDef<Employee>[] = [
-    {
-      key: 'employee', label: 'Employee', priority: 1, width: '1.4fr',
-      render: e => (
-        <div className="hr-person">
-          {/* One tint per person, derived from the name. Thirteen identical
-              circles are decoration; a stable colour is something the eye can
-              learn to find a familiar row by. */}
-          <span className="hr-person__avatar" data-tint={avatarTint(e.fullName)} aria-hidden="true">
-            {initials(e.fullName)}
-          </span>
-          <span className="hr-person__id">
-            <span className="hr-person__name">{e.fullName}</span>
-            <span className="hr-person__no">{e.employeeNo}</span>
-          </span>
-        </div>
-      ),
-      exportValue: e => e.fullName,
-    },
-    {
-      key: 'status', label: 'Status', priority: 1, width: '90px',
-      // Only the exception is loud. Active still says "Active" rather than an
-      // em dash, which reads as missing data in every other column here.
-      render: e => e.status === 'active'
-        ? <span className="hr-status-quiet">Active</span>
-        : <Badge status="cancelled" label={e.status} />,
-      // The export is a data file, not a screen: every row keeps its status.
-      exportValue: e => e.status,
-    },
-    {
-      key: 'setup', label: 'Record', priority: 1, width: '190px',
-      // How complete the person's record is, and what is still missing —
-      // a leaver shows the kit still to collect instead.
-      render: e => {
-        if (e.status === 'exited') {
-          const kit = heldAssets.get(e.id)?.length ?? 0
-          return kit ? <span className="hr-setup hr-setup--bad">{kit} item{kit === 1 ? '' : 's'} to collect</span> : <span className="hr-empty-cell">Left{e.exitDate ? ` ${fmtDate(e.exitDate)}` : ''}</span>
-        }
-        const st = setupById.get(e.id)
-        if (!st) return null
-        if (st.complete) return <span className="hr-setup hr-setup--ok">Complete</span>
-        return (
-          <span className="hr-setup">
-            <span className="hr-setup__bar"><i style={{ width: `${Math.round((st.done / Math.max(1, st.total)) * 100)}%` }} /></span>
-            <small title={st.missing.join(', ')}>{st.done} of {st.total} · {st.missing[0]}{st.missing.length > 1 ? ` +${st.missing.length - 1}` : ''}</small>
-          </span>
-        )
-      },
-      exportValue: e => (setupById.get(e.id)?.complete ? 'Complete' : `${setupById.get(e.id)?.done ?? 0}/${setupById.get(e.id)?.total ?? 0}`),
-    },
-    {
-      key: 'department', label: 'Department', priority: 2, width: '150px',
-      // departmentName() resolves an id to its name and passes a name through.
-      // The row used to print departmentId raw, so a record still holding an id
-      // showed one here while the detail panel showed the name.
-      render: e => departmentName(e.departmentId) || <span className="hr-empty-cell">—</span>,
-      exportValue: e => departmentName(e.departmentId),
-    },
-    {
-      key: 'jobTitle', label: 'Job title', priority: 2, width: '210px',
-      render: e => e.jobTitle
-        ? <span className="hr-cell-clamp" title={e.jobTitle}>{e.jobTitle}</span>
-        : <span className="hr-empty-cell">—</span>,
-      exportValue: e => e.jobTitle,
-    },
-    {
-      key: 'startDate', label: 'Start date', priority: 3, width: '105px',
-      render: e => <span className="whitespace-nowrap">{fmtDate(e.startDate)}</span>,
-      exportValue: e => e.startDate,
-    },
-  ]
+
 
   const downloadPayslipPdf = (id: string) => {
     const payslip = payslips.find(p => p.id === id)
@@ -466,30 +399,30 @@ function HRContent() {
 
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
 
+  /** "since 12 Nov", "3 yrs", "8 mo" — how long someone has been here. */
+  const tenure = (e: Employee) => {
+    if (e.status === 'exited') return e.exitDate ? `${e.exitDate > new Date().toISOString().slice(0, 10) ? 'leaving' : 'left'} ${fmtDate(e.exitDate).replace(/ \d{4}$/, '')}` : 'left'
+    if (!e.startDate) return ''
+    const months = Math.floor((Date.now() - new Date(`${e.startDate}T00:00:00`).getTime()) / (30.44 * 86400000))
+    if (months < 3) return `since ${fmtDate(e.startDate).replace(/ \d{4}$/, '')}`
+    return months >= 12 ? `${Math.floor(months / 12)} yr${months >= 24 ? 's' : ''}` : `${months} mo`
+  }
   /** Open the edit form for a person, filled with their record. */
   const startEdit = (emp: Employee) => { setEmpForm({ fullName: emp.fullName, employeeNo: emp.employeeNo, email: emp.email || '', workEmail: emp.workEmail || '', phone: emp.phone || '', nationalId: emp.nationalId || '', kraPin: emp.kraPin || '', nssfNumber: emp.nssfNumber || '', gender: emp.gender || '', departmentId: emp.departmentId || '', jobTitle: emp.jobTitle || '', shift: emp.shift || '', startDate: emp.startDate, status: emp.status as any, basicSalary: String(emp.basicSalary), housingAllowance: String(emp.housingAllowance ?? 0), transportAllowance: String(emp.transportAllowance ?? 0), bankName: emp.bankName || '', bankAccount: emp.bankAccount || '', paymentMode: emp.paymentMode || 'mpesa', mpesaNumber: emp.mpesaNumber || '', managerEmployeeId: emp.managerEmployeeId || '' }); setEditEmpId(emp.id); void loadPayBasis(emp.id) }
 
   if (!mounted) return <ModuleSkeleton />
 
   // What HR must act on. A group with nothing in it is left out, and the panel with it.
-  const pendingLeave = leaveRequests.filter(req => req.status === 'pending_hr')
-  const dayMs = 86400000
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const docsToRenew = hrDocuments.filter(d => documentExpiry(d.expiryDate).status !== 'active' && employees.some(e => e.id === d.employeeId && e.status !== 'exited'))
+  const within30 = (d?: string) => { if (!d) return false; const x = documentExpiry(d); return x.status === 'expired' || (x.daysLeft ?? 999) <= 30 }
+  const papersExpiring = hrDocuments.filter(d => within30(d.expiryDate) && employees.some(e => e.id === d.employeeId && e.status !== 'exited'))
   const kitToCollect = employeeAssetAssignments.filter(a => a.status === 'assigned' && employees.find(e => e.id === a.employeeId)?.status === 'exited')
-  const incompleteCount = employees.filter(e => e.status !== 'exited' && !setupById.get(e.id)?.complete).length
-  const probationSoon = employees
-    .filter(e => e.status === 'active' && e.probationEndDate)
-    .filter(e => { const d = Math.round((new Date(`${e.probationEndDate}T00:00:00`).getTime() - todayStart) / dayMs); return d <= 30 && d >= -14 })
-  // The four things HR acts on, each opening the list that fixes it.
+  const onboardingOpen = employees.filter(e => e.status !== 'exited' && !setupById.get(e.id)?.complete).length
+  // HR mock A: the four things HR acts on, each opening the list that fixes it.
   const attentionTiles: Array<{ id: string; n: number; title: string; sub: string; tone: 'bad' | 'warn' | 'calm'; open: () => void }> = [
-    { id: 'incomplete', n: incompleteCount, title: 'Records incomplete', sub: 'papers or details missing', tone: incompleteCount ? 'bad' : 'calm', open: () => { setTab('employees'); setPeopleFilter('incomplete') } },
-    { id: 'docs', n: docsToRenew.length, title: 'Papers to renew', sub: 'expired or ending in 30 days', tone: docsToRenew.length ? 'warn' : 'calm', open: () => setTab('documents') },
-    { id: 'kit', n: kitToCollect.length, title: 'Kit to collect', sub: 'still with people who left', tone: kitToCollect.length ? 'warn' : 'calm', open: () => setTab('assets') },
-    pendingLeave.length || !probationSoon.length
-      ? { id: 'leave', n: pendingLeave.length, title: 'Leave to approve', sub: 'waiting for HR', tone: pendingLeave.length ? 'warn' : 'calm', open: () => setTab('leave') }
-      : { id: 'probation', n: probationSoon.length, title: 'Probation ending', sub: 'within 30 days', tone: 'warn', open: () => { setTab('employees'); setPeopleFilter('active') } },
+    { id: 'onboarding', n: onboardingOpen, title: 'Onboarding open', sub: 'papers or kit missing', tone: onboardingOpen ? 'bad' : 'calm', open: () => { setTab('employees'); setPeopleFilter('onboarding') } },
+    { id: 'papers', n: papersExpiring.length, title: 'Papers expiring', sub: 'within 30 days', tone: papersExpiring.length ? 'warn' : 'calm', open: () => setTab('documents') },
+    { id: 'kit', n: kitToCollect.length, title: 'Kit to collect', sub: kitToCollect.length === 1 ? 'from a leaver' : 'from leavers', tone: kitToCollect.length ? 'warn' : 'calm', open: () => setTab('assets') },
+    { id: 'reviews', n: reviewsDue?.due ?? 0, title: 'Reviews due', sub: reviewsDue?.openCycle ? 'in the open cycle' : 'no cycle open', tone: reviewsDue?.due ? 'warn' : 'calm', open: () => setTab('performance') },
   ]
 
   /** One-tap choices (pay type, payment method, gender, status). */
@@ -591,63 +524,45 @@ function HRContent() {
 
   return (
     <div className="mod-page hr-workspace">
-      <ModuleHeader
-        title="Human resources"
-        subtitle="People, leave and payroll operations"
-        icon={<Fa icon={faUsers} />}
-        count={employees.length}
-        color="var(--navy)"
-        primaryAction={isAdmin ? (
-          <PrimaryActionButton
-            icon={<Fa icon={faUserPlus} />}
-            onClick={() => { setTab('employees'); void loadPayBasis(null); setShowEmployeeModal(true) }}
-          >
-            Add employee
-          </PrimaryActionButton>
-        ) : undefined}
-        overflowActions={canManageHR ? (
-          <SecondaryActionMenu
-            actions={[
-              { id: 'users', label: 'System users', onClick: () => router.push('/settings?tab=users') },
-            ]}
-          />
-        ) : undefined}
-      />
-
-      {canManageHR ? (
-        <>
-          <TabBar
-            tabs={visibleGroups.map(g => ({ id: g.id, label: g.label }))}
-            active={activeGroup.id}
-            onChange={id => { const g = visibleGroups.find(x => x.id === id); if (g) setTab(g.tabs[0].id) }}
-            maxVisibleMobile={6}
-            maxVisibleTablet={6}
-            maxVisibleDesktop={6}
-            ariaLabel="HR sections"
-          />
-          {activeGroup.tabs.length > 1 && (
-            <nav className="hr-subnav" aria-label={`${activeGroup.label} sections`}>
-              {activeGroup.tabs.map(t => (
-                <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
-              ))}
-            </nav>
-          )}
-        </>
-      ) : (
-        <TabBar
-          tabs={allowedTabs.map(id => ({ id, label: STAFF_TAB_LABELS[id] ?? id }))}
-          active={tab}
-          onChange={id => setTab(id as HRTab)}
-          maxVisibleMobile={4}
-          maxVisibleTablet={6}
-          maxVisibleDesktop={6}
-          ariaLabel="HR sections"
-        />
+      {/* HR mock: one white header — title, people count, actions, then the
+          sections; the chosen section's pages sit on the strip below it. */}
+      <header className="hrh">
+        <div className="hrh-row">
+          <h1>Human resources</h1>
+          <span className="hrh-count">{employees.filter(e => e.status !== 'exited').length} people</span>
+          <div className="hrh-actions">
+            {canManageHR && (
+              <SecondaryActionMenu
+                label="More"
+                actions={[{ id: 'users', label: 'System users', onClick: () => router.push('/settings?tab=users') }]}
+              />
+            )}
+            {isAdmin && (
+              <button type="button" className="hrb-btn is-p hrh-add" onClick={() => { setTab('employees'); void loadPayBasis(null); setShowEmployeeModal(true) }}>
+                <Fa icon={faUserPlus} /> Add employee
+              </button>
+            )}
+          </div>
+        </div>
+        <nav className="hrh-tabs" aria-label="HR sections">
+          {(canManageHR ? visibleGroups.map(g => ({ id: g.id, label: g.label, go: () => setTab(g.tabs[0].id), on: activeGroup.id === g.id }))
+            : allowedTabs.map(id => ({ id, label: STAFF_TAB_LABELS[id] ?? id, go: () => setTab(id), on: tab === id }))
+          ).map(t => (
+            <button key={t.id} type="button" aria-current={t.on ? 'page' : undefined} onClick={t.go}>{t.label}</button>
+          ))}
+        </nav>
+      </header>
+      {canManageHR && activeGroup.tabs.length > 1 && (
+        <nav className="hrh-sub" aria-label={`${activeGroup.label} sections`}>
+          {activeGroup.tabs.filter(t => t.id !== 'org_chart' || tab === 'org_chart').map(t => (
+            <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => { setViewEmpId(null); setTab(t.id) }}>{t.label}</button>
+          ))}
+        </nav>
       )}
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="mod-body">
-      <div className="hr-content-shell card overflow-hidden m-3 sm:m-4">
+      <div className="hr-content-shell hrx-body">
         {viewEmployee && editEmpId !== viewEmployee.id && canManageHR ? (
           <HREmployeeProfile
             employee={viewEmployee}
@@ -655,9 +570,17 @@ function HRContent() {
             manager={employees.find(e => e.id === viewEmployee.managerEmployeeId)?.fullName ?? ''}
             documents={hrDocuments}
             assets={(heldAssets.get(viewEmployee.id) ?? []).map(a => ({ id: a.id, productName: a.productName, serialNumber: a.serialNumber, assignedDate: a.assignedDate, acknowledgedByEmployee: a.acknowledgedByEmployee }))}
-            setup={setupById.get(viewEmployee.id) ?? employeeSetup(viewEmployee, hrDocuments, 0)}
+            setup={setupById.get(viewEmployee.id) ?? employeeSetup(viewEmployee, hrDocuments, 0, payBasisById.get(viewEmployee.id))}
+            payBasis={payBasisById.get(viewEmployee.id)}
+            leaveRequests={leaveRequests}
+            leaveLeft={(() => {
+              const b = leaveBalances.find(x => x.employeeId === viewEmployee.id && x.leaveType === 'annual' && x.year === new Date().getFullYear())
+              if (!b) return null
+              const total = b.entitlement + (b.carryForward || 0)
+              return { left: Math.max(0, total - b.used - b.pending), total }
+            })()}
+            payslips={payslips}
             canManage={isAdmin}
-            canSeePay={canSetPayBasis}
             onBack={() => setViewEmpId(null)}
             onEdit={() => startEdit(viewEmployee)}
             onAddDocument={type => { setDocPrefill({ employeeId: viewEmployee.id, type }); setViewEmpId(null); setTab('documents') }}
@@ -665,69 +588,84 @@ function HRContent() {
           />
         ) : tab === 'employees' && canManageHR ? (
           <div className="hr-employees-view">
-            <div className="hr-attn" role="list" aria-label="Needs attention">
+            <div className="hra-att" role="list" aria-label="Needs attention">
               {attentionTiles.map(t => (
-                <button key={t.id} type="button" role="listitem" className={`hr-attn__tile is-${t.tone}`} onClick={t.open}>
+                <button key={t.id} type="button" role="listitem" className={`hra-at is-${t.tone}`} onClick={t.open}>
                   <strong>{t.n}</strong><span><b>{t.title}</b><small>{t.sub}</small></span>
                 </button>
               ))}
             </div>
-            <div className="hr-people-bar">
-              <div className="hr-seg" role="tablist" aria-label="Which people">
-                {([
-                  ['active', `Active · ${employees.filter(e => e.status !== 'exited').length}`],
-                  ['incomplete', `Incomplete · ${incompleteCount}`],
-                  ['leavers', `Leavers · ${employees.filter(e => e.status === 'exited').length}`],
-                  ['all', 'All'],
-                ] as const).map(([id, label]) => (
-                  <button key={id} type="button" role="tab" aria-selected={peopleFilter === id} onClick={() => setPeopleFilter(id)}>{label}</button>
-                ))}
-              </div>
-            </div>
-              <section className="hr-directory card overflow-hidden">
-            <DataTable
-              tableId="hr_employees"
-              columns={employeeColumns}
-              rows={filteredEmployees}
-              rowKey={e => e.id}
-              searchValue={empSearch}
-              onSearchChange={setEmpSearch}
-              clientSearch={false}
-              page={empPage}
-              onPageChange={setEmpPage}
-              searchPlaceholder="Search employees…"
-              emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
-              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => { void loadPayBasis(null); setShowEmployeeModal(true) }}>+ Add Employee</button> : undefined}
-              onRowClick={e => setViewEmpId(e.id)}
-              rowActions={e => (
-                <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
-                  <Fa icon={faEye} />
-                </button>
-              )}
-              renderCard={e => (
-                <div
-                  key={e.id}
-                  className="rounded-xl border border-[var(--border-lt)] p-4 cursor-pointer hover:bg-[var(--bg-surface)] transition-colors"
-                  onClick={() => setViewEmpId(e.id)}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                        {e.fullName.slice(0, 1)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[var(--text-1)] truncate">{e.fullName}</p>
-                        <p className="text-[10px] text-[var(--text-4)]">{e.employeeNo} · {e.jobTitle}</p>
-                      </div>
-                    </div>
-                    <Badge status={e.status === 'active' ? 'active' : 'cancelled'} label={e.status} />
-                  </div>
+            <section className="hra-card">
+              <div className="hra-ch">
+                <div className="hra-seg" role="tablist" aria-label="Which people">
+                  {([
+                    ['active', `Active · ${employees.filter(e => e.status !== 'exited').length}`],
+                    ['onboarding', `Onboarding · ${onboardingOpen}`],
+                    ['leavers', `Leavers · ${employees.filter(e => e.status === 'exited').length}`],
+                    ['all', 'All'],
+                  ] as const).map(([id, label]) => (
+                    <button key={id} type="button" role="tab" aria-selected={peopleFilter === id} onClick={() => setPeopleFilter(id)}>{label}</button>
+                  ))}
                 </div>
-              )}
-              exportTitle="Employees"
-              exportFilename="employees"
-            />
-              </section>
+                <div className="hra-tools">
+                  <input className="hra-search" type="search" placeholder="Search people…" aria-label="Search people" value={empSearch} onChange={ev => setEmpSearch(ev.target.value)} />
+                  <button type="button" className="hrb-btn" onClick={() => setTab('org_chart')}>Org chart</button>
+                </div>
+              </div>
+              <div className="hra-table-wrap">
+              <table className="hra-table">
+                <thead><tr><th>Person</th><th>Department</th><th>Pay</th><th>Onboarding</th><th /></tr></thead>
+                <tbody>
+                  {filteredEmployees.length === 0 && (
+                    <tr><td colSpan={5} className="hra-empty">{employees.length === 0 ? 'No employees yet — add the first one.' : 'No one matches.'}</td></tr>
+                  )}
+                  {filteredEmployees.map(e => {
+                    const st = setupById.get(e.id)
+                    const left = e.status === 'exited'
+                    const leaving = left && !!e.exitDate && e.exitDate > new Date().toISOString().slice(0, 10)
+                    const kit = heldAssets.get(e.id)?.length ?? 0
+                    const basis = payBasisById.get(e.id)?.basis ?? 'monthly'
+                    const ending = !left && st?.complete
+                      ? hrDocuments.filter(d => d.employeeId === e.id && d.expiryDate && documentExpiry(d.expiryDate).status !== 'active').sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)))[0]
+                      : undefined
+                    return (
+                      <tr key={e.id} onClick={() => setViewEmpId(e.id)}>
+                        <td>
+                          <div className="hra-who">
+                            <span className="hra-av" style={{ background: avatarColor(e.fullName) }} aria-hidden="true">{initials(e.fullName)}</span>
+                            <div className="min-w-0"><b>{e.fullName}</b><small>{[e.jobTitle, tenure(e)].filter(Boolean).join(' · ')}</small></div>
+                          </div>
+                        </td>
+                        <td>{departmentName(e.departmentId) || '—'}</td>
+                        <td><span className={`hra-chip ${basis === 'daily' ? 'is-v' : 'is-s'}`}>{basis === 'daily' ? 'Daily' : 'Monthly'}</span></td>
+                        <td className="hra-onb">
+                          {left
+                            ? <span className="hra-chip is-r">{leaving ? 'Leaving' : 'Left'}</span>
+                            : st?.complete
+                              ? <span className="hra-chip is-g">Done</span>
+                              : st && (
+                                <>
+                                  <div className="hra-bar"><i style={{ width: `${Math.round((st.done / st.total) * 100)}%` }} /></div>
+                                  <small>{st.done} of {st.total} · {st.missing.slice(0, 2).join(', ')}{st.missing.length > 2 ? ` +${st.missing.length - 2}` : ''} left</small>
+                                </>
+                              )}
+                        </td>
+                        <td className="hra-r" onClick={ev => ev.stopPropagation()}>
+                          {left
+                            ? (kit > 0 ? <button type="button" className="hrb-btn" onClick={() => setViewEmpId(e.id)}>Offboard</button> : null)
+                            : !st?.complete
+                              ? <button type="button" className="hrb-btn" onClick={() => setViewEmpId(e.id)}>Continue</button>
+                              : ending
+                                ? <span className="hra-chip is-a">{(DOC_TYPE_SHORT[ending.type] ?? 'Paper')} {documentExpiry(ending.expiryDate).status === 'expired' ? 'expired' : `ends ${fmtDate(ending.expiryDate!).replace(/ \d{4}$/, '')}`}</span>
+                                : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              </div>
+            </section>
           </div>
         ) : tab === 'attendance' && canManageHR ? (
           <HRAttendanceTab />
