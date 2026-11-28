@@ -70,39 +70,8 @@ export default function AppraisalsPanel({ manage }: { manage: boolean }) {
     }
   }
 
-  if (!manage && (data?.appraisals.length ?? 0) === 0) return null
-
-  return (
-    <div className="hr-submodule-panel card overflow-hidden">
-      <PanelHeader title={manage ? 'Performance reviews' : 'My reviews'} count={rows.length}>
-        {cycles.length > 0 && (
-          <select className="form-input text-[11px] py-1.5" value={activeCycle} onChange={e => setCycleFilter(e.target.value)}>
-            {cycles.map(c => <option key={c.id} value={c.id}>{c.name}{c.status === 'closed' ? ' (closed)' : ''}</option>)}
-          </select>
-        )}
-        {manage && cycle?.status === 'open' && <button className="btn-outline text-[11px]" onClick={() => closeCycle()}>Close cycle</button>}
-        {manage && <button className="btn-primary text-[11px]" onClick={() => setNewCycle(true)}>+ Open review cycle</button>}
-      </PanelHeader>
-      <div className="p-3 text-xs">
-        {data === null && <p style={{ color: 'var(--text-4)' }}>Loading…</p>}
-        {data && cycle && <p className="mb-2" style={{ color: 'var(--text-4)' }}>{cycle.name}: {fmtDate(cycle.periodStart)} to {fmtDate(cycle.periodEnd)} · {completed} of {rows.length} completed</p>}
-        {data && rows.length === 0 && <p style={{ color: 'var(--text-4)' }}>{manage ? 'No review cycle yet. Open one to create a review for every active employee.' : 'No reviews yet'}</p>}
-        {rows.map(a => {
-          const action = canSelfAssess(a, who) ? 'Write self-assessment' : canManagerAssess(a, who) ? 'Review' : canAcknowledge({ ...a, status: a.status }, who) ? 'View and acknowledge' : 'View'
-          return (
-            <div key={a.id} className="flex items-center justify-between gap-3 py-2 flex-wrap" style={{ borderTop: '1px solid var(--border-lt)' }}>
-              <div>
-                <span className="font-semibold">{a.employeeName}</span> <span style={{ color: 'var(--text-4)' }}>{a.employeeNo}{a.jobTitle ? ` · ${a.jobTitle}` : ''}</span>
-                <div style={{ color: a.status === 'completed' ? 'var(--success-text)' : 'var(--text-3)' }}>
-                  {STATUS_LABEL[a.status]}{a.finalRating ? ` · ${a.finalRating}/5 ${RATING_LABEL[a.finalRating] ?? ''}` : ''}{a.status === 'completed' && !a.employeeAckAt ? ' · not yet acknowledged' : ''}
-                </div>
-              </div>
-              <button className={action === 'View' ? 'btn-outline text-[11px]' : 'btn-primary text-[11px]'} onClick={() => setOpen(a.id)}>{action}</button>
-            </div>
-          )
-        })}
-      </div>
-
+  const modals = (
+    <>
       {newCycle && (
         <Modal title="Open review cycle" subtitle="A review is created for every active employee" onClose={() => setNewCycle(false)} width={460}>
           <div className="flex flex-col gap-3">
@@ -121,6 +90,98 @@ export default function AppraisalsPanel({ manage }: { manage: boolean }) {
       )}
 
       {current && <AppraisalModal appraisal={current} cycleOpen={cycle?.status === 'open'} who={who} reviewerName={currentUser?.name ?? ''} onClose={() => setOpen(null)} onDone={async () => { setOpen(null); await load() }} />}
+    </>
+  )
+
+  if (!manage && (data?.appraisals.length ?? 0) === 0) return null
+
+  const remind = async (a: Appraisal) => {
+    try {
+      const out = await api<{ reminded: string }>(`/api/appraisals/${a.id}/remind`, post({}))
+      showToast(`Reminder sent to ${out.reminded}`, 'success')
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Could not send the reminder', 'error') }
+  }
+  const selfDone = rows.filter(a => a.status !== 'pending_self').length
+  const mgrDone = completed
+  const closed = cycle?.status === 'closed'
+  const step = (done: boolean, now: boolean) => (done ? 'd' : now ? 'n' : '')
+
+  // HR mock F: the cycle as its four steps, then where each person is.
+  if (manage) return (
+    <section className="hra-card hrf">
+      <div className="hra-ch">
+        <b className="hrc-title">{cycle ? `${cycle.name} · ${rows.length} ${rows.length === 1 ? 'person' : 'people'}` : 'Performance reviews'}</b>
+        <div className="hrf-tools">
+          {cycles.length > 1 && (
+            <select className="hre-select" value={activeCycle} onChange={e => setCycleFilter(e.target.value)} aria-label="Review cycle">
+              {cycles.map(c => <option key={c.id} value={c.id}>{c.name}{c.status === 'closed' ? ' (closed)' : ''}</option>)}
+            </select>
+          )}
+          {cycle && !closed && <button type="button" className="hrb-btn is-p" onClick={() => closeCycle()}>Close cycle</button>}
+          {(!cycle || closed) && <button type="button" className="hrb-btn is-p" onClick={() => setNewCycle(true)}>+ Open review cycle</button>}
+        </div>
+      </div>
+      {data === null && <p className="hrb-empty">Loading…</p>}
+      {data && !cycle && <p className="hrb-empty">No review cycle yet. Open one to create a review for every active employee.</p>}
+      {cycle && (
+        <>
+          <div className="hrf-cyc">
+            <div className={step(true, false)}><b>Opened</b>{fmtDate(cycle.periodStart)}</div>
+            <div className={step(selfDone === rows.length && rows.length > 0, selfDone < rows.length)}><b>Self review</b>{selfDone} of {rows.length} done</div>
+            <div className={step(mgrDone === rows.length && rows.length > 0, selfDone > 0 && mgrDone < rows.length)}><b>Manager review</b>{mgrDone} of {rows.length} · due {fmtDate(cycle.periodEnd)}</div>
+            <div className={step(closed, !closed && mgrDone === rows.length && rows.length > 0)}><b>Close & share</b>{closed ? 'Closed' : '—'}</div>
+          </div>
+          <div className="hra-table-wrap">
+            <table className="hra-table">
+              <thead><tr><th>Person</th><th>Self</th><th>Manager</th><th>Score</th><th /></tr></thead>
+              <tbody>
+                {rows.map(a => {
+                  const self = a.status === 'pending_self' ? <span className="hra-chip is-r">Not started</span> : <span className="hra-chip is-g">Done</span>
+                  const mgr = a.status === 'completed' ? <span className="hra-chip is-g">Done</span>
+                    : a.status === 'pending_manager' ? <span className="hra-chip is-a">Waiting{a.reviewerName ? ` · ${a.reviewerName}` : ''}</span>
+                    : <span className="hra-chip is-s">—</span>
+                  const btn = canManagerAssess(a, who) && !closed ? <button type="button" className="hrb-btn" onClick={() => setOpen(a.id)}>Review</button>
+                    : a.status !== 'completed' && !closed ? <button type="button" className="hrb-btn" onClick={() => void remind(a)}>Remind</button>
+                    : <button type="button" className="hrb-btn" onClick={() => setOpen(a.id)}>Open</button>
+                  return (
+                    <tr key={a.id} className="is-static">
+                      <td>{a.employeeName}</td>
+                      <td>{self}</td>
+                      <td>{mgr}</td>
+                      <td>{a.finalRating ? <b>{Number(a.finalRating).toFixed(1)}</b> : '—'}</td>
+                      <td className="hra-r">{btn}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {modals}
+    </section>
+  )
+
+  return (
+    <div className="hr-submodule-panel card overflow-hidden">
+      <PanelHeader title="My reviews" count={rows.length} />
+      <div className="p-3 text-xs">
+        {rows.map(a => {
+          const action = canSelfAssess(a, who) ? 'Write self-assessment' : canManagerAssess(a, who) ? 'Review' : canAcknowledge({ ...a, status: a.status }, who) ? 'View and acknowledge' : 'View'
+          return (
+            <div key={a.id} className="flex items-center justify-between gap-3 py-2 flex-wrap" style={{ borderTop: '1px solid var(--border-lt)' }}>
+              <div>
+                <span className="font-semibold">{a.employeeName}</span> <span style={{ color: 'var(--text-4)' }}>{a.employeeNo}{a.jobTitle ? ` · ${a.jobTitle}` : ''}</span>
+                <div style={{ color: a.status === 'completed' ? 'var(--success-text)' : 'var(--text-3)' }}>
+                  {STATUS_LABEL[a.status]}{a.finalRating ? ` · ${a.finalRating}/5 ${RATING_LABEL[a.finalRating] ?? ''}` : ''}{a.status === 'completed' && !a.employeeAckAt ? ' · not yet acknowledged' : ''}
+                </div>
+              </div>
+              <button className={action === 'View' ? 'btn-outline text-[11px]' : 'btn-primary text-[11px]'} onClick={() => setOpen(a.id)}>{action}</button>
+            </div>
+          )
+        })}
+      </div>
+      {modals}
     </div>
   )
 }

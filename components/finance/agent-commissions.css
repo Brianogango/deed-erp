@@ -22,7 +22,7 @@
 .agc-card { background: var(--agc-card); border: 1px solid var(--agc-line); border-radius: 12px; overflow: hidden; min-width: 0; }
 .agc-list-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--agc-line); }
 .agc-seg { display: inline-flex; background: var(--agc-soft); border-radius: 8px; padding: 2px; }
-.agc-seg button { border: 0; background: transparent; font: 600 11.5px inherit; padding: 3px 9px; border-radius: 6px; color: var(--agc-muted); cursor: pointer; }
+.agc-seg button { border: 0; background: transparent; font-family: inherit; font-weight: 600; font-size: 11.5px; padding: 3px 9px; border-radius: 6px; color: var(--agc-muted); cursor: pointer; }
 .agc-seg button[aria-selected="true"] { background: var(--agc-card); color: var(--agc-ink); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
 .agc-search { display: block; width: calc(100% - 28px); margin: 10px 14px 6px; border: 1px solid var(--agc-line); border-radius: 8px; padding: 7px 10px; font-size: 12px; background: var(--agc-card); color: var(--agc-ink); }
 .agc-agent { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: 0; border-top: 1px solid var(--agc-soft); background: transparent; text-align: left; cursor: pointer; color: inherit; font: inherit; }
@@ -43,7 +43,7 @@
 .agc-chip--paid { background: #d1fae5; color: #065f46; }
 .agc-chip--neg { background: #fee2e2; color: #991b1b; margin-left: 6px; }
 .agc-flag { display: block; font-size: 11px; color: #92400e; font-family: var(--font-sans, Inter, system-ui, sans-serif); letter-spacing: 0; margin-top: 2px; white-space: normal; }
-.agc-link { border: 0; background: none; padding: 0; color: var(--primary-600, #0b5fd1); font: 700 11.5px inherit; cursor: pointer; text-decoration: none; }
+.agc-link { border: 0; background: none; padding: 0; color: var(--primary-600, #0b5fd1); font-family: inherit; font-weight: 700; font-size: 11.5px; cursor: pointer; text-decoration: none; }
 .agc-link--danger { color: #b91c1c; font-weight: 600; }
 
 .agc-placeholder { padding: 48px 24px; text-align: center; display: flex; flex-direction: column; gap: 4px; color: var(--agc-muted); font-size: 12.5px; }
@@ -83,7 +83,6 @@
 .agc-done summary { padding: 10px 18px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--agc-muted); cursor: pointer; }
 
 :root[data-theme="dark"] .agc-paybar { background: rgba(37,99,235,.12); border-color: rgba(96,165,250,.35); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .agc-paybar { background: rgba(37,99,235,.12); border-color: rgba(96,165,250,.35); } }
 
 @media (max-width: 1180px) {
   .agc-paybar { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -1,11 +1,11 @@
 'use client'
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { Fragment, useState, useEffect, useRef } from 'react'
 import { useApp, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
 import { CALENDAR_DAY_TYPES, employeeLeaveTypesFor, isLeaveTypeAllowedForGender, leaveDaysForRange, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import HRLeaveCalendar, { usePublicHolidays } from './HRLeaveCalendar'
@@ -84,7 +84,6 @@ export default function HRLeaveTab() {
   const myLeaves        = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
   const myLeaveBalances = leaveBalances.filter(b => b.employeeId === myEmployee?.id && b.year === new Date().getFullYear())
 
-  const pendingLeaves = useMemo(() => leaveRequests.filter(r => r.status === 'pending_hr').length, [leaveRequests])
 
   const canDecideLeaveFor = (req: { employeeId: string }) => {
     // Own requests are decided by someone else, whatever the caller's role.
@@ -384,18 +383,101 @@ export default function HRLeaveTab() {
 
   return (
     <div className="hr-submodule hr-leave flex flex-col gap-3">
-      {/* Pending approvals callout */}
-      {pendingLeaves > 0 && canViewTeamHR && (
-        <div className="hr-submodule-alert rounded-xl p-3 flex items-center gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--warning)', color: '#fff' }}>
-            <Fa icon={faCircleExclamation} />
-          </div>
-          <div className="text-[12px]" style={{ color: 'var(--warning-text)' }}>
-            <span className="font-bold">{pendingLeaves} leave request{pendingLeaves > 1 ? 's' : ''} pending approval.</span>
-            {' '}Review and action them below.
-          </div>
-        </div>
-      )}
+      {canViewTeamHR && (() => {
+        // HR mock J: requests to decide, with the balance after and who else is off.
+        const pending = leaveRequests.filter(r => r.status === 'pending_hr').sort((x, y) => String(x.startDate).localeCompare(String(y.startDate)))
+        const overlaps = (r: { id: string; employeeId: string; startDate: string; endDate: string }) => leaveRequests
+          .filter(o => o.id !== r.id && o.employeeId !== r.employeeId && (o.status === 'approved' || o.status === 'pending_hr') && o.startDate <= r.endDate && o.endDate >= r.startDate)
+        const deptOf = (id: string) => employees.find(e => e.id === id)?.departmentId ?? ''
+        const color = (name: string) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return ['#db2777', '#2563eb', '#0d9488', '#ea580c', '#7c3aed', '#0891b2', '#b45309', '#4f46e5'][h % 8] }
+        const ini = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('')
+        const shortName = (name: string) => { const [x, y] = name.split(/\s+/); return y ? `${x} ${y[0]}.` : x }
+        const dayLabel = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+        const weekday = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short' })
+        // Two weeks from this Monday.
+        const start = (() => { const d = new Date(); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return d })()
+        const days = Array.from({ length: 14 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d.toLocaleDateString('en-CA') })
+        const todayIso = new Date().toLocaleDateString('en-CA')
+        const away = leaveRequests.filter(r => (r.status === 'approved' || r.status === 'pending_hr') && r.startDate <= days[13] && r.endDate >= days[0])
+        const people = [...new Set(away.map(r => r.employeeId))]
+        const barColor = (r: { status: string; leaveType: string }) => r.status === 'pending_hr' ? 'repeating-linear-gradient(45deg,#f59e0b 0 6px,#fbbf24 6px 12px)' : /sick/.test(r.leaveType) ? '#7c3aed' : '#3b82f6'
+        return (
+          <>
+            <section className="hra-card hrj">
+              <div className="hra-ch"><b className="hrc-title">{pending.length ? `${pending.length} request${pending.length === 1 ? '' : 's'} to decide` : 'No requests to decide'}</b><button type="button" className="hrb-btn" onClick={openLeaveModal}>+ Record leave for someone</button></div>
+              {pending.map(r => {
+                const bal = leaveBalances.find(b => b.employeeId === r.employeeId && b.leaveType === r.leaveType && b.year === new Date(`${r.startDate}T00:00:00`).getFullYear())
+                const total = bal ? bal.entitlement + bal.carryForward : 0
+                const left = bal ? bal.entitlement + bal.carryForward - bal.used - bal.pending + r.days : null
+                const clash = overlaps(r)
+                const canDecide = canDecideLeaveFor(r)
+                return (
+                  <div key={r.id} className="hrj-req">
+                    <div className="hrj-who">
+                      <span className="hrj-av" style={{ background: color(r.employeeName) }}>{ini(r.employeeName)}</span>
+                      <div className="min-w-0">
+                        <b>{r.employeeName}</b> <span className="hra-chip is-b">{LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType.replace(/_/g, ' ')}</span>
+                        <div className="hrj-when">{dayLabel(r.startDate)} → {dayLabel(r.endDate)} · <b>{r.days} working day{r.days === 1 ? '' : 's'}</b></div>
+                        {left !== null && total > 0 && (
+                          <>
+                            <div className="hrj-bal"><i style={{ width: `${Math.max(0, Math.min(100, (left / total) * 100))}%` }} /></div>
+                            <div className="hrj-small">{left} of {total} days left → {Math.max(0, left - r.days)} after this</div>
+                          </>
+                        )}
+                        {clash.length > 0 && <div className="hrj-warn">{clash.map(o => `${o.employeeName}${deptOf(o.employeeId) ? ` (${deptOf(o.employeeId)})` : ''}`).join(', ')} {clash.length === 1 ? 'is' : 'are'} also off {weekday(clash[0].startDate > r.startDate ? clash[0].startDate : r.startDate)}–{weekday(clash[0].endDate < r.endDate ? clash[0].endDate : r.endDate)}</div>}
+                      </div>
+                    </div>
+                    {canDecide && (
+                      <div className="hrj-btns">
+                        <button type="button" className="hrb-btn" onClick={() => { setDecideId(r.id); setDecideNote(''); setDecideError('') }}>Reject</button>
+                        <button type="button" className="hrb-btn is-g" onClick={() => { decideLeaveRequest(r.id, true); showToast(`${r.employeeName}'s leave approved`, 'success') }}>Approve</button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </section>
+            <section className="hra-card">
+              <div className="hra-ch"><b className="hrc-title">Who&apos;s away · next two weeks</b><div className="hrj-legend"><span className="hra-chip is-b">Annual</span><span className="hra-chip is-v">Sick</span><span className="hra-chip is-a">Pending</span></div></div>
+              {people.length === 0 ? <p className="hrb-empty">No one is off in the next two weeks.</p> : (
+                <div className="hra-table-wrap">
+                  <div className="hrj-cal" style={{ gridTemplateColumns: `150px repeat(14, minmax(34px, 1fr))` }}>
+                    <div className="hrj-h" />
+                    {days.map((d, i) => {
+                      const dt = new Date(`${d}T00:00:00`)
+                      const we = dt.getDay() === 0 || dt.getDay() === 6
+                      return <div key={d} className={`hrj-h${we ? ' is-we' : ''}${d === todayIso ? ' is-today' : ''}`}>{['S', 'M', 'T', 'W', 'T', 'F', 'S'][dt.getDay()]} {dt.getDate()}{i === 0 ? '' : ''}</div>
+                    })}
+                    {people.map(pid => {
+                      const name = employees.find(e => e.id === pid)?.fullName ?? away.find(r => r.employeeId === pid)?.employeeName ?? '—'
+                      const mine = away.filter(r => r.employeeId === pid)
+                      return (
+                        <Fragment key={pid}>
+                          <div className="hrj-nm"><span className="hrj-av is-sm" style={{ background: color(name) }}>{ini(name)}</span>{shortName(name)}</div>
+                          {days.map(d => {
+                            const dt = new Date(`${d}T00:00:00`)
+                            const we = dt.getDay() === 0 || dt.getDay() === 6
+                            const starts = mine.filter(r => (r.startDate <= days[0] ? days[0] : r.startDate) === d)
+                            return (
+                              <div key={d} className={`hrj-c${we ? ' is-we' : ''}`}>
+                                {starts.map(r => {
+                                  const last = r.endDate > days[13] ? days[13] : r.endDate
+                                  const span = days.indexOf(last) - days.indexOf(d) + 1
+                                  return <div key={r.id} className="hrj-bar" style={{ width: `calc(${span * 100}% - 6px)`, background: barColor(r) }}>{(LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType).replace(/ leave$/i, '')}{r.status === 'pending_hr' ? ' · pending' : ''}</div>
+                                })}
+                              </div>
+                            )
+                          })}
+                        </Fragment>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        )
+      })()}
 
       {/* Leave requests table */}
       <div className="hr-submodule-panel card overflow-hidden">

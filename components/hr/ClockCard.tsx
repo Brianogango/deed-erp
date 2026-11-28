@@ -12,6 +12,7 @@ type Me = {
   inOffice: boolean
   officeNetworksSet: boolean
   hasPasskey: boolean
+  month?: { worked: number; of: number }
 }
 
 const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' }) : '')
@@ -28,7 +29,14 @@ async function postJson(url: string, body?: unknown) {
  * fingerprint confirms who it is; the connection says whether it is the office.
  * Anything short of both still records the day, for a supervisor to approve.
  */
-export default function ClockCard({ showToast }: { showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+export default function ClockCard({ showToast, variant = 'card', firstName = '', onMonth }: {
+  showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void
+  /** 'hero': the My portal band (HR mock H) — date, greeting, big clock and the button. */
+  variant?: 'card' | 'hero'
+  firstName?: string
+  /** This month's days, for the portal's "Days worked" ring. */
+  onMonth?: (m: { worked: number; of: number }) => void
+}) {
   const [me, setMe] = useState<Me | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -39,7 +47,7 @@ export default function ClockCard({ showToast }: { showToast?: (msg: string, typ
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/attendance/me', { cache: 'no-store' })
-      if (res.ok) setMe(await res.json())
+      if (res.ok) { const d = await res.json(); setMe(d); if (d?.month) onMonth?.(d.month) }
     } catch { /* offline: keep what is shown */ }
   }, [])
   useEffect(() => { void load() }, [load])
@@ -88,6 +96,36 @@ export default function ClockCard({ showToast }: { showToast?: (msg: string, typ
   const h = Math.floor(worked)
   const m = Math.round((worked - h) * 60)
   const value = day?.clockOut ? payableValue({ ...day, status: 'approved' }) : null
+
+  if (variant === 'hero') {
+    const now = new Date()
+    const hour = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' }))
+    const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+    return (
+      <section className="hrh-hero" aria-label="Attendance">
+        <div className="min-w-0">
+          <div className="hrh-hero__date">{now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Nairobi' }).toUpperCase()}</div>
+          <h2>{greet}{firstName ? `, ${firstName}` : ''}</h2>
+          <p>
+            {action === 'in' ? "You haven't clocked in today."
+              : action === 'out' ? `Clocked in at ${time(day!.clockIn)} · ${h}h ${String(m).padStart(2, '0')}m so far`
+              : `Done for today: ${time(day!.clockIn)}–${time(day!.clockOut)} · ${value === 1 ? 'full day' : value === 0.5 ? 'half day' : 'under 3 hours'}`}
+          </p>
+          <div className="hrh-hero__chips">
+            <span>{me.inOffice ? '✓ On the office Wi-Fi' : `⚠ ${me.officeNetworksSet ? 'Not on office Wi-Fi' : 'Office Wi-Fi not set up'} — a supervisor approves`}</span>
+            <span>{me.hasPasskey ? `✓ ${label} ready` : <>⚠ No {label} — <button type="button" onClick={() => setSetup(v => !v)}>set it up</button></>}</span>
+            {day && day.status !== 'approved' && <span>{day.status === 'rejected' ? 'Day rejected' : 'Waiting for a supervisor'}</span>}
+          </div>
+          {error && <p className="hrh-hero__err" role="alert">{error}</p>}
+          {setup && !me.hasPasskey && <div className="hrh-hero__setup"><PasskeySettings showToast={(msg, type) => { showToast?.(msg, type); void load() }} /></div>}
+        </div>
+        <div className="hrh-hero__right">
+          <div className="hrh-hero__clock">{now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })}</div>
+          {action && <button type="button" className="hrh-hero__btn" disabled={busy} onClick={() => void punch()}>{busy ? 'Checking…' : action === 'in' ? 'Clock in' : 'Clock out'}</button>}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className={`clock-card${action === 'out' ? ' is-in' : ''}`} aria-label="Attendance">

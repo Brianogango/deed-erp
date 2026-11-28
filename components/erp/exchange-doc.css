@@ -25,17 +25,12 @@
 .xsw-tag--returned { background: #fff7ed; color: #c2410c; }
 .xsw-neg { color: #c2410c; }
 .xsw-chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: #ede9fe; color: #6d28d9; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .xsw-side--returned { background: rgba(194,65,12,.12); border-color: rgba(251,146,60,.35); }
-  :root:not([data-theme="light"]) .xsw-side--given { background: rgba(4,120,87,.14); border-color: rgba(52,211,153,.35); }
-  :root:not([data-theme="light"]) .xsw-name, :root:not([data-theme="light"]) .xsw-amt, :root:not([data-theme="light"]) .xsw-code span { color: #f3f4f6; }
-  :root:not([data-theme="light"]) .xsw-specs { color: #cbd5e1; }
-  :root:not([data-theme="light"]) .xsw-code svg rect, :root:not([data-theme="light"]) .xsw-code svg path { fill: #f3f4f6; }
-}
 :root[data-theme="dark"] .xsw-side--returned { background: rgba(194,65,12,.12); border-color: rgba(251,146,60,.35); }
 :root[data-theme="dark"] .xsw-side--given { background: rgba(4,120,87,.14); border-color: rgba(52,211,153,.35); }
 :root[data-theme="dark"] .xsw-name, :root[data-theme="dark"] .xsw-amt, :root[data-theme="dark"] .xsw-code span { color: #f3f4f6; }
 :root[data-theme="dark"] .xsw-specs { color: #cbd5e1; }
+/* The barcode stays black on a white chip in dark mode so it still scans. */
+:root[data-theme="dark"] .xsw-code svg { background: #fff; padding: 2px 4px; border-radius: 3px; }
 @container (max-width: 600px) {
   .xsw-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .xsw-arrow { transform: rotate(90deg); height: 18px; }

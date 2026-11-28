@@ -154,6 +154,17 @@ function AfterSalesContent() {
   const [warrantyLengthReason, setWarrantyLengthReason] = useState('')
   const [showReject, setShowReject]       = useState(false)
   const [rejectTarget, setRejectTarget]   = useState<ReturnOrder | null>(null)
+  // Wide screens show the chosen return beside the list; phones open it.
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [wideReturns, setWideReturns] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(min-width: 1100px)')
+    const sync = () => setWideReturns(mq.matches)
+    sync()
+    mq.addEventListener?.('change', sync)
+    return () => mq.removeEventListener?.('change', sync)
+  }, [])
   const [rejectReason, setRejectReason]   = useState('')
 
   // ── Derived warranty data ───────────────────────────────────────────────────
@@ -194,6 +205,21 @@ function AfterSalesContent() {
     )
   }, [returnOrders, rmaFilter, rmaSearch])
 
+  const rmaFigures = useMemo(() => {
+    const month = new Date().toISOString().slice(0, 7)
+    const done = returnOrders.filter(r => r.status === 'processed' && r.processedDate)
+    const thisMonth = done.filter(r => String(r.processedDate).slice(0, 7) === month)
+    const days = done
+      .map(r => (new Date(String(r.processedDate)).getTime() - new Date(r.requestDate).getTime()) / 86400000)
+      .filter(d => Number.isFinite(d) && d >= 0)
+    return {
+      open: returnOrders.filter(r => r.status === 'requested' || r.status === 'approved' || r.status === 'received').length,
+      processedMonth: thisMonth.length,
+      refundedMonth: thisMonth.filter(r => r.resolution === 'refund' || r.resolution === 'credit_note').reduce((t, r) => t + (Number(r.refundAmount) || 0), 0),
+      avgDays: days.length ? days.reduce((a, b) => a + b, 0) / days.length : null,
+    }
+  }, [returnOrders])
+
   const rmaStats = useMemo(() => {
     let requested = 0, approved = 0, received = 0, processed = 0
     for (const r of returnOrders) {
@@ -204,6 +230,16 @@ function AfterSalesContent() {
     }
     return { total: returnOrders.length, requested, approved, received, processed }
   }, [returnOrders])
+
+  const previewRma = useMemo(() => {
+    if (!wideReturns) return null
+    const chosen = previewId ? returnOrders.find(r => r.id === previewId) : undefined
+    if (chosen) return chosen
+    const open = [...returnOrders]
+      .filter(r => r.status === 'requested' || r.status === 'approved' || r.status === 'received')
+      .sort((a, b) => String(a.requestDate).localeCompare(String(b.requestDate)))
+    return open[0] ?? null
+  }, [wideReturns, previewId, returnOrders])
 
   const selectedWarranty = tab === 'warranties' && detailId
     ? refreshedWarranties.find(w => w.id === detailId) ?? null
@@ -292,6 +328,18 @@ function AfterSalesContent() {
     } catch {
       /* store toast */
     }
+  }
+
+  /** Open the process form for a received return, its refund amount suggested. */
+  function openProcess(rma: ReturnOrder) {
+    // Resolution and refund method are the user's choice; the amount
+    // hint comes from the source invoice/credit total of this RMA.
+    setProcessRMA(rma)
+    setResolution('')
+    setRefundPaymentMethod('')
+    setRefundAmount(Number(rma.creditTotalHint) > 0 ? String(rma.creditTotalHint) : '')
+    setProcessNotes('')
+    setShowProcess(true)
   }
 
   function handleProcess() {
@@ -478,6 +526,118 @@ function AfterSalesContent() {
     )
   }
 
+  // The process / reject forms, drawn on the list and on a return's own page
+  // (they were only on the list, so "Process Return" on the page did nothing).
+  const returnModals = (
+    <>
+      {/* ── Process Return Modal ──────────────────────────────────────────── */}
+      {showProcess && processRMA && (
+        <div className="modal-overlay" onClick={() => setShowProcess(false)}>
+          <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-t1">Process Return — {processRMA.ref}</h3>
+              <button onClick={() => setShowProcess(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-t2 block mb-2">Resolution *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(['refund', 'replacement', 'repair', 'credit_note'] as const).map(r => (
+                    <button key={r} onClick={() => {
+                      setResolution(r)
+                      if ((r === 'credit_note' || r === 'refund') && processRMA && Number(processRMA.creditTotalHint) > 0) {
+                        setRefundAmount(String(processRMA.creditTotalHint))
+                      }
+                    }}
+                      style={{
+                        padding: '10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                        border: `1.5px solid ${resolution === r ? 'var(--navy)' : 'var(--border-lt)'}`,
+                        background: resolution === r ? '#E8F3FA' : '#FAFAFA',
+                        color: resolution === r ? 'var(--navy)' : 'var(--text-4)',
+                        fontSize: 11, fontWeight: resolution === r ? 700 : 400,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      }}>
+                      <Fa icon={RESOLUTION_META[r].icon} aria-hidden="true" />
+                      {RESOLUTION_META[r].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {(resolution === 'refund' || resolution === 'credit_note') && (
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KES)</label>
+                  <input type="number" aria-label="Refund or credit amount" className="form-input w-full text-[12px]"
+                    value={refundAmount} onChange={e => setRefundAmount(e.target.value)} />
+                  {processRMA?.sourceInvoiceRef && resolution === 'credit_note' && (
+                    <p className="text-[10px] text-t3 mt-1">Against {processRMA.sourceInvoiceRef}</p>
+                  )}
+                </div>
+              )}
+              {resolution === 'refund' && (
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method *</label>
+                  <div className="flex gap-2">
+                    {([['cash','Cash',faMoneyBill],['mpesa','M-Pesa',faMobileScreenButton],['bank_transfer','Bank Transfer',faBuildingColumns]] as const).map(([val, lbl, icon]) => (
+                      <button key={val} onClick={() => setRefundPaymentMethod(val)}
+                        style={{
+                          flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 10,
+                          border: `1.5px solid ${refundPaymentMethod === val ? 'var(--navy)' : 'var(--border-lt)'}`,
+                          background: refundPaymentMethod === val ? '#E8F3FA' : '#FAFAFA',
+                          color: refundPaymentMethod === val ? 'var(--navy)' : 'var(--text-4)',
+                          fontWeight: refundPaymentMethod === val ? 700 : 400,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                        }}>
+                        <Fa icon={icon} aria-hidden="true" /> {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
+                <textarea aria-label="Return processing notes" className="form-input w-full text-[12px]" rows={2}
+                  value={processNotes} onChange={e => setProcessNotes(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4 justify-end">
+              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowProcess(false)}>Cancel</button>
+              <button className="btn-primary text-[11px] py-2 px-4" onClick={handleProcess}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject Modal ─────────────────────────────────────────────────── */}
+      {showReject && rejectTarget && (
+        <div className="modal-overlay" onClick={() => setShowReject(false)}>
+          <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-t1">Reject Return</h3>
+              <button onClick={() => setShowReject(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[12px] text-t2">Provide a reason for rejection — this will be visible on the return record.</p>
+              <textarea aria-label="Return rejection reason" className="form-input w-full text-[12px]" rows={3} placeholder="e.g. Item is outside warranty period…"
+                value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+            </div>
+            <div className="flex gap-2 mt-4 justify-end">
+              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowReject(false)}>Cancel</button>
+              <button className="text-[11px] py-2 px-4 rounded-lg font-semibold"
+                style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FECACA', cursor: 'pointer' }}
+                disabled={!rejectReason.trim()}
+                onClick={() => {
+                  rejectReturn(rejectTarget.id, rejectReason)
+                  setShowReject(false)
+                }}>
+                Reject Return
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   // ════════════════════════════════════════════════════════════════════════════
   // RMA DETAIL PANEL
   // ════════════════════════════════════════════════════════════════════════════
@@ -637,24 +797,13 @@ function AfterSalesContent() {
             )}
             {rma.status === 'received' && (
               <button className="btn-primary text-[11px] px-4 py-2 flex items-center gap-1.5"
-                onClick={() => {
-                  // Resolution and refund method are the user's choice; the amount
-                  // hint comes from the source invoice/credit total of this RMA.
-                  const amount = Number(rma.creditTotalHint) > 0
-                    ? String(rma.creditTotalHint)
-                    : ''
-                  setProcessRMA(rma)
-                  setResolution('')
-                  setRefundPaymentMethod('')
-                  setRefundAmount(amount)
-                  setProcessNotes('')
-                  setShowProcess(true)
-                }}>
+                onClick={() => openProcess(rma)}>
                 <Fa icon={faFlagCheckered} aria-hidden="true" /> Process Return
               </button>
             )}
           </div>
         )}
+        {returnModals}
       </div>
     )
   }
@@ -796,6 +945,83 @@ function AfterSalesContent() {
     )
   }
 
+  function returnPreview(rma: ReturnOrder) {
+    const meta = RMA_STATUS_META[rma.status]
+    const dateOf = (d?: string) => (d ? fmtDate(d) : '')
+    const steps: Array<{ label: string; at?: string; by?: string; step: number }> = [
+      { label: 'Requested', at: rma.requestDate, step: 1 },
+      { label: 'Approved', at: rma.approvedDate, by: rma.approvedByName, step: 2 },
+      { label: 'Received', at: rma.receivedDate, step: 3 },
+      { label: 'Processed', at: rma.processedDate, by: rma.processedByName, step: 4 },
+    ]
+    const current = rma.status === 'rejected' ? 0 : meta.step
+    const serialIds = rma.lines.flatMap(l => l.serialIds)
+    const warranty = refreshedWarranties.find(w => serialIds.includes(w.serialId) && w.status !== 'cancelled')
+    const ageDays = Math.max(0, Math.round((Date.now() - new Date(rma.requestDate).getTime()) / 86400000))
+    const next = rma.status === 'requested'
+      ? { title: 'Approve or reject the return', sub: 'Then the customer brings the machine in' }
+      : rma.status === 'approved'
+        ? { title: 'Receive the machine', sub: 'Mark it received when it is in the shop' }
+        : rma.status === 'received'
+          ? { title: 'Inspect and decide', sub: 'Refund, replace, repair or credit note' }
+          : null
+    return (
+      <aside className="asx-preview" aria-label={`Return ${rma.ref}`}>
+        <div className="asx-preview__head">
+          <div className="min-w-0">
+            <h3>{rma.ref}</h3>
+            <p>{rma.customerName} · {fmtDate(rma.requestDate)} · {rma.saleOrderRef}</p>
+          </div>
+          <span className="asx-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+        </div>
+        {rma.status === 'rejected' ? (
+          <p className="asx-preview__rejected">Rejected{rma.notes ? ` — ${rma.notes}` : ''}</p>
+        ) : (
+          <ol className="asx-steps">
+            {steps.map(st => (
+              <li key={st.label} className={st.step < current ? 'is-done' : st.step === current ? 'is-now' : ''}>
+                <b>{st.label}</b>
+                <span>{st.step <= current ? [dateOf(st.at), st.by].filter(Boolean).join(' · ') || '—' : '—'}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        <p className="asx-sec">{rma.lines.length === 1 ? 'Machine' : `Items · ${rma.lines.length}`}</p>
+        {rma.lines.map(line => (
+          <div key={line.id} className="asx-machine">
+            <div className="min-w-0">
+              <b>{line.productName}{line.qty > 1 ? ` ×${line.qty}` : ''}</b>
+              <span>Condition: {line.condition}{line.reason && line.reason !== rma.reason ? ` · ${line.reason}` : ''}</span>
+            </div>
+            {line.serialIds.length > 0 && (
+              <span className="asx-serials">{line.serialIds.map(id => serials.find(sn => sn.id === id)?.serial ?? id).join(', ')}</span>
+            )}
+          </div>
+        ))}
+        <dl className="asx-facts">
+          <dt>Reason</dt><dd>{rma.reason || '—'}</dd>
+          <dt>Warranty</dt><dd>{warranty ? `${warranty.ref} · ${warranty.status === 'expired' ? 'expired' : 'active'} to ${fmtDate(warranty.endDate)}` : 'None found'}</dd>
+          {rma.resolution && (<><dt>Resolution</dt><dd>{RESOLUTION_LABELS[rma.resolution]}{rma.refundAmount ? ` · ${fmtKes(rma.refundAmount)}` : ''}</dd></>)}
+          {next && (<><dt>Open for</dt><dd>{ageDays} {ageDays === 1 ? 'day' : 'days'}</dd></>)}
+        </dl>
+        {next && (
+          <div className="asx-next">
+            <div><span>Next</span><b>{next.title}</b><small>{next.sub}</small></div>
+            {canManage && rma.status === 'requested' && (
+              <div className="asx-next__btns">
+                <button type="button" className="btn-outline text-[11px]" onClick={() => { setRejectTarget(rma); setRejectReason(''); setShowReject(true) }}>Reject</button>
+                <button type="button" className="btn-primary text-[11px]" onClick={() => approveReturn(rma.id)}>Approve</button>
+              </div>
+            )}
+            {canManage && rma.status === 'approved' && <button type="button" className="btn-primary text-[11px]" onClick={() => receiveReturn(rma.id)}>Mark received</button>}
+            {canManage && rma.status === 'received' && <button type="button" className="btn-primary text-[11px]" onClick={() => openProcess(rma)}>Process</button>}
+          </div>
+        )}
+        <button type="button" className="asx-open" onClick={() => setDetailId(rma.id)}>Open the full return ›</button>
+      </aside>
+    )
+  }
+
   const careQueuePanel = (
     <aside className="aftersales-care-queue" aria-label="Customer care queue">
       <div className="aftersales-care-queue__header">
@@ -850,7 +1076,7 @@ function AfterSalesContent() {
         tabs={[
           { id: 'warranties', label: `Warranties (${wStats.total})` },
           { id: 'returns', label: `Returns (${rmaStats.total})` },
-          { id: 'trade', label: `Trade-in (${buyBacks.length + donations.length + clientExchanges.length})` },
+          { id: 'trade', label: `Trade-ins (${buyBacks.length + donations.length + clientExchanges.length})` },
         ]}
         active={tab}
         onChange={id => selectTab(id as Tab)}
@@ -859,20 +1085,38 @@ function AfterSalesContent() {
       />
 
       <div className="mod-body aftersales-body p-3 sm:p-4 flex flex-col gap-4">
-        <section className="aftersales-summary" aria-label="After-sales summary">
-          <button type="button" className="aftersales-summary__item" onClick={() => { selectTab('warranties'); setWFilter('active') }}>
-            <span>Active coverage</span><strong>{wStats.active}</strong><small>Protected devices</small>
-          </button>
-          <button type="button" className="aftersales-summary__item is-warning" onClick={() => { selectTab('warranties'); setWFilter('expiring') }}>
-            <span>Expiring soon</span><strong>{wStats.expiring}</strong><small>Customer follow-up</small>
-          </button>
-          <button type="button" className="aftersales-summary__item" onClick={() => { selectTab('returns'); setRmaFilter('requested') }}>
-            <span>Open returns</span><strong>{rmaStats.requested + rmaStats.approved + rmaStats.received}</strong><small>Needs processing</small>
-          </button>
-          <button type="button" className="aftersales-summary__item" onClick={() => selectTab('trade')}>
-            <span>Trade records</span><strong>{buyBacks.length + donations.length + clientExchanges.length}</strong><small>Buy-backs & exchanges</small>
-          </button>
-        </section>
+        {tab === 'warranties' && (
+          <section className="aftersales-summary" aria-label="Warranty figures">
+            <button type="button" className="aftersales-summary__item" onClick={() => setWFilter('active')}>
+              <span>Active coverage</span><strong>{wStats.active}</strong><small>Machines covered</small>
+            </button>
+            <button type="button" className="aftersales-summary__item is-warning" onClick={() => setWFilter('expiring')}>
+              <span>Expiring soon</span><strong>{wStats.expiring}</strong><small>Customer follow-up</small>
+            </button>
+            <button type="button" className="aftersales-summary__item" onClick={() => setWFilter('expired')}>
+              <span>Expired</span><strong>{wStats.expired}</strong><small>Out of cover</small>
+            </button>
+            <button type="button" className="aftersales-summary__item" onClick={() => setWFilter('all')}>
+              <span>Issued</span><strong>{wStats.total}</strong><small>All warranties</small>
+            </button>
+          </section>
+        )}
+        {tab === 'returns' && (
+          <section className="aftersales-summary" aria-label="Return figures">
+            <button type="button" className="aftersales-summary__item is-warning" onClick={() => setRmaFilter('all')}>
+              <span>To act on</span><strong>{rmaFigures.open}</strong><small>Requested, approved or received</small>
+            </button>
+            <button type="button" className="aftersales-summary__item" onClick={() => setRmaFilter('processed')}>
+              <span>Processed</span><strong>{rmaFigures.processedMonth}</strong><small>This month</small>
+            </button>
+            <div className="aftersales-summary__item">
+              <span>Refunded</span><strong>{fmtKes(rmaFigures.refundedMonth)}</strong><small>This month</small>
+            </div>
+            <div className="aftersales-summary__item">
+              <span>Days to process</span><strong>{rmaFigures.avgDays === null ? '—' : rmaFigures.avgDays.toFixed(1)}</strong><small>Request → processed, average</small>
+            </div>
+          </section>
+        )}
 
       {tab === 'trade' && <TradeIn />}
 
@@ -955,13 +1199,14 @@ function AfterSalesContent() {
               onClearFilters={() => patchListUi({ returnQ: null, returnStatus: null, returnPage: null })}
               hideColumnFilters
               emptyMessage={returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
-              onRowClick={rma => setDetailId(rma.id)}
+              onRowClick={rma => (wideReturns ? setPreviewId(rma.id) : setDetailId(rma.id))}
+              rowClassName={rma => (wideReturns && rma.id === previewRma?.id ? 'is-previewed' : '')}
               renderCard={rmaCard}
               exportTitle="Returns & RMAs"
               exportFilename="returns-rmas"
             />
           </div>
-          {careQueuePanel}
+          {previewRma ? returnPreview(previewRma) : careQueuePanel}
         </div>
       )}
 
@@ -1114,111 +1359,7 @@ function AfterSalesContent() {
         )
       })()}
 
-      {/* ── Process Return Modal ──────────────────────────────────────────── */}
-      {showProcess && processRMA && (
-        <div className="modal-overlay" onClick={() => setShowProcess(false)}>
-          <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-t1">Process Return — {processRMA.ref}</h3>
-              <button onClick={() => setShowProcess(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-2">Resolution *</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {(['refund', 'replacement', 'repair', 'credit_note'] as const).map(r => (
-                    <button key={r} onClick={() => {
-                      setResolution(r)
-                      if ((r === 'credit_note' || r === 'refund') && processRMA && Number(processRMA.creditTotalHint) > 0) {
-                        setRefundAmount(String(processRMA.creditTotalHint))
-                      }
-                    }}
-                      style={{
-                        padding: '10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                        border: `1.5px solid ${resolution === r ? 'var(--navy)' : 'var(--border-lt)'}`,
-                        background: resolution === r ? '#E8F3FA' : '#FAFAFA',
-                        color: resolution === r ? 'var(--navy)' : 'var(--text-4)',
-                        fontSize: 11, fontWeight: resolution === r ? 700 : 400,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      }}>
-                      <Fa icon={RESOLUTION_META[r].icon} aria-hidden="true" />
-                      {RESOLUTION_META[r].label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {(resolution === 'refund' || resolution === 'credit_note') && (
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KES)</label>
-                  <input type="number" aria-label="Refund or credit amount" className="form-input w-full text-[12px]"
-                    value={refundAmount} onChange={e => setRefundAmount(e.target.value)} />
-                  {processRMA?.sourceInvoiceRef && resolution === 'credit_note' && (
-                    <p className="text-[10px] text-t3 mt-1">Against {processRMA.sourceInvoiceRef}</p>
-                  )}
-                </div>
-              )}
-              {resolution === 'refund' && (
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method *</label>
-                  <div className="flex gap-2">
-                    {([['cash','Cash',faMoneyBill],['mpesa','M-Pesa',faMobileScreenButton],['bank_transfer','Bank Transfer',faBuildingColumns]] as const).map(([val, lbl, icon]) => (
-                      <button key={val} onClick={() => setRefundPaymentMethod(val)}
-                        style={{
-                          flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 10,
-                          border: `1.5px solid ${refundPaymentMethod === val ? 'var(--navy)' : 'var(--border-lt)'}`,
-                          background: refundPaymentMethod === val ? '#E8F3FA' : '#FAFAFA',
-                          color: refundPaymentMethod === val ? 'var(--navy)' : 'var(--text-4)',
-                          fontWeight: refundPaymentMethod === val ? 700 : 400,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                        }}>
-                        <Fa icon={icon} aria-hidden="true" /> {lbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <textarea aria-label="Return processing notes" className="form-input w-full text-[12px]" rows={2}
-                  value={processNotes} onChange={e => setProcessNotes(e.target.value)} />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowProcess(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={handleProcess}>Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Reject Modal ─────────────────────────────────────────────────── */}
-      {showReject && rejectTarget && (
-        <div className="modal-overlay" onClick={() => setShowReject(false)}>
-          <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-t1">Reject Return</h3>
-              <button onClick={() => setShowReject(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
-            <div className="space-y-3">
-              <p className="text-[12px] text-t2">Provide a reason for rejection — this will be visible on the return record.</p>
-              <textarea aria-label="Return rejection reason" className="form-input w-full text-[12px]" rows={3} placeholder="e.g. Item is outside warranty period…"
-                value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
-            </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowReject(false)}>Cancel</button>
-              <button className="text-[11px] py-2 px-4 rounded-lg font-semibold"
-                style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FECACA', cursor: 'pointer' }}
-                disabled={!rejectReason.trim()}
-                onClick={() => {
-                  rejectReturn(rejectTarget.id, rejectReason)
-                  setShowReject(false)
-                }}>
-                Reject Return
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {returnModals}
       </div>{/* mod-body */}
     </div>
   )

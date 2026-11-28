@@ -597,3 +597,45 @@ export const useHrStore = create<HrState>((set, get) => ({
     get().ctx.showToast('Training status updated')
   },
 }))
+
+/**
+ * The browser-saved HR lists, kept in step with the copies the server sends.
+ * The store read them once when the page loaded, so documents, departments,
+ * job postings and training downloaded afterwards never reached the screen
+ * (a person's ID copy or contract looked missing).
+ */
+const LOCAL_FIELDS: Record<string, 'departments' | 'hrDocuments' | 'jobPostings' | 'candidates' | 'trainingPrograms' | 'employeeTrainings'> = {
+  deed_departments: 'departments',
+  deed_hrDocuments: 'hrDocuments',
+  deed_jobPostings: 'jobPostings',
+  deed_candidates: 'candidates',
+  deed_trainingPrograms: 'trainingPrograms',
+  deed_employeeTrainings: 'employeeTrainings',
+}
+
+/** Take whatever this browser now holds for the HR lists (no save back). */
+export function refreshHrListsFromBrowser() {
+  if (typeof window === 'undefined') return
+  const patch: Partial<HrState> = {}
+  for (const [key, field] of Object.entries(LOCAL_FIELDS)) {
+    try {
+      const raw = window.localStorage.getItem(key)
+      if (raw === null) continue
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && JSON.stringify(useHrStore.getState()[field]) !== raw) (patch as Record<string, unknown>)[field] = parsed
+    } catch { /* unreadable — keep what is shown */ }
+  }
+  if (Object.keys(patch).length) useHrStore.setState(patch)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('deed_remote_update', (event: Event) => {
+    const { key, value } = ((event as CustomEvent).detail ?? {}) as { key?: string; value?: string }
+    const field = key ? LOCAL_FIELDS[key] : undefined
+    if (!field || typeof value !== 'string') return
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) useHrStore.setState({ [field]: parsed } as Partial<HrState>)
+    } catch { /* unreadable — keep what is shown */ }
+  })
+}
