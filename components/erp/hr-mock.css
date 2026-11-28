@@ -140,3 +140,18 @@
   .hrc.has-drawer { grid-template-columns: minmax(0, 1fr); }
   .hrc-drawer { position: fixed; inset: auto 0 0 0; top: auto; border-radius: 16px 16px 0 0; max-height: 85vh; overflow-y: auto; z-index: 60; box-shadow: 0 -10px 30px rgba(15,27,61,.18); }
 }
+
+/* D · Equipment */
+.hrd { display: flex; flex-direction: column; gap: 14px; }
+.hrd-scan { border: 1px solid #bfdbfe; background: #f0f7ff; border-radius: 12px; padding: 12px 14px; }
+.hrd-scan-row { display: flex; gap: 10px; align-items: center; }
+.hrd-in { border: 1px solid #d5dce6; border-radius: 8px; padding: 7px 10px; font-family: inherit; font-size: 12.5px; background: #fff; color: var(--hrx-ink); }
+.hrd-code { flex: 1; min-width: 0; }
+.hrd-to { width: 190px; }
+.hrd-note { margin: 8px 0 0; font-size: 11px; color: var(--hrx-muted); }
+.hrd-note.is-ok { color: #065f46; font-weight: 600; }
+.hrd-note.is-bad { color: #991b1b; font-weight: 600; }
+.hrd-link { border: 0; background: none; padding: 0; font-family: inherit; font-size: 11.5px; font-weight: 700; color: var(--hrx-blue); cursor: pointer; }
+.hrd-hint { font-size: 11px; color: var(--hrx-muted); }
+.hrd-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+@media (max-width: 700px) { .hrd-scan-row { flex-wrap: wrap; } .hrd-code { flex-basis: 100%; } .hrd-to { flex: 1; width: auto; } }

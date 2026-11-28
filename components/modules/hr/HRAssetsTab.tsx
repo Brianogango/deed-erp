@@ -3,11 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp, fmtDate, type EmployeeAssetAssignment, type LocationId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
-import { Fa } from '@/components/icons'
-import { faLaptop, faPlus, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { Input, Modal, Select, Textarea } from '@/components/ui'
-import { AsyncActionButton, FormField, PrimaryActionButton, StatusBadge } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { AsyncActionButton, FormField } from '@/components/erp'
 import { useCan } from '@/hooks/useCan'
 
 type AssignForm = {
@@ -181,88 +178,110 @@ export default function HRAssetsTab({ prefillEmployeeId, onPrefillUsed }: { pref
     showToast('Asset return recorded', 'success')
   }
 
-  type Assignment = typeof visibleAssignments[number]
-
-  const assetColumns: ColumnDef<Assignment>[] = [
-    {
-      key: 'employee', label: 'Employee', priority: 1, width: '1.2fr',
-      render: a => (
-        <div>
-          <p className="text-xs font-bold text-[var(--text-1)]">{a.employeeName}</p>
-          <p className="text-[10px] text-[var(--text-4)]">ID: {a.employeeId.slice(0, 8)}</p>
-        </div>
-      ),
-      exportValue: a => a.employeeName,
-    },
-    {
-      key: 'asset', label: 'Asset', priority: 1, width: '1.2fr',
-      render: a => (
-        <div className="flex items-center gap-2">
-          <Fa icon={faLaptop} className="text-[var(--text-4)]" />
-          <div>
-            <p className="text-xs font-bold text-[var(--text-1)]">{a.productName}</p>
-            {a.serialNumber && <p className="text-[10px] text-[var(--text-4)]">SN: {a.serialNumber}</p>}
-          </div>
-        </div>
-      ),
-      exportValue: a => a.productName,
-    },
-    {
-      key: 'status', label: 'Status', priority: 1, width: '150px',
-      render: a => (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <StatusBadge
-            status={a.status === 'assigned' ? 'active' : 'done'}
-            label={a.status === 'assigned' ? 'Assigned' : 'Returned'}
-            size="xs"
-          />
-          {a.acknowledgedByEmployee && (
-            <StatusBadge status="done" label="Acknowledged" size="xs" />
-          )}
-        </div>
-      ),
-      exportValue: a => a.status,
-    },
-    {
-      key: 'assignedDate', label: 'Assigned Date', priority: 2, width: '120px',
-      render: a => <span className="text-xs text-[var(--text-3)]">{fmtDate(a.assignedDate)}</span>,
-      exportValue: a => a.assignedDate,
-    },
-  ]
-
-  function assetRowActions(a: Assignment) {
-    return a.status === 'assigned' && isAdmin ? (
-      <button onClick={e => { e.stopPropagation(); setReturnDirty(false); setReturnError(null); setReturnForm(emptyReturnForm(a.id)) }} className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" title="Return Asset">
-        <Fa icon={faRotateLeft} />
-      </button>
-    ) : null
+  // HR mock D: scan the asset sticker, choose the person, Issue.
+  const [scanCode, setScanCode] = useState('')
+  const [scanTo, setScanTo] = useState('')
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [issuedBy, setIssuedBy] = useState<'person' | 'item'>('person')
+  const findSerial = (code: string) => {
+    const c = code.trim().toUpperCase()
+    if (!c) return undefined
+    return serials.find(s => [s.serial, s.barcode, (s as { assetId?: string }).assetId].some(v => String(v ?? '').trim().toUpperCase() === c))
   }
+  const issueByScan = async () => {
+    const sn = findSerial(scanCode)
+    if (!scanTo) { setScanMsg({ ok: false, text: 'Choose who it goes to.' }); return }
+    if (!sn) { setScanMsg({ ok: false, text: `No machine with sticker or serial ${scanCode.trim() || '—'}.` }); return }
+    if (sn.status !== 'available') { setScanMsg({ ok: false, text: `${sn.serial} is not in stock (${sn.status}).` }); return }
+    await Promise.resolve(assignAssetToEmployee(scanTo, sn.productId, 1, sn.id, 'good', 'Issued by scanning its sticker'))
+    const who = employees.find(e => e.id === scanTo)?.fullName ?? 'them'
+    setScanMsg({ ok: true, text: `${sn.productName || 'Machine'} · ${sn.serial} issued to ${who}.` })
+    setScanCode('')
+  }
+  const exitedIds = new Set(employees.filter(e => e.status === 'exited').map(e => e.id))
+  const held = visibleAssignments.filter(a => a.status === 'assigned')
+  const toCollect = held.filter(a => exitedIds.has(a.employeeId))
+  const issued = held.filter(a => !exitedIds.has(a.employeeId))
+    .sort((a, b) => issuedBy === 'person' ? a.employeeName.localeCompare(b.employeeName) : a.productName.localeCompare(b.productName))
+  const leaverOf = (id: string) => employees.find(e => e.id === id)
+  const color = (name: string) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return ['#db2777', '#2563eb', '#0d9488', '#ea580c', '#7c3aed', '#0891b2', '#b45309', '#4f46e5'][h % 8] }
+  const ini = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('')
+  const sinceLabel = (d: string) => new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
 
   return (
-    <div className="hr-submodule hr-assets flex flex-col">
-      <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)] gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-[var(--text-1)]">Asset Assignments</h3>
-          <p className="text-[11px] text-[var(--text-4)] mt-0.5">Staff equipment issued from trading stock. Office furniture and fittings are recorded under Asset Management.</p>
-        </div>
-        {isAdmin && (
-          <PrimaryActionButton icon={<Fa icon={faPlus} />} hideLabelOnMobile={false} onClick={openAssignModal}>
-            Assign Asset
-          </PrimaryActionButton>
-        )}
-      </div>
+    <div className="hrd">
+      {isAdmin && (
+        <section className="hrd-scan">
+          <div className="hrd-scan-row">
+            <input
+              className="hrd-in hrd-code" value={scanCode} autoFocus placeholder="▣ Scan or type the asset ID (e.g. LT000312)…" aria-label="Asset ID"
+              onChange={e => { setScanCode(e.target.value); setScanMsg(null) }}
+              onKeyDown={e => { if (e.key === 'Enter') void issueByScan() }}
+            />
+            <select className="hrd-in hrd-to" value={scanTo} onChange={e => { setScanTo(e.target.value); setScanMsg(null) }} aria-label="Issue to">
+              <option value="">To: choose person ▾</option>
+              {activeEmployees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+            </select>
+            <button type="button" className="hrb-btn is-p" onClick={() => void issueByScan()}>Issue</button>
+          </div>
+          <p className={`hrd-note${scanMsg ? (scanMsg.ok ? ' is-ok' : ' is-bad') : ''}`}>
+            {scanMsg?.text ?? 'The machine leaves stock and shows on their profile; they acknowledge it in My portal.'}
+            {!scanMsg && <> · <button type="button" className="hrd-link" onClick={openAssignModal}>Something without a sticker?</button></>}
+          </p>
+        </section>
+      )}
 
-      <DataTable
-        tableId="hr_assets"
-        columns={assetColumns}
-        rows={visibleAssignments}
-        rowKey={a => a.id}
-        emptyMessage="No assets assigned"
-        emptyAction={<p className="text-xs text-[var(--text-4)] max-w-xs mx-auto mt-1">{canViewAllAssignments ? 'Track company property assigned to employees including laptops, phones, and tools.' : 'No company assets are currently assigned to you.'}</p>}
-        rowActions={assetRowActions}
-        exportTitle="Asset Assignments"
-        exportFilename="asset-assignments"
-      />
+      {canViewAllAssignments && (
+        <section className="hra-card">
+          <div className="hra-ch"><b className="hrc-title">To collect · {toCollect.length}</b><span className="hrd-hint">leavers and expired loans</span></div>
+          {toCollect.length === 0 ? <p className="hrb-empty">Nothing to collect — no one who left still holds company kit.</p> : (
+            <div className="hra-table-wrap"><table className="hra-table"><tbody>
+              {toCollect.map(a => {
+                const e = leaverOf(a.employeeId)
+                const future = !!e?.exitDate && e.exitDate > new Date().toISOString().slice(0, 10)
+                return (
+                  <tr key={a.id} className="is-static">
+                    <td><div className="hra-who"><span className="hra-av" style={{ background: color(a.employeeName) }}>{ini(a.employeeName)}</span><b>{a.employeeName}</b></div></td>
+                    <td>{a.productName}{a.serialNumber ? <> · <span className="hrd-mono">{a.serialNumber}</span></> : null}</td>
+                    <td><span className="hra-chip is-r">{e?.exitDate ? `${future ? 'Leaves' : 'Left'} ${fmtDate(e.exitDate).replace(/ \d{4}$/, '')}` : 'Left'}</span></td>
+                    <td className="hra-r">{isAdmin && <button type="button" className="hrb-btn" onClick={() => { setReturnDirty(false); setReturnError(null); setReturnForm(emptyReturnForm(a.id)) }}>Mark returned</button>}</td>
+                  </tr>
+                )
+              })}
+            </tbody></table></div>
+          )}
+        </section>
+      )}
+
+      <section className="hra-card">
+        <div className="hra-ch">
+          <b className="hrc-title">{canViewAllAssignments ? `Issued · ${issued.length}` : `Your equipment · ${issued.length}`}</b>
+          {canViewAllAssignments && (
+            <div className="hra-seg" role="tablist" aria-label="Group equipment">
+              <button type="button" role="tab" aria-selected={issuedBy === 'person'} onClick={() => setIssuedBy('person')}>By person</button>
+              <button type="button" role="tab" aria-selected={issuedBy === 'item'} onClick={() => setIssuedBy('item')}>By item</button>
+            </div>
+          )}
+        </div>
+        {issued.length === 0 ? <p className="hrb-empty">{canViewAllAssignments ? 'Nothing issued yet — scan a sticker above to issue a machine.' : 'No company equipment is assigned to you.'}</p> : (
+          <div className="hra-table-wrap"><table className="hra-table">
+            <thead><tr>{issuedBy === 'person' ? <><th>Person</th><th>Item</th></> : <><th>Item</th><th>Person</th></>}<th>Since</th><th>Acknowledged</th><th /></tr></thead>
+            <tbody>
+              {issued.map(a => {
+                const item = <>{a.productName}{a.serialNumber ? <> · <span className="hrd-mono">{a.serialNumber}</span></> : null}</>
+                return (
+                  <tr key={a.id} className="is-static">
+                    {issuedBy === 'person' ? <><td>{a.employeeName}</td><td>{item}</td></> : <><td>{item}</td><td>{a.employeeName}</td></>}
+                    <td>{sinceLabel(a.assignedDate)}</td>
+                    <td><span className={`hra-chip ${a.acknowledgedByEmployee ? 'is-g' : 'is-a'}`}>{a.acknowledgedByEmployee ? 'Yes' : 'Waiting'}</span></td>
+                    <td className="hra-r">{isAdmin && <button type="button" className="hrd-link" onClick={() => { setReturnDirty(false); setReturnError(null); setReturnForm(emptyReturnForm(a.id)) }}>Return</button>}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table></div>
+        )}
+      </section>
 
       {showAssignModal && (
         <Modal title="Assign Asset" subtitle="Issue company property to an employee and sync the assignment to the server" onClose={closeAssignModal} width={620}>
