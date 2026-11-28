@@ -12,6 +12,7 @@ import {
 } from '@/lib/document-payment-details'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
 import { fetchDocumentWarranties } from '@/lib/warranty/client'
+import { exchangeRefOf, type ExchangeDocumentView } from '@/lib/after-sales/exchange-document'
 
 /** Warranty lines for a customer invoice (machines sold on it). None for bills or drafts. */
 async function withWarranties(inv: Invoice, input: CommercialPdfInput): Promise<CommercialPdfInput> {
@@ -22,6 +23,31 @@ async function withWarranties(inv: Invoice, input: CommercialPdfInput): Promise<
 }
 
 const isCustomerInvoice = (inv: Invoice) => inv.type === 'customer_invoice'
+
+/**
+ * An exchange's balance invoice: the machines handed back and given above the
+ * items, and — while the invoice is still the single balance line — the
+ * "given / returned" rows that add up to it in place of that line.
+ */
+async function withExchange(inv: Invoice, input: CommercialPdfInput): Promise<CommercialPdfInput> {
+  if (!isCustomerInvoice(inv) || !exchangeRefOf(inv)) return input
+  try {
+    const res = await fetch(`/api/invoices/${encodeURIComponent(inv.id)}/exchange`, { cache: 'no-store' })
+    if (!res.ok) return input
+    const body = await res.json().catch(() => null) as { exchange?: (ExchangeDocumentView & { replacesLines: boolean }) | null } | null
+    const view = body?.exchange
+    if (!view) return input
+    return {
+      ...input,
+      exchange: { ref: view.ref, returned: view.returned, given: view.given },
+      ...(view.replacesLines
+        ? { lines: view.rows.map(r => ({ description: r.description, qty: r.qty, unitPrice: r.unitPrice, taxRate: 0, subtotal: r.subtotal, serial: r.serial })) }
+        : {}),
+    }
+  } catch {
+    return input
+  }
+}
 
 /**
  * The device heading for a repair invoice, from the server when this page has
@@ -125,7 +151,7 @@ export async function downloadInvoicePdf(
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
   repairs: RepairDeviceLike[] = [],
 ) {
-  const input = await withServerDeviceHeading(inv, await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs)))
+  const input = await withExchange(inv, await withServerDeviceHeading(inv, await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs))))
   await downloadCommercialPdf(input, companySettings, bankAccounts, `${input.title} - ${input.ref}.pdf`)
 }
 
@@ -139,7 +165,7 @@ export async function invoicePdfBase64(
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
   repairs: RepairDeviceLike[] = [],
 ): Promise<{ pdfBase64: string; pdfFilename: string }> {
-  const input = await withServerDeviceHeading(inv, await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs)))
+  const input = await withExchange(inv, await withServerDeviceHeading(inv, await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs))))
   const doc = await buildCommercialPdf(input, companySettings, bankAccounts)
   const dataUri = doc.output('datauristring')
   return {

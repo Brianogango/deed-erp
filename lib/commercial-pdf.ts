@@ -77,6 +77,8 @@ export interface CommercialPdfInput {
   paymentDetailLines?: string[]
   /** Machines sold under warranty (invoices): a line and QR each. */
   warranties?: DeedPdfInput['warranties']
+  /** An exchange: machines handed back and given, drawn above the items. */
+  exchange?: DeedPdfInput['exchange']
 }
 
 /** The company settings and logo in the shape the PDF builders take. */
@@ -148,6 +150,7 @@ export async function buildCommercialPdf(
     showSignature: input.showSignature,
     paymentDetailLines: input.paymentDetailLines,
     warranties: input.warranties,
+    exchange: input.exchange,
   }
 
   return buildDeedDocumentPdf(
