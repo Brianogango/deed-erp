@@ -37,6 +37,7 @@ import { initials } from '@/lib/utils'
 
 type HRTab =
   | 'employees'
+  | 'targets'
   | 'recruitment'
   | 'training'
   | 'leave'
@@ -53,7 +54,7 @@ type HRTab =
   | 'org_chart'
   | 'system_users'
 
-const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'departments', 'assets', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'attendance', 'departments', 'assets', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'targets', 'reports']
 const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll']
 
 /** HR's sections, grouped the way the work is: who people are, their time, their pay, their growth. */
@@ -62,7 +63,7 @@ const TAB_GROUPS: Array<{ id: string; label: string; tabs: Array<{ id: HRTab; la
   { id: 'people', label: 'People', tabs: [{ id: 'employees', label: 'Employees' }, { id: 'departments', label: 'Departments' }, { id: 'documents', label: 'Documents' }, { id: 'assets', label: 'Equipment' }, { id: 'org_chart', label: 'Org chart' }] },
   { id: 'time', label: 'Time', tabs: [{ id: 'attendance', label: 'Attendance' }, { id: 'leave', label: 'Leave' }] },
   { id: 'pay', label: 'Pay', tabs: [{ id: 'payroll', label: 'Payroll' }, { id: 'salary_advances', label: 'Salary advances' }] },
-  { id: 'growth', label: 'Growth', tabs: [{ id: 'performance', label: 'Performance' }, { id: 'training', label: 'Training' }, { id: 'recruitment', label: 'Recruitment' }] },
+  { id: 'growth', label: 'Growth', tabs: [{ id: 'performance', label: 'Reviews' }, { id: 'targets', label: 'Targets' }, { id: 'training', label: 'Training' }, { id: 'recruitment', label: 'Recruitment' }] },
   { id: 'reports', label: 'Reports', tabs: [{ id: 'reports', label: 'Reports' }] },
 ]
 const DOC_TYPE_SHORT: Record<string, string> = { contract: 'Contract', nda: 'NDA', id_copy: 'ID', certification: 'Certificate', work_permit: 'Work permit', other: 'Paper' }
@@ -684,7 +685,9 @@ function HRContent() {
         ) : tab === 'documents' && canManageHR ? (
           <HRDocumentsTab prefill={docPrefill} onPrefillUsed={() => setDocPrefill(null)} />
         ) : tab === 'performance' && canManageHR ? (
-          <HRPerformanceTab />
+          <HRPerformanceTab view="reviews" onTargets={() => setTab('targets')} onTraining={() => setTab('training')} />
+        ) : tab === 'targets' && canManageHR ? (
+          <HRPerformanceTab view="targets" />
         ) : tab === 'reports' && canManageHR ? (
           <HRReportsTab />
         ) : tab === 'assets' ? (

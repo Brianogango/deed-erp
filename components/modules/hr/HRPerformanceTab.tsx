@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useApp, fmtKes, type PerfPeriod, type PerfStatus, type PerformanceTarget } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Fa } from '@/components/icons'
-import { faChartLine, faBullseye, faTrophy, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faChartLine } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 import AppraisalsPanel from './HRAppraisals'
 import { useCan } from '@/hooks/useCan'
@@ -35,9 +35,9 @@ const emptyTargetForm = (): TargetForm => ({
   status: '',
 })
 
-export default function HRPerformanceTab() {
+export default function HRPerformanceTab({ view = 'reviews', onTargets, onTraining }: { view?: 'reviews' | 'targets'; onTargets?: () => void; onTraining?: () => void } = {}) {
   const { hrPerfTargets, currentUser, saveHrPerfTargets, showToast } = useApp()
-  const { employees } = useHrStore()
+  const { employees, employeeTrainings } = useHrStore()
   const can = useCan()
   const isAdmin = can('manageHR')
   const canViewAllTargets = can('viewHrRecords')
@@ -117,39 +117,23 @@ export default function HRPerformanceTab() {
     return { total, achieved, atRisk }
   }, [visibleTargets])
 
+  const onTrack = visibleTargets.filter(t => t.status !== 'at_risk' && t.status !== 'achieved').length
+  const trainingDue = employeeTrainings.filter(t => t.status !== 'completed').length
+
+  // HR mock F: Reviews — the cycle, then targets and training at a glance.
+  if (view === 'reviews') return (
+    <div className="hrf-wrap">
+      <AppraisalsPanel manage />
+      <div className="hra-att hrf-tiles">
+        <button type="button" className="hra-at" onClick={onTargets}><strong>{stats.total}</strong><span><b>Targets active</b><small>on track {onTrack}</small></span></button>
+        <button type="button" className={`hra-at${stats.atRisk ? ' is-warn' : ''}`} onClick={onTargets}><strong>{stats.atRisk}</strong><span><b>At risk</b><small>behind by &gt; 25%</small></span></button>
+        <button type="button" className="hra-at" onClick={onTraining}><strong>{trainingDue}</strong><span><b>Training due</b><small>not finished yet</small></span></button>
+      </div>
+    </div>
+  )
+
   return (
     <div className="hr-submodule hr-performance flex flex-col">
-      <div className="p-4"><AppraisalsPanel manage /></div>
-      <div className="hr-submodule-kpis hr-performance-kpis p-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-        <div className="hr-metric-card hr-metric-card--accent flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl">
-            <Fa icon={faBullseye} />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">Active Targets</p>
-            <h3 className="text-xl font-black text-[var(--text-1)]">{stats.total}</h3>
-          </div>
-        </div>
-        <div className="hr-metric-card hr-metric-card--success flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-xl">
-            <Fa icon={faTrophy} />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">Achieved</p>
-            <h3 className="text-xl font-black text-[var(--text-1)]">{stats.achieved}</h3>
-          </div>
-        </div>
-        <div className="hr-metric-card hr-metric-card--danger flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl">
-            <Fa icon={faTriangleExclamation} />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">At Risk</p>
-            <h3 className="text-xl font-black text-[var(--text-1)]">{stats.atRisk}</h3>
-          </div>
-        </div>
-      </div>
-
       <div className="hr-submodule-content p-6">
         <div className="hr-submodule-toolbar flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Performance Overview</h3>

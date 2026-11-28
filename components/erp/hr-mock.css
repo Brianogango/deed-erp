@@ -173,3 +173,15 @@
 .hre-menu button:hover:not(:disabled) { background: var(--hrx-soft); }
 .hre-menu button:disabled { color: var(--hrx-faint); cursor: not-allowed; }
 .hre-foot { margin: 0; padding: 8px 14px 10px; font-size: 11px; color: var(--hrx-muted); }
+
+/* F · Growth › Reviews */
+.hrf-wrap { display: flex; flex-direction: column; gap: 14px; }
+.hrf-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hrf-tools { display: flex; gap: 8px; align-items: center; }
+.hrf-cyc { display: flex; gap: 0; padding: 12px 14px; border-bottom: 1px solid #eef1f5; }
+.hrf-cyc > div { flex: 1; font-size: 11px; color: var(--hrx-faint); padding-top: 12px; position: relative; min-width: 0; }
+.hrf-cyc > div::before { content: ""; position: absolute; top: 2px; left: 0; right: 6px; height: 4px; border-radius: 2px; background: #e2e8f0; }
+.hrf-cyc > div.d::before { background: #20164d; }
+.hrf-cyc > div.n::before { background: linear-gradient(90deg, #20164d 50%, #e2e8f0 50%); }
+.hrf-cyc b { display: block; color: var(--hrx-ink); font-size: 12px; }
+@media (max-width: 700px) { .hrf-cyc { flex-wrap: wrap; row-gap: 10px; } .hrf-cyc > div { flex-basis: 50%; } .hrf-tiles { grid-template-columns: minmax(0, 1fr); } }
