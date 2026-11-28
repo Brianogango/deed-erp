@@ -55,7 +55,7 @@ beforeEach(() => {
 })
 
 describe('postSalesCommissionForInvoice', () => {
-  it('pays no employee commission on a sale brought by a Deed Express agent', async () => {
+  it('pays no employee commission on a sale brought by a Deed Xpress agent', async () => {
     storeState.saleOrders = [{ saleOrderId: SALE_ORDER_ID, agentId: 'agent-1' }]
     await postSalesCommissionForInvoice(INVOICE_ID)
     expect(mockPrisma.salesCommission.createMany).not.toHaveBeenCalled()

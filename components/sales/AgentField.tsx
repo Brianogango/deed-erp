@@ -10,7 +10,7 @@ type ContactLike = { id: string; name: string; tags?: string[]; phone?: string }
 export type AgentValue = { agentId?: string; agentName?: string; agentCommission?: number }
 
 /**
- * Deed Express agent who brought the customer, and the commission agreed for
+ * Deed Xpress agent who brought the customer, and the commission agreed for
  * this sale (KES). The agent is paid once the customer has paid in full —
  * Finance → Agent commissions. Agents are contacts tagged deed_express_agent.
  */
@@ -66,7 +66,7 @@ export function AgentField({
     <select
       id={compact ? undefined : selectId}
       className={compact ? 'form-input text-xs' : undefined}
-      aria-label="Deed Express agent who brought the customer"
+      aria-label="Deed Xpress agent who brought the customer"
       disabled={disabled}
       value={value.agentId || ''}
       onChange={e => {

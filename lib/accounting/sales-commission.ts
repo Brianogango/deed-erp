@@ -54,7 +54,7 @@ export async function postSalesCommissionForInvoice(
     if (!salesCommissionAppliesToInvoice(invoice)) return
 
     let salespersonId = opts?.salespersonUserId || null
-    // A sale brought by a Deed Express agent pays the agent's commission
+    // A sale brought by a Deed Xpress agent pays the agent's commission
     // (lib/agents) instead — never both on one sale.
     if (invoice.saleOrderId && await saleOrderHasAgent(invoice.saleOrderId)) return
     if (invoice.saleOrderId) {

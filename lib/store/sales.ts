@@ -508,7 +508,7 @@ export interface POSOrder {
   /** Person who closed the sale for commission (may differ from cashier). */
   salespersonId?: string
   salespersonName?: string
-  /** Deed Express agent who brought the customer; earns agentCommission (KES) once the sale is fully paid. */
+  /** Deed Xpress agent who brought the customer; earns agentCommission (KES) once the sale is fully paid. */
   agentId?: string
   agentName?: string
   agentCommission?: number

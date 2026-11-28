@@ -1,5 +1,5 @@
 /**
- * Deed Express agent commissions (lib/agents/agent-commissions.ts).
+ * Deed Xpress agent commissions (lib/agents/agent-commissions.ts).
  *
  * GET — agents, commission lines (brought up to date with the sales first),
  *       payouts and settings.
