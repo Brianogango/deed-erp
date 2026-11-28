@@ -1,0 +1,42 @@
+/* Exchange: machines handed back → machines given (invoice, exchange screen). */
+.xsw { container-type: inline-size; border: 1px solid var(--border, #e5e7eb); border-radius: 12px; background: var(--surface, #fff); overflow: hidden; margin-bottom: 16px; }
+.xsw-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border, #eef0f3); }
+.xsw-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
+.xsw-aside { font-size: 12px; color: var(--text-3, #6b7280); }
+.xsw-grid { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); padding: 14px 16px; align-items: stretch; }
+.xsw-arrow { display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-3, #9ca3af); }
+.xsw-side { border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.xsw-side--returned { background: #fff7ed; border: 1px solid #fed7aa; }
+.xsw-side--given { background: #ecfdf5; border: 1px solid #a7f3d0; }
+.xsw-k { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.xsw-side--returned .xsw-k { color: #c2410c; }
+.xsw-side--given .xsw-k { color: #047857; }
+.xsw-item + .xsw-item { border-top: 1px dashed rgba(0,0,0,.12); padding-top: 10px; }
+.xsw-name { font-weight: 700; font-size: 14px; color: var(--text-1, #111827); }
+.xsw-specs { font-size: 12px; color: #4b5563; margin-top: 2px; }
+.xsw-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 8px; }
+.xsw-code { display: flex; flex-direction: column; min-width: 0; }
+.xsw-code svg { max-width: 160px; height: 26px; }
+.xsw-code span { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; color: #111827; }
+.xsw-noserial { font-size: 11px; color: #6b7280; }
+.xsw-amt { font-size: 15px; font-weight: 800; color: #111827; white-space: nowrap; }
+.xsw-tag { display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; margin-right: 6px; vertical-align: 1px; }
+.xsw-tag--given { background: #ecfdf5; color: #047857; }
+.xsw-tag--returned { background: #fff7ed; color: #c2410c; }
+.xsw-neg { color: #c2410c; }
+.xsw-chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: #ede9fe; color: #6d28d9; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .xsw-side--returned { background: rgba(194,65,12,.12); border-color: rgba(251,146,60,.35); }
+  :root:not([data-theme="light"]) .xsw-side--given { background: rgba(4,120,87,.14); border-color: rgba(52,211,153,.35); }
+  :root:not([data-theme="light"]) .xsw-name, :root:not([data-theme="light"]) .xsw-amt, :root:not([data-theme="light"]) .xsw-code span { color: #f3f4f6; }
+  :root:not([data-theme="light"]) .xsw-specs { color: #cbd5e1; }
+  :root:not([data-theme="light"]) .xsw-code svg rect, :root:not([data-theme="light"]) .xsw-code svg path { fill: #f3f4f6; }
+}
+:root[data-theme="dark"] .xsw-side--returned { background: rgba(194,65,12,.12); border-color: rgba(251,146,60,.35); }
+:root[data-theme="dark"] .xsw-side--given { background: rgba(4,120,87,.14); border-color: rgba(52,211,153,.35); }
+:root[data-theme="dark"] .xsw-name, :root[data-theme="dark"] .xsw-amt, :root[data-theme="dark"] .xsw-code span { color: #f3f4f6; }
+:root[data-theme="dark"] .xsw-specs { color: #cbd5e1; }
+@container (max-width: 600px) {
+  .xsw-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .xsw-arrow { transform: rotate(90deg); height: 18px; }
+}

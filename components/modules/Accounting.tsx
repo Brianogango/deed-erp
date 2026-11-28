@@ -902,7 +902,7 @@ function AccountingContent() {
     credit_applications: { title: 'Credit account applications', subtitle: 'Corporate credit terms: documents, credit check and approval' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
     recurring_bills: { title: 'Recurring bills', subtitle: 'Rent, internet, electricity: bills that come every period' },
-    agent_commissions: { title: 'Agent commissions', subtitle: 'Deed Express agents: commissions earned and payouts' },
+    agent_commissions: { title: 'Agent commissions', subtitle: 'Deed Xpress agents: commissions earned and payouts' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
     journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
     reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
@@ -1875,6 +1875,7 @@ function AccountingContent() {
                 <AgentCommissions
                   limited={!canManageFullFinance}
                   showToast={showToast}
+                  companySettings={companySettings}
                   contacts={contacts}
                   moneyAccounts={bankAccounts
                     .filter(a => a.active !== false)

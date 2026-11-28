@@ -180,7 +180,7 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '3311', name: 'Other Payroll Deductions Payable', type: 'liability', group: 'Payroll Liabilities', subGroup: 'Other Deductions', balance: 0 },
     { code: '3312', name: 'Employee Reimbursements Payable', type: 'liability', group: 'Accruals', subGroup: 'Accruals', balance: 0 },
     { code: '3313', name: 'Customer Credits', type: 'liability', group: 'Customer Liabilities', subGroup: 'Credits', balance: 0, notes: 'Credit notes, cancelled paid-invoice credits, and buy-back store credit' },
-    { code: '3314', name: 'Agent Commissions Payable', type: 'liability', group: 'Accruals', subGroup: 'Accruals', balance: 0, notes: 'Deed Express agent commission earned (customer paid in full) and not yet paid out' },
+    { code: '3314', name: 'Agent Commissions Payable', type: 'liability', group: 'Accruals', subGroup: 'Accruals', balance: 0, notes: 'Deed Xpress agent commission earned (customer paid in full) and not yet paid out' },
     // Non-current liabilities
     { code: '3401', name: 'Bank Loan', type: 'liability', group: 'Non-Current Liabilities', subGroup: 'Non-Current Liabilities', balance: 0 },
     { code: '3402', name: 'Directors Account', type: 'liability', group: 'Non-Current Liabilities', subGroup: 'Non-Current Liabilities', balance: 0 },
@@ -228,7 +228,7 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '6307', name: 'Purchase Price Difference', type: 'expense', group: 'Direct Expenses', subGroup: 'Inventory', balance: 0, notes: 'GRN vs vendor-bill purchase price variance' },
     { code: '6401', name: 'Selling and Delivery', type: 'expense', group: 'Other Direct Expenses', subGroup: 'Other Direct Expenses', balance: 0 },
     { code: '6402', name: 'Packaging Expenses', type: 'expense', group: 'Other Direct Expenses', subGroup: 'Other Direct Expenses', balance: 0 },
-    { code: '6403', name: 'Agent Commissions', type: 'expense', group: 'Other Direct Expenses', subGroup: 'Other Direct Expenses', balance: 0, notes: 'Deed Express agents (independent) — commission on sales they bring' },
+    { code: '6403', name: 'Agent Commissions', type: 'expense', group: 'Other Direct Expenses', subGroup: 'Other Direct Expenses', balance: 0, notes: 'Deed Xpress agents (independent) — commission on sales they bring' },
     ...OPERATING_EXPENSES,
     { code: '6595', name: 'Cash Over/Short', type: 'expense', group: 'Operating Expenses', subGroup: 'Operating and Administrative', balance: 0 },
     { code: '6599', name: 'Other Operating Expenses', type: 'expense', group: 'Operating Expenses', subGroup: 'Operating and Administrative', balance: 0 },

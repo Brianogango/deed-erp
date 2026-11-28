@@ -678,7 +678,7 @@ export interface AppState {
       splitPayments?: import('@/lib/pos-tenders').PosTender[]
       salespersonId?: string
       salespersonName?: string
-      /** Deed Express agent who brought the customer (no employee commission then). */
+      /** Deed Xpress agent who brought the customer (no employee commission then). */
       agentId?: string
       agentName?: string
       agentCommission?: number

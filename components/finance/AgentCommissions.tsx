@@ -1,11 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { fmtKes } from '@/lib/store'
+import { fmtKes, type CompanySettings } from '@/lib/store'
+import { downloadAgentPayoutStatement } from './agent-payout-statement'
 import { AGENT_TAG, type AgentCommission, type AgentPayout, type AgentSettings } from '@/lib/agents/agent-commissions'
 
 type Agent = { id: string; name: string; phone: string | null; email: string | null; kraPin: string | null }
-type Overview = { agents: Agent[]; commissions: AgentCommission[]; payouts: AgentPayout[]; settings: AgentSettings }
+type Overview = { agents: Agent[]; commissions: AgentCommission[]; payouts: AgentPayout[]; settings: AgentSettings; paidSoFar?: Record<string, number> }
 type ContactLike = { id: string; name: string; phone?: string; tags?: string[] }
 /** One of the business's bank/cash accounts (Finance → Bank accounts). */
 type MoneyAccount = { id: string; name: string; bankName?: string }
@@ -16,12 +17,6 @@ const STATUS_LABEL: Record<AgentCommission['status'], string> = {
   due: 'Due',
   paid: 'Paid',
   cancelled: 'Cancelled',
-}
-const STATUS_TONE: Record<AgentCommission['status'], string> = {
-  pending: 'bg-[var(--bg-muted)] text-[var(--text-2)]',
-  due: 'bg-amber-50 text-amber-900',
-  paid: 'bg-emerald-50 text-emerald-800',
-  cancelled: 'bg-red-50 text-red-700',
 }
 const METHOD_LABEL: Record<AgentPayout['method'], string> = { mpesa: 'M-Pesa', bank: 'Bank', cash: 'Cash' }
 
@@ -34,7 +29,7 @@ async function readJson<T>(res: Response): Promise<T> {
 }
 
 /**
- * Finance → Bills → Agent commissions. Deed Express agents are independent
+ * Finance → Bills → Agent commissions. Deed Xpress agents are independent
  * people who bring customers; the commission agreed on the sale becomes due
  * once the customer has paid in full and is paid out daily or weekly.
  */
@@ -42,9 +37,11 @@ export default function AgentCommissions({
   showToast,
   contacts,
   moneyAccounts,
+  companySettings,
   limited = false,
 }: {
   showToast: Toast
+  companySettings?: CompanySettings
   contacts: ContactLike[]
   moneyAccounts: MoneyAccount[]
   /** Admin Officer view: add agents, add and cancel commission bills; no payouts or payout settings. */
@@ -67,6 +64,10 @@ export default function AgentCommissions({
   const [bill, setBill] = useState(emptyBill)
   const [billFile, setBillFile] = useState<File | null>(null)
   const [billFileKey, setBillFileKey] = useState(0)
+  const [listFilter, setListFilter] = useState<'due' | 'all'>('due')
+  const [search, setSearch] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
+  const [showAllPayouts, setShowAllPayouts] = useState(false)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -98,7 +99,15 @@ export default function AgentCommissions({
   const agentRows = useMemo(() => {
     const known = new Map((data?.agents ?? []).map(a => [a.id, a.name]))
     for (const row of data?.commissions ?? []) if (!known.has(row.agentId)) known.set(row.agentId, row.agentName)
-    return [...known.entries()].map(([id, name]) => ({ id, name, ...(totals.get(id) ?? { due: 0, pending: 0, paid: 0 }) }))
+    const phones = new Map((data?.agents ?? []).map(a => [a.id, a.phone ?? '']))
+    const dueCount = new Map<string, number>()
+    const lastPaid = new Map<string, string>()
+    for (const row of data?.commissions ?? []) if (row.status === 'due' && row.amount > 0) dueCount.set(row.agentId, (dueCount.get(row.agentId) ?? 0) + 1)
+    for (const p of data?.payouts ?? []) if ((lastPaid.get(p.agentId) ?? '') < p.paidAt) lastPaid.set(p.agentId, p.paidAt)
+    return [...known.entries()].map(([id, name]) => ({
+      id, name, phone: phones.get(id) ?? '', dueCount: dueCount.get(id) ?? 0, lastPaid: lastPaid.get(id) ?? '',
+      ...(totals.get(id) ?? { due: 0, pending: 0, paid: 0 }),
+    }))
       .sort((a, b) => b.due - a.due || a.name.localeCompare(b.name))
   }, [data, totals])
 
@@ -154,7 +163,7 @@ export default function AgentCommissions({
           ? { ...existing, tags, isVendor: true, ...(newAgent.kraPin.trim() ? { kraPin: newAgent.kraPin.trim() } : {}) }
           : { name, phone, type: 'individual', kraPin: newAgent.kraPin.trim() || undefined, tags, isVendor: true, isCustomer: false }),
       }))
-      showToast(existing ? `${existing.name} is now a Deed Express agent` : `${name} added as a Deed Express agent`, 'success')
+      showToast(existing ? `${existing.name} is now a Deed Xpress agent` : `${name} added as a Deed Xpress agent`, 'success')
       setNewAgent({ name: '', phone: '', kraPin: '' })
       setShowAdd(false)
       await load()
@@ -237,43 +246,76 @@ export default function AgentCommissions({
     }
   }
 
+  const month = today().slice(0, 7)
+  const kpi = useMemo(() => {
+    const rows = data?.commissions ?? []
+    const payoutsThisMonth = (data?.payouts ?? []).filter(p => String(p.paidAt).slice(0, 7) === month)
+    return {
+      due: rows.filter(r => r.status === 'due').reduce((s, r) => s + r.amount, 0),
+      dueAgents: new Set(rows.filter(r => r.status === 'due' && r.amount > 0).map(r => r.agentId)).size,
+      waiting: rows.filter(r => r.status === 'pending').reduce((s, r) => s + r.amount, 0),
+      waitingSales: rows.filter(r => r.status === 'pending').length,
+      paidMonth: payoutsThisMonth.reduce((s, p) => s + p.net, 0),
+      payoutsMonth: payoutsThisMonth.length,
+      whtMonth: payoutsThisMonth.reduce((s, p) => s + p.withholdingTax, 0),
+    }
+  }, [data, month])
+
+  const q = search.trim().toLowerCase()
+  const listed = agentRows
+    .filter(a => listFilter === 'all' || a.due !== 0 || a.id === agentId)
+    .filter(a => !q || a.name.toLowerCase().includes(q) || a.phone.replace(/\s/g, '').includes(q.replace(/\s/g, '')))
+  const toPayCount = agentRows.filter(a => a.due !== 0).length
+  const agent = agentRows.find(a => a.id === agentId)
+  const agentInfo = (data?.agents ?? []).find(a => a.id === agentId)
+  const dueLines = lines.filter(r => r.status === 'due')
+  const waitingLines = lines.filter(r => r.status === 'pending')
+  const doneLines = lines.filter(r => r.status === 'paid' || r.status === 'cancelled')
+  const payableIds = dueLines.filter(r => r.amount > 0).map(r => r.id)
+  const allTicked = payableIds.length > 0 && payableIds.every(id => selected.has(id))
+  const shownPayouts = showAllPayouts ? payouts : payouts.slice(0, 5)
+  const recovery = owed.reduce((s, r) => s + r.amount, 0)
+  const dateLabel = (d?: string) => (d ? new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—')
+
+  const statement = async (p: AgentPayout) => {
+    if (!companySettings) { showToast('Company settings are still loading — try again', 'error'); return }
+    try {
+      await downloadAgentPayoutStatement({ payout: p, commissions: data?.commissions ?? [], agent: (data?.agents ?? []).find(a => a.id === p.agentId), company: companySettings })
+    } catch {
+      showToast('Statement could not be made', 'error')
+    }
+  }
+
   return (
-    <div className="space-y-4 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="agc">
+      <div className="agc-head">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-primary-600">Deed Express</p>
-          <h2 className="mt-1 text-lg font-extrabold text-text-1">Agent commissions</h2>
-          <p className="mt-1 max-w-3xl text-xs text-text-3">
-            The commission agreed on a sale becomes due when the customer has paid in full (expense 6403, owed in 3314).
-            A refund before payout cancels it; a refund after payout is recovered from the agent&apos;s next payout.
-          </p>
+          <p className="agc-kicker">Deed Xpress</p>
+          <h2 className="agc-title">Agent commissions</h2>
+          <p className="agc-lede">Earned when the customer pays in full (6403, owed in 3314) · paid out from here · a refund after payout comes off the next one</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => { setShowBill(v => !v); setBill(b => ({ ...b, agentId: b.agentId || agentId })) }}>Add commission bill</button>
-          <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setShowAdd(v => !v)}>Add agent</button>
-          <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => void load()}>{busy ? 'Loading…' : 'Refresh'}</button>
+        <div className="agc-actions">
+          {settings && !limited && (
+            <button type="button" className="agc-settings-btn" aria-expanded={showSettings} onClick={() => setShowSettings(v => !v)}>
+              ⚙ Payouts: WHT {settings.withholdingEnabled ? 'on' : 'off'} · {settings.withholdingRate}%
+            </button>
+          )}
+          <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setShowAdd(v => !v)}>+ Add agent</button>
+          <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => { setShowBill(v => !v); setBill(b => ({ ...b, agentId: b.agentId || agentId })) }}>+ Commission bill</button>
+          <button type="button" className="agc-icon-btn" disabled={busy} aria-label="Refresh" title="Refresh" onClick={() => void load()}>{busy ? '…' : '↻'}</button>
         </div>
       </div>
 
-      {settings && !limited && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border-lt bg-card p-3 text-xs">
+      {settings && !limited && showSettings && (
+        <div className="agc-panel agc-settings">
           <label className="flex items-center gap-2 font-semibold text-text-1">
-            <input
-              type="checkbox"
-              checked={settings.withholdingEnabled}
-              onChange={e => void saveSettings({ withholdingEnabled: e.target.checked })}
-            />
+            <input type="checkbox" checked={settings.withholdingEnabled} onChange={e => void saveSettings({ withholdingEnabled: e.target.checked })} />
             Deduct withholding tax from payouts
           </label>
           <label className="flex items-center gap-1 text-text-2">
             Rate
             <input
-              className="form-input w-16 text-xs"
-              type="number"
-              min={0.1}
-              max={99}
-              step={0.5}
-              value={rateInput}
+              className="form-input w-16 text-xs" type="number" min={0.1} max={99} step={0.5} value={rateInput}
               onChange={e => setRateInput(e.target.value)}
               onBlur={() => { if (Number(rateInput) !== settings.withholdingRate) void saveSettings({ withholdingRate: Number(rateInput) }) }}
             />%
@@ -283,7 +325,7 @@ export default function AgentCommissions({
       )}
 
       {showAdd && (
-        <div className="grid gap-2 rounded-2xl border border-border-lt bg-card p-3 sm:grid-cols-4">
+        <div className="agc-panel grid gap-2 sm:grid-cols-4">
           <input className="form-input text-xs" placeholder="Full name" aria-label="Agent name" value={newAgent.name} onChange={e => setNewAgent(a => ({ ...a, name: e.target.value }))} />
           <input className="form-input text-xs" placeholder="Phone (M-Pesa)" aria-label="Agent phone" value={newAgent.phone} onChange={e => setNewAgent(a => ({ ...a, phone: e.target.value }))} />
           <input className="form-input text-xs" placeholder="KRA PIN (optional)" aria-label="Agent KRA PIN" value={newAgent.kraPin} onChange={e => setNewAgent(a => ({ ...a, kraPin: e.target.value }))} />
@@ -292,7 +334,7 @@ export default function AgentCommissions({
       )}
 
       {showBill && (
-        <div className="space-y-2 rounded-2xl border border-border-lt bg-card p-3">
+        <div className="agc-panel space-y-2">
           <p className="text-xs font-extrabold text-text-1">Commission bill</p>
           <p className="text-[11px] text-text-3">For a commission agreed outside a sale order or the till. It is owed to the agent at once and paid with their next payout.</p>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -320,163 +362,226 @@ export default function AgentCommissions({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-border-lt bg-card">
-        <table className="erp-table">
-          <thead className="text-text-3">
-            <tr>
-              <th className="px-3 py-2 font-semibold">Agent</th>
-              <th className="px-3 py-2 text-right font-semibold">Due now</th>
-              <th className="px-3 py-2 text-right font-semibold">Waiting for payment</th>
-              <th className="px-3 py-2 text-right font-semibold">Paid to date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border-lt)]">
-            {agentRows.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-3 text-text-3">No agents yet. Add one, then pick them on a sale order or at the till under “Brought by agent”.</td></tr>
-            )}
-            {agentRows.map(a => (
-              <tr
-                key={a.id}
-                className={`cursor-pointer hover:bg-[var(--bg-muted)] ${a.id === agentId ? 'bg-[var(--primary-light)]' : ''}`}
-                onClick={() => pickAgent(a.id)}
-              >
-                <td className="px-3 py-2 font-semibold text-text-1">{a.name}</td>
-                <td className="px-3 py-2 text-right font-bold">{fmtKes(a.due)}</td>
-                <td className="px-3 py-2 text-right text-text-2">{fmtKes(a.pending)}</td>
-                <td className="px-3 py-2 text-right text-text-2">{fmtKes(a.paid)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="agc-tiles">
+        <div className="agc-tile"><span className="k">Due now</span><b>{fmtKes(kpi.due)}</b><small>{kpi.dueAgents} {kpi.dueAgents === 1 ? 'agent' : 'agents'} to pay</small></div>
+        <div className="agc-tile"><span className="k">Waiting for customer</span><b>{fmtKes(kpi.waiting)}</b><small>{kpi.waitingSales} {kpi.waitingSales === 1 ? 'sale' : 'sales'} not fully paid</small></div>
+        <div className="agc-tile"><span className="k">Paid this month</span><b>{fmtKes(kpi.paidMonth)}</b><small>{kpi.payoutsMonth} {kpi.payoutsMonth === 1 ? 'payout' : 'payouts'}</small></div>
+        <div className="agc-tile"><span className="k">WHT withheld this month</span><b>{fmtKes(kpi.whtMonth)}</b><small>{settings?.withholdingEnabled ? `at ${settings.withholdingRate}% · for KRA` : 'withholding is off'}</small></div>
       </div>
 
-      {agentId && (
-        <div className="space-y-3 rounded-2xl border border-border-lt bg-card p-4">
-          <h3 className="text-sm font-extrabold text-text-1">{agentRows.find(a => a.id === agentId)?.name}</h3>
-          <div className="overflow-x-auto">
-            <table className="erp-table">
-              <thead className="text-text-3">
-                <tr>
-                  <th className="py-1.5 pr-2" />
-                  <th className="py-1.5 pr-3 font-semibold">Sale</th>
-                  <th className="py-1.5 pr-3 font-semibold">Customer</th>
-                  <th className="py-1.5 pr-3 text-right font-semibold">Sale total</th>
-                  <th className="py-1.5 pr-3 text-right font-semibold">Commission</th>
-                  <th className="py-1.5 pr-3 font-semibold">Status</th>
-                  <th className="py-1.5 font-semibold">Earned / paid</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-lt)]">
-                {lines.length === 0 && <tr><td colSpan={7} className="py-2 text-text-3">No sales for this agent yet.</td></tr>}
-                {lines.map(r => {
-                  const payable = r.status === 'due' && r.amount > 0
-                  const forced = r.status === 'due' && r.amount < 0
-                  return (
-                    <tr key={r.id} className="align-top">
-                      <td className="py-1.5 pr-2">
-                        {(payable || forced) && (
-                          <input
-                            type="checkbox"
-                            aria-label={`Pay ${r.sourceRef}`}
-                            checked={forced || selected.has(r.id)}
-                            disabled={forced}
-                            onChange={e => setSelected(s => {
-                              const next = new Set(s)
-                              if (e.target.checked) next.add(r.id); else next.delete(r.id)
-                              return next
-                            })}
-                          />
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-3 font-mono">
-                        {r.sourceRef}{r.clawbackOf && <span className="ml-1 font-sans text-red-700">refund recovery</span>}
-                        {r.sourceKind === 'manual' && (
-                          <span className="block font-sans text-text-3">
-                            Bill {r.id}{r.description ? ` · ${r.description}` : ''}
-                            {r.attachment && <> · <a className="text-primary-600 underline" href={`/api/agents/commissions?file=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer">{r.attachment.name}</a></>}
-                            {r.status === 'due' && <> · <button type="button" className="text-red-700 underline" disabled={busy} onClick={() => void cancelBill(r)}>Cancel bill</button></>}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-3">{r.customerName || '—'}</td>
-                      <td className="py-1.5 pr-3 text-right">{r.saleTotal ? fmtKes(r.saleTotal) : '—'}</td>
-                      <td className={`py-1.5 pr-3 text-right font-bold ${r.amount < 0 ? 'text-red-700' : ''}`}>{fmtKes(r.amount)}</td>
-                      <td className="py-1.5 pr-3">
-                        <span className={`rounded-md px-1.5 py-0.5 font-bold ${STATUS_TONE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-                        {r.flag && <span className="mt-0.5 block text-amber-800">{r.flag}</span>}
-                      </td>
-                      <td className="py-1.5 text-text-2">{r.paidAt ?? r.earnedAt ?? '—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+      <div className="agc-split" data-open={agentId ? '1' : undefined}>
+        <section className="agc-card agc-list" aria-label="Agents">
+          <div className="agc-list-head">
+            <b>Agents</b>
+            <span className="agc-seg" role="tablist">
+              <button type="button" role="tab" aria-selected={listFilter === 'due'} onClick={() => setListFilter('due')}>To pay · {toPayCount}</button>
+              <button type="button" role="tab" aria-selected={listFilter === 'all'} onClick={() => setListFilter('all')}>All · {agentRows.length}</button>
+            </span>
           </div>
-
-          {!limited && lines.some(r => r.status === 'due') && (
-            <div className="grid gap-2 border-t border-border-lt pt-3 sm:grid-cols-5">
-              <select className="form-input text-xs" aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as AgentPayout['method'])}>
-                <option value="mpesa">M-Pesa</option>
-                <option value="bank">Bank transfer</option>
-                <option value="cash">Cash</option>
-              </select>
-              <input
-                className="form-input text-xs"
-                aria-label="Payment reference"
-                placeholder={method === 'mpesa' ? 'M-Pesa code' : 'Reference'}
-                value={reference}
-                onChange={e => setReference(e.target.value.toUpperCase())}
-              />
-              <input className="form-input text-xs" type="date" aria-label="Payment date" value={paidAt} onChange={e => setPaidAt(e.target.value)} />
-              <select className="form-input text-xs" aria-label="Paid from account" value={chosenAccount ? accountId : ''} onChange={e => setAccountId(e.target.value)}>
-                <option value="">{moneyAccounts.length ? 'Paid from which account?' : 'No bank/cash accounts — add one in Bank accounts'}</option>
-                {moneyAccounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.bankName && a.bankName !== a.name ? ` · ${a.bankName}` : ''}</option>)}
-              </select>
-              <button type="button" className="btn-primary text-[11px]" disabled={busy || chosen.length === 0 || gross <= 0 || !chosenAccount} onClick={() => void pay()}>
-                {busy ? 'Saving…' : `Pay ${fmtKes(Math.max(0, net))}`}
+          <input className="agc-search" placeholder="Search agent or phone…" aria-label="Search agents" value={search} onChange={e => setSearch(e.target.value)} />
+          {agentRows.length === 0 && <p className="agc-empty">No agents yet. Add one, then pick them on a sale order or at the till under “Brought by agent”.</p>}
+          {agentRows.length > 0 && listed.length === 0 && (
+            <p className="agc-empty">{q ? 'No agent matches.' : 'Nobody is owed anything right now.'} <button type="button" className="agc-link" onClick={() => setListFilter('all')}>Show all agents</button></p>
+          )}
+          {listed.map(a => {
+            const nothing = a.due === 0
+            return (
+              <button key={a.id} type="button" className={`agc-agent${a.id === agentId ? ' is-on' : ''}${nothing ? ' is-dim' : ''}`} onClick={() => pickAgent(a.id)}>
+                <span className="agc-av" style={{ background: avatarColor(a.name) }}>{initials(a.name)}</span>
+                <span className="agc-agent-main">
+                  <span className="agc-agent-name">{a.name}</span>
+                  <span className="agc-agent-meta">
+                    {[a.phone, a.dueCount ? `${a.dueCount} ${a.dueCount === 1 ? 'sale' : 'sales'} due` : a.lastPaid ? `Last paid ${dateLabel(a.lastPaid)}` : (a.pending ? '' : 'No sales due')].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className="agc-agent-amt">
+                  {nothing ? <span className="agc-zero">Nothing due</span> : <b>{fmtKes(a.due)}</b>}
+                  {a.pending > 0 && <span className="agc-chip agc-chip--wait">+{fmtKes(a.pending)} waiting</span>}
+                </span>
               </button>
-              <p className="text-[11px] text-text-3 sm:col-span-5">
-                Commission {fmtKes(gross)}{wht > 0 ? ` − withholding tax ${fmtKes(wht)}` : ''} = paid to agent {fmtKes(Math.max(0, net))}.
-                {owed.length > 0 && ' Refund recoveries owed by this agent are always deducted.'}
-              </p>
-            </div>
-          )}
+            )
+          })}
+        </section>
 
-          {payouts.length > 0 && (
-            <div className="border-t border-border-lt pt-3">
-              <h4 className="mb-1 text-xs font-extrabold text-text-1">Payout statements</h4>
-              <table className="erp-table">
-                <thead className="text-text-3">
-                  <tr>
-                    <th className="py-1 pr-3 font-semibold">Payout</th>
-                    <th className="py-1 pr-3 font-semibold">Date</th>
-                    <th className="py-1 pr-3 font-semibold">Method</th>
-                    <th className="py-1 pr-3 text-right font-semibold">Commission</th>
-                    <th className="py-1 pr-3 text-right font-semibold">WHT</th>
-                    <th className="py-1 pr-3 text-right font-semibold">Paid</th>
-                    <th className="py-1 font-semibold">Sales</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-lt)]">
-                  {payouts.map(p => (
-                    <tr key={p.id}>
-                      <td className="py-1 pr-3 font-mono">{p.ref}</td>
-                      <td className="py-1 pr-3">{p.paidAt}</td>
-                      <td className="py-1 pr-3">{METHOD_LABEL[p.method]}{p.reference ? ` · ${p.reference}` : ''}{p.paidFrom ? <span className="block text-text-3">from {p.paidFrom}</span> : null}</td>
-                      <td className="py-1 pr-3 text-right">{fmtKes(p.gross)}</td>
-                      <td className="py-1 pr-3 text-right">{fmtKes(p.withholdingTax)}</td>
-                      <td className="py-1 pr-3 text-right font-bold">{fmtKes(p.net)}</td>
-                      <td className="py-1 text-text-2">
-                        {(data?.commissions ?? []).filter(r => p.commissionIds.includes(r.id)).map(r => r.sourceRef).join(', ')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <section className="agc-card agc-detail" aria-label="Agent">
+          {!agent ? (
+            <div className="agc-placeholder">
+              <b>Pick an agent</b>
+              <span>Their sales due, what is waiting for the customer to pay, and their payouts show here.</span>
             </div>
+          ) : (
+            <>
+              <div className="agc-ahead">
+                <button type="button" className="agc-back" onClick={() => setAgentId('')} aria-label="Back to agents">‹</button>
+                <span className="agc-av agc-av--lg" style={{ background: avatarColor(agent.name) }}>{initials(agent.name)}</span>
+                <div className="min-w-0">
+                  <h3>{agent.name}</h3>
+                  <p>{[agentInfo?.phone, agentInfo?.kraPin ? `KRA PIN ${agentInfo.kraPin}` : '', agentInfo?.email].filter(Boolean).join(' · ') || 'No contact details'}</p>
+                </div>
+                <div className="agc-figs">
+                  <div><span>Due now</span><b>{fmtKes(agent.due)}</b></div>
+                  <div><span>Waiting</span><b>{fmtKes(agent.pending)}</b></div>
+                  <div><span>Paid to date</span><b>{fmtKes(agent.paid)}</b></div>
+                </div>
+              </div>
+
+              <div className="agc-sec">
+                <span>Due now · {dueLines.length}</span>
+                {!limited && payableIds.length > 1 && (
+                  <button type="button" className="agc-link" onClick={() => setSelected(allTicked ? new Set() : new Set(payableIds))}>{allTicked ? 'Clear' : 'Select all'}</button>
+                )}
+              </div>
+              {dueLines.length === 0 ? <p className="agc-empty">Nothing due for {agent.name} right now.</p> : (
+                <div className="agc-table-wrap">
+                  <table className="agc-table">
+                    <thead><tr><th aria-label="Pay" /><th>Sale</th><th>Customer</th><th className="r">Sale total</th><th className="r">Commission</th><th>Earned</th></tr></thead>
+                    <tbody>
+                      {dueLines.map(r => {
+                        const forced = r.amount < 0
+                        return (
+                          <tr key={r.id}>
+                            <td>
+                              {!limited && (
+                                <input
+                                  type="checkbox" aria-label={`Pay ${r.sourceRef}`}
+                                  checked={forced || selected.has(r.id)} disabled={forced}
+                                  title={forced ? 'A refund recovery is always deducted' : undefined}
+                                  onChange={e => setSelected(s => { const next = new Set(s); if (e.target.checked) next.add(r.id); else next.delete(r.id); return next })}
+                                />
+                              )}
+                            </td>
+                            <td className="agc-ref" data-label="Sale">
+                              {r.sourceKind === 'manual' ? `Bill ${r.id}` : r.sourceRef}
+                              {r.clawbackOf && <span className="agc-chip agc-chip--neg">refund recovery</span>}
+                              {r.flag && <span className="agc-flag">{r.flag}</span>}
+                            </td>
+                            <td data-label="Customer">
+                              {r.sourceKind === 'manual' ? (
+                                <span className="text-text-3">
+                                  {[r.sourceRef !== r.id ? r.sourceRef : '', r.customerName, r.description].filter(Boolean).join(' · ') || 'Commission bill'}
+                                  {r.attachment && <> · <a className="agc-link" href={`/api/agents/commissions?file=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer">📎 {r.attachment.name}</a></>}
+                                  <> · <button type="button" className="agc-link agc-link--danger" disabled={busy} onClick={() => void cancelBill(r)}>Cancel bill</button></>
+                                </span>
+                              ) : (r.customerName || '—')}
+                            </td>
+                            <td className="r" data-label="Sale total">{r.saleTotal ? fmtKes(r.saleTotal) : '—'}</td>
+                            <td className={`r agc-amt${forced ? ' is-neg' : ''}`} data-label="Commission">{forced ? `− ${fmtKes(-r.amount)}` : fmtKes(r.amount)}</td>
+                            <td data-label="Earned">{dateLabel(r.earnedAt)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!limited && dueLines.length > 0 && (
+                <div className="agc-paybar">
+                  <div className="agc-paymath">
+                    <span>
+                      {chosen.length} selected · commission {fmtKes(chosen.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0))}
+                      {recovery < 0 ? ` − recovery ${fmtKes(-recovery)}` : ''}{wht > 0 ? ` − WHT ${fmtKes(wht)}` : ''}
+                    </span>
+                    <span>Pay agent <b>{fmtKes(Math.max(0, net))}</b></span>
+                  </div>
+                  <label className="agc-field"><span>Method</span>
+                    <select className="form-input text-xs" value={method} onChange={e => setMethod(e.target.value as AgentPayout['method'])}>
+                      <option value="mpesa">M-Pesa</option><option value="bank">Bank transfer</option><option value="cash">Cash</option>
+                    </select>
+                  </label>
+                  <label className="agc-field"><span>{method === 'mpesa' ? 'M-Pesa code' : 'Reference'}</span>
+                    <input className="form-input text-xs" value={reference} placeholder={method === 'mpesa' ? 'e.g. TKR8H2LQ0P' : 'Optional'} onChange={e => setReference(e.target.value.toUpperCase())} />
+                  </label>
+                  <label className="agc-field"><span>Date</span>
+                    <input className="form-input text-xs" type="date" value={paidAt} onChange={e => setPaidAt(e.target.value)} />
+                  </label>
+                  <label className="agc-field"><span>Paid from</span>
+                    <select className="form-input text-xs" value={chosenAccount ? accountId : ''} onChange={e => setAccountId(e.target.value)}>
+                      <option value="">{moneyAccounts.length ? 'Choose account…' : 'No bank/cash accounts — add one in Bank accounts'}</option>
+                      {moneyAccounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.bankName && a.bankName !== a.name ? ` · ${a.bankName}` : ''}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" className="agc-pay" disabled={busy || chosen.length === 0 || gross <= 0 || !chosenAccount} onClick={() => void pay()}>
+                    {busy ? 'Saving…' : `Pay ${fmtKes(Math.max(0, net))}`}
+                  </button>
+                </div>
+              )}
+
+              {waitingLines.length > 0 && (
+                <>
+                  <div className="agc-sec"><span>Waiting for the customer to pay · {waitingLines.length}</span></div>
+                  <ul className="agc-rows">
+                    {waitingLines.map(r => {
+                      const paidSoFar = data?.paidSoFar?.[r.id] ?? 0
+                      const pct = r.saleTotal > 0 ? Math.min(99, Math.floor((paidSoFar / r.saleTotal) * 100)) : 0
+                      return (
+                        <li key={r.id}>
+                          <span className="agc-ref">{r.sourceRef}</span>
+                          <span className="agc-rows-main">
+                            {r.customerName || '—'}
+                            <small>{paidSoFar > 0 ? ` · paid ${pct}% of ${fmtKes(r.saleTotal)}` : r.saleTotal ? ` · ${fmtKes(r.saleTotal)} not paid yet` : ''}</small>
+                            {r.flag && <span className="agc-flag">{r.flag}</span>}
+                          </span>
+                          <span className="agc-amt">{fmtKes(r.amount)}</span>
+                          <span className="agc-chip agc-chip--wait">Waiting</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+
+              {payouts.length > 0 && (
+                <>
+                  <div className="agc-sec">
+                    <span>Payouts · {payouts.length}</span>
+                    {payouts.length > 5 && <button type="button" className="agc-link" onClick={() => setShowAllPayouts(v => !v)}>{showAllPayouts ? 'Show fewer' : 'Show all ›'}</button>}
+                  </div>
+                  <ul className="agc-rows">
+                    {shownPayouts.map(p => (
+                      <li key={p.id}>
+                        <span className="agc-ref">{p.ref}</span>
+                        <span className="agc-rows-main">
+                          {dateLabel(p.paidAt)} · {METHOD_LABEL[p.method]}{p.reference ? ` ${p.reference}` : ''}
+                          <small>{` · ${p.commissionIds.length} ${p.commissionIds.length === 1 ? 'line' : 'lines'}`}{p.withholdingTax > 0 ? ` · WHT ${fmtKes(p.withholdingTax)}` : ''}{p.paidFrom ? ` · from ${p.paidFrom}` : ''}</small>
+                        </span>
+                        <span className="agc-amt">{fmtKes(p.net)}</span>
+                        <button type="button" className="agc-link" onClick={() => void statement(p)}>Statement ⤓</button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {doneLines.length > 0 && (
+                <details className="agc-done">
+                  <summary>Paid and cancelled lines · {doneLines.length}</summary>
+                  <ul className="agc-rows">
+                    {doneLines.map(r => (
+                      <li key={r.id}>
+                        <span className="agc-ref">{r.sourceKind === 'manual' ? `Bill ${r.id}` : r.sourceRef}</span>
+                        <span className="agc-rows-main">{r.customerName || r.description || '—'}<small>{r.paidAt ? ` · paid ${dateLabel(r.paidAt)}` : ''}</small>{r.flag && <span className="agc-flag">{r.flag}</span>}</span>
+                        <span className={`agc-amt${r.amount < 0 ? ' is-neg' : ''}`}>{fmtKes(r.amount)}</span>
+                        <span className={`agc-chip ${r.status === 'paid' ? 'agc-chip--paid' : 'agc-chip--neg'}`}>{STATUS_LABEL[r.status]}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
           )}
-        </div>
-      )}
+        </section>
+      </div>
     </div>
   )
+}
+
+const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0d9488', '#4f46e5', '#b45309', '#0891b2']
+function avatarColor(name: string) {
+  let h = 0
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'
 }

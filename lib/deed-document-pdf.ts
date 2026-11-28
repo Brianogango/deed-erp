@@ -102,6 +102,22 @@ export interface DeedPdfInput {
   paymentDetailLines?: string[]
   /** Machines sold under warranty: a line each with a QR to the live check. */
   warranties?: DeedPdfWarranty[]
+  /** An exchange: the machines handed back and given, drawn above the items. */
+  exchange?: DeedPdfExchange
+}
+
+export interface DeedPdfExchangeMachine {
+  productName: string
+  specs?: string
+  serial?: string
+  qty: number
+  amount: number
+}
+
+export interface DeedPdfExchange {
+  ref: string
+  returned: DeedPdfExchangeMachine[]
+  given: DeedPdfExchangeMachine[]
 }
 
 export interface DeedPdfWarranty {
@@ -178,6 +194,7 @@ const cleanWebsite = (value?: string) =>
 
 const titleKind = (title: string) => {
   const value = title.toLowerCase().replace(/-/g, '')
+  if (value.includes('exchange note')) return 'exchange'
   if (value.includes('proforma')) return 'proforma'
   if (value.includes('quotation') || value.includes('quote')) return 'quotation'
   if (value.includes('sales order') || value.includes('sale order')) return 'sales-order'
@@ -204,7 +221,8 @@ export function closingFigure(
   if (kind === 'receipt') {
     return paid > 0 ? { label: 'Amount received', when: '', amount: paid } : null
   }
-  if (kind === 'quotation' || kind === 'proforma' || kind === 'delivery') return null
+  // An exchange note records a swap; any balance is settled on its invoice or as store credit.
+  if (kind === 'quotation' || kind === 'proforma' || kind === 'delivery' || kind === 'exchange') return null
   if (!(balance > 0)) return null
   return { label: partlyPaid ? 'Balance due' : 'Amount due', when: '', amount: balance }
 }
@@ -397,6 +415,75 @@ function drawQr(doc: jsPDF, text: string, x: number, y: number, size: number) {
 
 const WARRANTY_SUPPORT_LINE = 'Warranty support: 0113 704 451'
 
+/** A serial as a CODE128 image (browser only; elsewhere the serial is printed as text). */
+function serialBarcode(value: string): string {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !value.trim()) return ''
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const JsBarcode = require('jsbarcode')
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, value, { format: 'CODE128', width: 2, height: 44, displayValue: false, margin: 0, background: '#FFFFFF', lineColor: '#000000' })
+    return canvas.toDataURL('image/png')
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * The exchange boxes: machines handed back (left) and given (right), each with
+ * its specs, serial barcode and value. Drawn above the items.
+ */
+function drawExchange(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, startY: number, showAmounts: boolean): number {
+  const exc = input.exchange
+  if (!exc || (!exc.returned.length && !exc.given.length)) return startY
+  const gap = 22
+  const boxW = (contentW(doc) - gap) / 2
+  const ITEM_H = 50
+  const rows = Math.max(exc.returned.length, exc.given.length, 1)
+  const boxH = 22 + rows * ITEM_H
+  let y = ensureRoom(doc, company, input, startY, boxH + 22)
+  writeLabel(doc, `Exchange ${exc.ref}`, MARGIN, y + 4)
+  y += 12
+  const sides: Array<{ title: string; items: DeedPdfExchangeMachine[]; fill: [number, number, number]; edge: [number, number, number]; ink: [number, number, number] }> = [
+    { title: 'RETURNED BY CUSTOMER', items: exc.returned, fill: [255, 247, 237], edge: [253, 186, 116], ink: [194, 65, 12] },
+    { title: 'GIVEN TO CUSTOMER', items: exc.given, fill: [236, 253, 245], edge: [110, 231, 183], ink: [4, 120, 87] },
+  ]
+  sides.forEach((side, si) => {
+    const x = MARGIN + si * (boxW + gap)
+    doc.setFillColor(...side.fill).setDrawColor(...side.edge).setLineWidth(.6)
+    doc.roundedRect(x, y, boxW, boxH, 4, 4, 'FD')
+    doc.setFont('helvetica', 'bold').setFontSize(6.8).setTextColor(...side.ink)
+    doc.text(side.title, x + 9, y + 13)
+    side.items.forEach((m, i) => {
+      const iy = y + 22 + i * ITEM_H
+      doc.setFont('helvetica', 'bold').setFontSize(8.4).setTextColor(...INK)
+      const name = `${m.productName}${m.qty > 1 ? ` x${m.qty}` : ''}`
+      doc.text((doc.splitTextToSize(name, boxW - 18) as string[])[0] ?? '', x + 9, iy + 6)
+      if (m.specs && !m.productName.includes(m.specs)) {
+        doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+        doc.text((doc.splitTextToSize(m.specs, boxW - 18) as string[])[0] ?? '', x + 9, iy + 15)
+      }
+      if (m.serial) {
+        const img = serialBarcode(m.serial)
+        if (img) doc.addImage(img, 'PNG', x + 9, iy + 19, Math.min(110, boxW - 90), 14, undefined, 'FAST')
+        doc.setFont('courier', 'bold').setFontSize(7).setTextColor(...INK)
+        doc.text(m.serial, x + 9, iy + (img ? 41 : 28))
+      }
+      if (showAmounts) {
+        doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...INK)
+        doc.text(money(m.amount), x + boxW - 9, iy + 38, { align: 'right' })
+      }
+    })
+  })
+  doc.setDrawColor(...MUTED).setLineWidth(.8)
+  const ax = MARGIN + boxW + gap / 2
+  const ay = y + boxH / 2
+  doc.line(ax - 6, ay, ax + 5, ay)
+  doc.line(ax + 1, ay - 3.5, ax + 5, ay)
+  doc.line(ax + 1, ay + 3.5, ax + 5, ay)
+  return y + boxH + 14
+}
+
 /**
  * Warranty codes under the totals: one QR per machine, in a row. The items
  * above already name the machines; the code opens the live check (number,
@@ -588,6 +675,7 @@ export function buildDeedDocumentPdf(
     m.lines.forEach((text, i) => doc.text(text, x + 92, rowY + i * VALUE_LH))
   })
   y += blockH + (boxed ? 14 : 8)
+  y = drawExchange(doc, company, input, y, showAmounts)
 
   // No "UNIT" column: every row said "Unit(s)", so it cost width and told the
   // reader nothing. The width goes to the description, which carries the serial

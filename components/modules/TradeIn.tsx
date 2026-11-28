@@ -16,6 +16,9 @@ import { Fa, faBox, faCheck, faCreditCard, faMoneyBillWave, faTrash, faUpload } 
 import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { userCan } from '@/lib/auth/can'
 import { financeInvoicePath } from '@/lib/finance-invoice'
+import { ExchangeSwapCard } from '@/components/aftersales/ExchangeSwapCard'
+import { downloadExchangeNotePdf, exchangeSettlementText } from '@/components/aftersales/exchange-note-pdf'
+import { exchangeDocumentView } from '@/lib/after-sales/exchange-document'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -1299,6 +1302,7 @@ function downloadExchangeBulkTemplate() {
 function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
+  const { companySettings, bankAccounts, invoices } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canApprove = userCan(currentUser, 'sales.buyback.approve')
@@ -1498,6 +1502,22 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
     const exc = detail
     const STEPS = ['draft', 'approved', 'completed']
     const si = exc.status === 'cancelled' ? -1 : STEPS.indexOf(exc.status)
+    const excView = exchangeDocumentView(exc, serials as Array<{ id: string; serial?: string; specs?: string; unitName?: string }>)
+    const balanceInvoice = invoices.find(i => i.type === 'customer_invoice' && (i.lines ?? []).some(l => (l.description || '').startsWith(`Exchange ${exc.ref} `)))
+    const printNote = async () => {
+      try {
+        await downloadExchangeNotePdf({
+          view: excView,
+          customerName: exc.customerName,
+          contact: contacts.find(c => c.id === exc.customerId),
+          company: companySettings,
+          bankAccounts,
+          settlement: exchangeSettlementText(excView, balanceInvoice?.ref, exc.priceDiff < 0 ? `CR/${exc.ref}` : undefined),
+        })
+      } catch {
+        showToast('Exchange note could not be made', 'error')
+      }
+    }
     return (
       <div>
         <button onClick={() => onOpenDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
@@ -1522,30 +1542,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div style={{ border: '1px solid #FEE2E2', borderRadius: 10, padding: 12 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#991B1B', marginBottom: 8 }}>↩ Returned by Customer</p>
-              {exc.returnLines.map(l => (
-                <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                  <span>{l.productName} ×{l.qty}</span><span style={{ fontWeight: 600 }}>{fmtKes(l.unitPrice * l.qty)}</span>
-                </div>
-              ))}
-              <div style={{ borderTop: '1px solid #FEE2E2', marginTop: 8, paddingTop: 6, fontWeight: 700, fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
-                <span>Credit Value</span><span>{fmtKes(exc.returnTotal)}</span>
-              </div>
-            </div>
-            <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)', marginBottom: 8 }}>New items for customer</p>
-              {exc.newLines.map(l => (
-                <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                  <span>{l.productName} ×{l.qty}</span><span style={{ fontWeight: 600 }}>{fmtKes(l.unitPrice * l.qty)}</span>
-                </div>
-              ))}
-              <div style={{ borderTop: '1px solid #DCFCE7', marginTop: 8, paddingTop: 6, fontWeight: 700, fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total Value</span><span>{fmtKes(exc.newTotal)}</span>
-              </div>
-            </div>
-          </div>
+          <ExchangeSwapCard view={excView} title="Machines swapped" aside={<>Returned {fmtKes(exc.returnTotal)} · Given {fmtKes(exc.newTotal)}</>} />
 
           <div style={{ background: exc.priceDiff > 0 ? '#FEF9C3' : exc.priceDiff < 0 ? 'var(--success-bg)' : 'var(--bg-muted)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
             <span>{exc.priceDiff > 0 ? 'Customer pays additional' : exc.priceDiff < 0 ? 'We owe customer' : 'Even exchange'}</span>
@@ -1565,6 +1562,8 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
               </div>
             )}
             {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); onOpenDetail(null) }}>✕ Cancel</button>}
+            {exc.status === 'completed' && <button className="btn-secondary text-[11px]" onClick={() => { void printNote() }}>Print exchange note</button>}
+            {exc.status === 'completed' && balanceInvoice && <Link className="btn-secondary text-[11px]" href={financeInvoicePath(balanceInvoice.id)}>Open invoice {balanceInvoice.ref}</Link>}
           </div>
         </div>
       </div>

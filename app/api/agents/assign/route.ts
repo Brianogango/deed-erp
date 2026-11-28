@@ -1,5 +1,5 @@
 /**
- * The Deed Express agent on a sale order, kept in deed_saleAgents (sale
+ * The Deed Xpress agent on a sale order, kept in deed_saleAgents (sale
  * orders themselves are rebuilt from Prisma, which has no agent columns).
  *
  * GET ?saleOrderId= — the agent on that order, if any.
@@ -40,7 +40,7 @@ export async function PUT(request: Request) {
         where: { id: agentId, tags: { array_contains: [AGENT_TAG] } },
         select: { name: true },
       })
-      if (!agent) return NextResponse.json({ error: 'That contact is not a Deed Express agent' }, { status: 422 })
+      if (!agent) return NextResponse.json({ error: 'That contact is not a Deed Xpress agent' }, { status: 422 })
       agentName = agent.name
     }
 

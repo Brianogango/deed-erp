@@ -1,5 +1,5 @@
 /**
- * Deed Express agents — independent individuals who bring customers.
+ * Deed Xpress agents — independent individuals who bring customers.
  *
  * Each sale (a sale order, or a POS ticket) may name one agent and the
  * commission agreed for it in KES (there is no rate). The commission is
@@ -104,6 +104,8 @@ export type EvaluatedSale = {
   earnedAt?: string
   /** Partly refunded — leave the commission as it is and tell Finance. */
   partlyRefunded?: boolean
+  /** What the customer has paid towards the sale so far. */
+  paidSoFar?: number
 }
 
 export function commissionIdFor(kind: 'sale_order' | 'pos_order', sourceId: string) {
@@ -151,6 +153,7 @@ export function evaluateAgentSales(input: { saleOrders: Row[]; posOrders: Row[];
       state,
       earnedAt: state === 'earned' ? (lastPaid || input.today).slice(0, 10) : undefined,
       partlyRefunded: credited > 0 && !refunded,
+      paidSoFar: money(paid),
     })
   }
   for (const po of input.posOrders) {
@@ -175,6 +178,7 @@ export function evaluateAgentSales(input: { saleOrders: Row[]; posOrders: Row[];
       state,
       earnedAt: state === 'earned' ? String(po.date || po.createdAt || input.today).slice(0, 10) : undefined,
       partlyRefunded: credited > 0 && !refunded,
+      paidSoFar: paidInFull ? total : money(paid),
     })
   }
   return out

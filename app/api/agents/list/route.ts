@@ -1,5 +1,5 @@
 /**
- * GET — Deed Express agents (id + name) for the "Brought by agent" picker on
+ * GET — Deed Xpress agents (id + name) for the "Brought by agent" picker on
  * sale orders and the till. Any signed-in user; no amounts or contact details.
  */
 import { NextResponse } from 'next/server'

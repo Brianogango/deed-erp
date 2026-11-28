@@ -4,6 +4,8 @@ import { bankChoiceLabel } from '@/lib/finance/bank-choice-label'
 import JobTrail from '@/components/erp/JobTrail'
 import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
 import { DocumentWarranties } from '@/components/aftersales/DocumentWarranties'
+import { ExchangeSwapCard } from '@/components/aftersales/ExchangeSwapCard'
+import { exchangeRefOf, type ExchangeDocumentView } from '@/lib/after-sales/exchange-document'
 import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
 import type { DeliveryJob } from '@/lib/store'
 import { addChequeToRegister, chequeDirectionForDoc, chequeLinkedType } from '@/lib/cheques/cheque-link'
@@ -150,6 +152,22 @@ export default function InvoiceDetail() {
     return () => controller.abort()
   }, [id, invoiceIsCustomer, localDeviceHeading])
   const deviceHeading = localDeviceHeading || serverDeviceHeading
+
+  // An invoice for an exchange's balance: the machines handed back and given.
+  const exchangeRef = invoice && invoiceIsCustomer ? exchangeRefOf(invoice) : null
+  const [exchangeView, setExchangeView] = useState<(ExchangeDocumentView & { replacesLines: boolean }) | null>(null)
+  useEffect(() => {
+    setExchangeView(null)
+    if (!id || !exchangeRef) return
+    const controller = new AbortController()
+    fetch(`/api/invoices/${encodeURIComponent(id)}/exchange`, { signal: controller.signal, cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then((body: { exchange?: (ExchangeDocumentView & { replacesLines: boolean }) | null } | null) => { if (body?.exchange) setExchangeView(body.exchange) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [id, exchangeRef])
+  // The ± rows stand in for the single balance line, except while a draft is being edited.
+  const showExchangeRows = !!exchangeView?.replacesLines && !(invoice?.status === 'draft' && canManageFinance)
   // Lines that already carry headings (a combined repair invoice, or ones
   // Finance added) keep their own; the device heading is not added on top.
   const showDeviceHeading = !!deviceHeading && !(invoice?.lines ?? []).some(l => l.lineType === 'section')
@@ -893,6 +911,7 @@ export default function InvoiceDetail() {
                   ? <StatusBadge status="cancelled" label="Overdue" />
                   : <StatusBadge status={badgeStatus as string} label={payStateLabel} />
               )}
+              {exchangeRef && <span className="xsw-chip">Exchange</span>}
             </div>
             <p className="invoice-detail__customer">{invoice.partnerName}</p>
             {invoice.type === 'customer_invoice' && availableCredit > 0 && (
@@ -1065,6 +1084,13 @@ export default function InvoiceDetail() {
         </section>
         )}
 
+        {exchangeView && (
+          <ExchangeSwapCard
+            view={exchangeView}
+            aside={<>Exchange <b>{exchangeView.ref}</b>{exchangeView.originalSORef ? ` · original sale ${exchangeView.originalSORef}` : ''}</>}
+          />
+        )}
+
         <section className="invoice-detail__card" aria-label="Line items">
           <div className="invoice-detail__card-head">
             <h2 className="invoice-detail__card-title">Line Items</h2>
@@ -1108,7 +1134,23 @@ export default function InvoiceDetail() {
                       </td>
                     </tr>
                   )}
-                  {(invoice.lines || []).map((line, idx) => {
+                  {showExchangeRows && exchangeView!.rows.map((row, idx) => (
+                    <tr key={`exc-${idx}`} className="invoice-detail__item-row">
+                      <td className="is-num" data-col="index">{idx + 1}</td>
+                      <td data-col="description">
+                        <span className="invoice-detail__line-desc">
+                          <span className={`xsw-tag xsw-tag--${row.kind}`}>{row.kind === 'given' ? 'GIVEN' : 'RETURNED'}</span>
+                          {row.description.replace(/^(Given|Returned): /, '')}{row.serial ? ` · SN ${row.serial}` : ''}
+                        </span>
+                      </td>
+                      <td className="is-num" data-col="qty">{row.qty}</td>
+                      <td className={`is-num${row.unitPrice < 0 ? ' xsw-neg' : ''}`} data-col="price">{fmtKes(row.unitPrice)}</td>
+                      <td className="is-num" data-col="discount" data-zero="1">0%</td>
+                      <td className="is-num" data-col="tax">0%</td>
+                      <td className={`is-num is-strong${row.subtotal < 0 ? ' xsw-neg' : ''}`} data-col="amount">{fmtKes(row.subtotal)}</td>
+                    </tr>
+                  ))}
+                  {!showExchangeRows && (invoice.lines || []).map((line, idx) => {
                     const canReorder = invoice.status === 'draft' && canManageFinance
                     const moveButtons = canReorder ? (
                       <div className="flex items-center justify-end gap-0.5">
@@ -1192,6 +1234,18 @@ export default function InvoiceDetail() {
           )}
 
           <div className="invoice-detail__totals">
+            {showExchangeRows && (
+              <>
+                <div className="invoice-detail__totals-row">
+                  <span>Value of machines given</span>
+                  <span>{fmtKes(exchangeView!.givenTotal)}</span>
+                </div>
+                <div className="invoice-detail__totals-row">
+                  <span>Less machines returned</span>
+                  <span className="xsw-neg">− {fmtKes(exchangeView!.returnedTotal)}</span>
+                </div>
+              </>
+            )}
             <div className="invoice-detail__totals-row">
               <span>Subtotal</span>
               <span>{fmtKes(invoice.subtotal)}</span>

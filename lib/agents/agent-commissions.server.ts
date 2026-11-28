@@ -61,7 +61,7 @@ export function readAgentSettings(value: unknown): AgentSettings {
  * flagged, and is retried on the next sync. Idempotent: journal refs are
  * fixed per sale, and a rerun with nothing new changes nothing.
  */
-export async function syncAgentCommissions(): Promise<{ rows: AgentCommission[]; posted: number; failed: number }> {
+export async function syncAgentCommissions(): Promise<{ rows: AgentCommission[]; posted: number; failed: number; paidSoFar: Record<string, number> }> {
   return withAppStateKeyLock(AGENT_COMMISSIONS_KEY, async () => {
     const state = await loadAppStateForWrite(['deed_saleOrders', SALE_AGENTS_KEY, 'deed_posOrders', 'deed_invoices', AGENT_COMMISSIONS_KEY])
     const existing = asArray<AgentCommission>(state[AGENT_COMMISSIONS_KEY])
@@ -104,7 +104,9 @@ export async function syncAgentCommissions(): Promise<{ rows: AgentCommission[];
     if (JSON.stringify(rows) !== JSON.stringify(existing)) {
       await saveStoreKeys({ [AGENT_COMMISSIONS_KEY]: JSON.stringify(rows) })
     }
-    return { rows, posted, failed }
+    // How far each sale still waiting for payment has got (shown next to it).
+    const paidSoFar = Object.fromEntries(evaluated.filter(e => e.state === 'pending').map(e => [e.id, e.paidSoFar ?? 0]))
+    return { rows, posted, failed, paidSoFar }
   })
 }
 
@@ -204,7 +206,7 @@ export async function recordAgentPayout(params: {
 }
 
 export async function loadAgentOverview() {
-  const { rows } = await syncAgentCommissions()
+  const { rows, paidSoFar } = await syncAgentCommissions()
   const state = await loadAppState([AGENT_PAYOUTS_KEY, AGENT_SETTINGS_KEY])
   const agents = await prisma.client.findMany({
     where: { tags: { array_contains: [AGENT_TAG] } },
@@ -214,6 +216,7 @@ export async function loadAgentOverview() {
   return {
     agents,
     commissions: rows,
+    paidSoFar,
     payouts: asArray<AgentPayout>(state[AGENT_PAYOUTS_KEY]),
     settings: readAgentSettings(state[AGENT_SETTINGS_KEY]),
   }
@@ -244,7 +247,7 @@ export async function addManualCommission(params: {
     where: { id: params.agentId, tags: { array_contains: [AGENT_TAG] } },
     select: { id: true, name: true },
   })
-  if (!agent) throw httpError('Choose a Deed Express agent (add them under Add agent first)', 422)
+  if (!agent) throw httpError('Choose a Deed Xpress agent (add them under Add agent first)', 422)
   return withAppStateKeyLock(AGENT_COMMISSIONS_KEY, async () => {
     const state = await loadAppStateForWrite([AGENT_COMMISSIONS_KEY])
     const rows = asArray<AgentCommission>(state[AGENT_COMMISSIONS_KEY])
