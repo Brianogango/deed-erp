@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDashboardInvoiceFigures, moneyReceivedByPeriod, nairobiDay } from '@/lib/dashboard/invoice-figures'
+import { computeDashboardInvoiceFigures, moneyReceivedByPeriod, nairobiDay, ownSalesInvoices } from '@/lib/dashboard/invoice-figures'
 
 const base = {
   today: '2026-11-11', // a Wednesday
@@ -109,5 +109,21 @@ describe('money received for the sales team', () => {
     ]
     const full = computeDashboardInvoiceFigures({ ...base, invoices })
     expect(moneyReceivedByPeriod(invoices, base.today)).toEqual(full.revenue)
+  })
+})
+
+describe("a sales rep's own sales", () => {
+  it('counts their orders and till sales, not the rest of the company', () => {
+    const invoices = [
+      inv({ id: 'a', saleOrderId: 'so-mine', date: '2026-11-11', amountPaid: 1000 }),
+      inv({ id: 'b', saleOrderId: 'so-other', date: '2026-11-11', amountPaid: 9000 }),
+      inv({ id: 'c', salespersonId: 'u1', date: '2026-11-11', amountPaid: 300 }),
+      inv({ id: 'd', saleOrderId: 'so-sold', date: '2026-11-11', amountPaid: 200 }),
+    ]
+    const orders = [{ id: 'so-mine', createdByUserId: 'u1' }, { id: 'so-other', createdByUserId: 'u2' }, { id: 'so-sold', createdByUserId: 'u2', salespersonId: 'u1' }]
+    const own = ownSalesInvoices(invoices, orders, 'u1')
+    expect(own.map(i => i.id)).toEqual(['a', 'c', 'd'])
+    expect(moneyReceivedByPeriod(own, base.today).today).toBe(1500)
+    expect(ownSalesInvoices(invoices, orders, '')).toEqual([])
   })
 })

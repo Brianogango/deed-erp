@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { dashboardSectionsForUser, visibleDashboardRepairs, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
-import { computeDashboardInvoiceFigures, moneyReceivedByPeriod } from '@/lib/dashboard/invoice-figures'
-import { loadAppState } from '@/lib/server-store'
+import { computeDashboardInvoiceFigures, moneyReceivedByPeriod, ownSalesInvoices } from '@/lib/dashboard/invoice-figures'
+import { canonicalUserRole } from '@/lib/auth/roles'
 import { loadViewerState } from '@/lib/store-viewer-state.server'
 
 export const dynamic = 'force-dynamic'
@@ -60,12 +60,12 @@ export async function GET(request: NextRequest) {
           }
         : null,
     })
-    // The sales team sees the company's money received (the dashboard's lead
-    // card), not just their own invoices — worked out here over every
-    // invoice; they still receive only their own invoice rows.
-    if (!sections.finance && sections.sales) {
-      const all = await loadAppState(['deed_invoices'])
-      figures.revenue = moneyReceivedByPeriod(rows(all.deed_invoices), today)
+    // A sales rep's lead card is the money received on their own sales —
+    // invoices of the orders they raised or are the salesperson on, and
+    // their till sales — never the company's totals.
+    if (!sections.finance && canonicalUserRole((user as { role?: string }).role) === 'sales_rep') {
+      const own = ownSalesInvoices(rows(state.deed_invoices), saleOrders, String((user as { id?: string }).id ?? ''))
+      figures.revenue = moneyReceivedByPeriod(own, today)
     }
     return NextResponse.json(figures, { headers: { 'Cache-Control': 'no-store' } })
   })

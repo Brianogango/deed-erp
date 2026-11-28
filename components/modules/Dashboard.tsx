@@ -1040,9 +1040,9 @@ export function Dashboard() {
 
       {/* P1: the lead figure, what needs attention, three key numbers */}
       <div className="dash2-bento">
-        {canSeeFinance || canSeeSales ? (
+        {canSeeFinance || isSalesRep ? (
           <section className="dash2-hero" aria-label="Paid this week">
-            <p className="dash2-hero-label">Paid this week</p>
+            <p className="dash2-hero-label">{canSeeFinance ? 'Paid this week' : 'Your sales paid this week'}</p>
             <p className="dash2-hero-value">{fmtKes(executiveSnapshot.paidThisWeek)}</p>
             <p className="dash2-hero-sub">
               {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} paid
@@ -1051,7 +1051,8 @@ export function Dashboard() {
               )}
             </p>
             <div className="dash2-hero-periods">
-              {executiveSnapshot.periods.filter(period => period.label === 'Today' || period.label === 'This month' || period.label === 'This year').map(period => (
+              {/* A sales rep sees their own day and month, not the year's company-scale total. */}
+              {executiveSnapshot.periods.filter(period => period.label === 'Today' || period.label === 'This month' || (canSeeFinance && period.label === 'This year')).map(period => (
                 <div key={period.label}>
                   <span>{period.label}</span>
                   <strong>{fmtKes(period.value)}</strong>
