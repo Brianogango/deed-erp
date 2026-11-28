@@ -254,11 +254,3 @@ export function moneyReceivedByPeriod(invoices: Row[], today: string): Dashboard
   return revenue
 }
 
-/** A sales rep's own invoices: their till sales and the orders they raised or sell. */
-export function ownSalesInvoices(invoices: Row[], saleOrders: Row[], userId: string): Row[] {
-  if (!userId) return []
-  const mine = new Set(saleOrders
-    .filter(o => o?.createdByUserId === userId || o?.salespersonId === userId)
-    .map(o => String(o.id)))
-  return invoices.filter(i => i?.salespersonId === userId || (i?.saleOrderId && mine.has(String(i.saleOrderId))))
-}
