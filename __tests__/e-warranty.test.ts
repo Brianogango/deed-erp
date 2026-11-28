@@ -56,6 +56,13 @@ describe('who gets a warranty', () => {
     expect(warrantiesToIssue(existing, sources as any).map(w => w.serialId)).toEqual(['s4'])
   })
 
+  it('a machine upgraded on the bench is warranted under its new name and specs', () => {
+    const upgraded = { ...sources, serials: serials.map(x => x.id === 's1' ? { ...x, specs: 'i5, 16GB, 512GB SSD', unitName: 'HP EliteBook 840 G5 - i5, 16GB RAM, 512GB SSD' } : x) }
+    const w = warrantiesToIssue([], upgraded as any)[0]
+    expect(w.productName).toBe('HP EliteBook 840 G5 - i5, 16GB RAM, 512GB SSD')
+    expect(w.specs).toBe('i5, 16GB, 512GB SSD')
+  })
+
   it('a machine resold after a trade-in gets a new one', () => {
     const existing = [{ id: 'w1', ref: 'WAR/0001', serialId: 's2', sourceKey: 'pos:old', status: 'cancelled' }] as any
     expect(warrantiesToIssue(existing, sources as any).map(w => w.serialId)).toContain('s2')

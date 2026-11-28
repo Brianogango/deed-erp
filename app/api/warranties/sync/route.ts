@@ -8,6 +8,12 @@ export const dynamic = 'force-dynamic'
 export async function POST() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    return NextResponse.json(await syncWarranties())
+    const out = await syncWarranties()
+    // Machines upgraded on the bench and then sold: their documents and
+    // warranties take the new specs (and, once, every such machine sold before).
+    void import('@/lib/reconfiguration/sales-bridge')
+      .then(m => m.refreshReconfiguredSales(out.added.map(w => w.serialId)))
+      .catch(() => {})
+    return NextResponse.json(out)
   })
 }
