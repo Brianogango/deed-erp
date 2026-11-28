@@ -324,45 +324,38 @@ export default function HRLeaveTab() {
     return [...groups.entries()]
   })()
 
-  const balanceColumns: ColumnDef<BalanceRow>[] = [
+  // Desktop: one row per person, one column per leave type. A row per
+  // person *and* type gave 12 people about 90 rows.
+  const TYPE_ORDER = ['annual', 'sick', 'compassionate', 'study', 'december_closure', 'maternity', 'paternity', 'unpaid']
+  const balanceTypes = [...new Set(balanceRows.map(b => b.leaveType as string))]
+    .sort((x, y) => (TYPE_ORDER.indexOf(x) + 1 || 99) - (TYPE_ORDER.indexOf(y) + 1 || 99))
+  type PersonBalances = { id: string; name: string; byType: Map<string, BalanceRow> }
+  const personRows: PersonBalances[] = balancesByPerson.map(([id, g]) => ({ id, name: g.name, byType: new Map(g.rows.map(r => [r.leaveType as string, r])) }))
+  const typeLabel = (t: string) => t.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())
+  const balanceColumns: ColumnDef<PersonBalances>[] = [
     ...(canViewTeamHR ? [{
-      key: 'employee', label: 'Employee', priority: 1 as const, width: '150px',
-      render: (bal: BalanceRow) => <span style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: 11 }}>{bal.employeeName}</span>,
-      exportValue: (bal: BalanceRow) => bal.employeeName,
+      key: 'employee', label: 'Employee', priority: 1 as const, width: '190px',
+      render: (r: PersonBalances) => <span style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: 12 }}>{r.name}</span>,
+      exportValue: (r: PersonBalances) => r.name,
     }] : []),
-    {
-      key: 'leaveType', label: 'Leave Type', priority: 1, width: '140px',
-      render: bal => <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>,
-      exportValue: bal => bal.leaveType,
-    },
-    {
-      key: 'available', label: 'Available', priority: 1, width: '90px',
-      render: bal => {
-        const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-        return <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? 'var(--success)' : 'var(--danger)' }}>{available}d</span>
+    ...balanceTypes.map(t => ({
+      key: `t_${t}`, label: typeLabel(t), priority: (t === 'annual' || t === 'sick' ? 1 : 2) as 1 | 2,
+      render: (r: PersonBalances) => {
+        const bal = r.byType.get(t)
+        if (!bal) return <span style={{ color: 'var(--text-4)', fontSize: 12 }}>—</span>
+        const total = bal.entitlement + bal.carryForward
+        const left = balanceAvailable(bal)
+        if (total === 0 && bal.used === 0 && bal.pending === 0) return <span style={{ color: 'var(--text-4)', fontSize: 12 }}>—</span>
+        return (
+          <span title={`${bal.entitlement}d entitled · ${bal.carryForward}d carried · ${bal.used}d used · ${bal.pending}d pending`} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+            <b style={{ color: left > 0 ? 'var(--success)' : 'var(--danger)' }}>{left}</b>
+            <span style={{ color: 'var(--text-4)' }}> / {total}d</span>
+            {bal.pending > 0 && <span style={{ color: 'var(--warning)', marginLeft: 4 }}>· {bal.pending} pending</span>}
+          </span>
+        )
       },
-      exportValue: bal => bal.entitlement + bal.carryForward - bal.used - bal.pending,
-    },
-    {
-      key: 'entitlement', label: 'Entitlement', priority: 2, width: '90px',
-      render: bal => <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>,
-      exportValue: bal => bal.entitlement,
-    },
-    {
-      key: 'carryForward', label: 'Carry Fwd', priority: 2, width: '90px',
-      render: bal => <span style={{ fontSize: 11, color: bal.carryForward > 0 ? 'var(--navy)' : 'var(--text-4)' }}>{bal.carryForward}d</span>,
-      exportValue: bal => bal.carryForward,
-    },
-    {
-      key: 'used', label: 'Used', priority: 2, width: '80px',
-      render: bal => <span style={{ fontSize: 11, color: 'var(--danger)' }}>{bal.used}d</span>,
-      exportValue: bal => bal.used,
-    },
-    {
-      key: 'pending', label: 'Pending', priority: 3, width: '80px',
-      render: bal => <span style={{ fontSize: 11, color: bal.pending > 0 ? 'var(--warning)' : 'var(--text-4)' }}>{bal.pending}d</span>,
-      exportValue: bal => bal.pending,
-    },
+      exportValue: (r: PersonBalances) => { const bal = r.byType.get(t); return bal ? balanceAvailable(bal) : '' },
+    })),
   ]
 
   const leaveTypeOptions = [
@@ -518,9 +511,7 @@ export default function HRLeaveTab() {
       <div className="hr-submodule-panel card overflow-hidden">
         <PanelHeader
           title={`Leave Balances — ${new Date().getFullYear()}`}
-          count={canViewTeamHR
-            ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length
-            : myLeaveBalances.length}
+          count={personRows.length}
         />
         <div className="md:hidden">
           {balanceRows.length > 0 && canViewTeamHR && (
@@ -562,11 +553,12 @@ export default function HRLeaveTab() {
           )}
         </div>
         <div className="hidden md:block">
+          <p className="px-4 pt-3 text-[11px] text-t3">Days left / days available this year. Hover a figure for used and pending days.</p>
           <DataTable
-            tableId="hr_leave_balances"
+            tableId="hr_leave_balances_by_person"
             columns={balanceColumns}
-            rows={balanceRows}
-            rowKey={bal => bal.id}
+            rows={personRows}
+            rowKey={r => r.id}
             emptyMessage="No leave balances found"
             exportTitle="Leave Balances"
             exportFilename="leave-balances"

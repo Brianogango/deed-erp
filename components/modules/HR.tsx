@@ -555,7 +555,7 @@ function HRContent() {
       </header>
       {canManageHR && activeGroup.tabs.length > 1 && (
         <nav className="hrh-sub" aria-label={`${activeGroup.label} sections`}>
-          {activeGroup.tabs.filter(t => t.id !== 'org_chart' || tab === 'org_chart').map(t => (
+          {activeGroup.tabs.map(t => (
             <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => { setViewEmpId(null); setTab(t.id) }}>{t.label}</button>
           ))}
         </nav>
