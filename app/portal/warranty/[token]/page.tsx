@@ -10,7 +10,7 @@ type Data = {
     ref: string; buyer: string; productName: string; serialNumber: string; specs: string; document: string
     startDate: string; endDate: string; months: number; state: 'valid' | 'expired' | 'void'
   }
-  company: { name?: string; phone?: string; email?: string; website?: string; address?: string; city?: string }
+  company: { name?: string; phone?: string; email?: string; website?: string; address?: string; city?: string; logoUrl?: string }
 }
 
 const longDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -82,7 +82,8 @@ export default function WarrantyCertificatePage() {
         <header className="flex items-center gap-4">
           <span className="h-px flex-1 bg-[#20164D]" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/deed-logo.png" alt={c.name || 'Deed Technologies'} className="h-14 w-auto" />
+          {/* The invoices' logo, at the size they print it (about a ninth of the page width). */}
+          <img src={c.logoUrl || '/deed-logo.png'} alt={c.name || 'Deed Technologies'} className="h-20 w-auto max-w-[220px] object-contain sm:h-24" />
           <span className="h-px flex-1 bg-[#20164D]" />
         </header>
 

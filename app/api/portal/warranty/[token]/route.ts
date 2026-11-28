@@ -29,6 +29,7 @@ export const GET = guardPortalRoute('warranty', 120, async (_req: NextRequest, {
       months: w.months,
       state: warrantyState(w),
     },
-    company: { name: company.name, phone: company.phone, email: company.email, website: company.website, address: company.address, city: company.city },
+    // The logo the invoices print (Settings → company logo), so the certificate matches them.
+    company: { name: company.name, phone: company.phone, email: company.email, website: company.website, address: company.address, city: company.city, logoUrl: /^(data:image\/|https?:\/\/|\/)/.test(String(company.logoUrl ?? '')) ? String(company.logoUrl) : '' },
   }, { headers: noStore })
 })
