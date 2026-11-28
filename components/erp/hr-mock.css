@@ -111,3 +111,32 @@
   .hra-tools { width: 100%; }
   .hra-search { flex: 1; width: auto; }
 }
+
+/* C · Documents (needs action, all documents, add-document drawer) */
+.hrc { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.hrc.has-drawer { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+.hrc-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hrc-title { font-size: 13.5px; color: var(--hrx-ink); }
+.hrc-muted { color: var(--hrx-muted) !important; }
+.hra-table tr.is-static { cursor: default; }
+.hrc-sub td { background: #fafbfd; font-size: 12px; padding-left: 28px !important; }
+.hrc-more { border: 0; background: none; padding: 9px 14px; color: var(--hrx-blue); font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.hrc-drawer { position: sticky; top: 12px; background: #fff; border: 1px solid var(--hrx-line); border-radius: 12px; box-shadow: -8px 0 24px rgba(15,27,61,.06); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.hrc-drawer-head { display: flex; justify-content: space-between; align-items: center; }
+.hrc-drawer-head b { font-size: 15px; color: var(--hrx-ink); }
+.hrc-x { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--hrx-muted); cursor: pointer; }
+.hrc-fld { display: flex; flex-direction: column; gap: 3px; }
+.hrc-fld > span { font-size: 11px; font-weight: 700; color: var(--hrx-muted); }
+.hrc-fld > small { font-size: 10.5px; color: var(--hrx-faint); }
+.hrc-fld select, .hrc-fld input { border: 1px solid #d5dce6; border-radius: 8px; padding: 7px 10px; font-family: inherit; font-size: 12.5px; background: #fff; color: var(--hrx-ink); }
+.hrc-fld .hra-seg { align-self: flex-start; }
+.hrc-drop { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 16px; text-align: center; background: #fff; font-family: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.hrc-drop b { font-size: 12px; color: var(--hrx-muted); font-weight: 600; }
+.hrc-drop span { font-size: 11px; color: var(--hrx-faint); }
+.hrc-drop.has-file { border-style: solid; border-color: #86efac; background: #f0fdf4; }
+.hrc-drop.has-file b { color: #065f46; }
+.hrc-save { justify-content: center; padding: 9px 12px; margin-top: 6px; }
+@media (max-width: 1100px) {
+  .hrc.has-drawer { grid-template-columns: minmax(0, 1fr); }
+  .hrc-drawer { position: fixed; inset: auto 0 0 0; top: auto; border-radius: 16px 16px 0 0; max-height: 85vh; overflow-y: auto; z-index: 60; box-shadow: 0 -10px 30px rgba(15,27,61,.18); }
+}
