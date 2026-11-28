@@ -690,7 +690,7 @@ function HRContent() {
         ) : tab === 'assets' ? (
           <HRAssetsTab prefillEmployeeId={assignPrefill} onPrefillUsed={() => setAssignPrefill(null)} />
         ) : tab === 'departments' && canManageHR ? (
-          <HRDepartments canManage={isAdmin} showToast={showToast} onChanged={() => void loadDepartments()} />
+          <HRDepartments canManage={isAdmin} showToast={showToast} onChanged={() => void loadDepartments()} employees={employees} payBasis={payBasisById} canSeePay={canSetPayBasis} />
         ) : tab === 'self_service' ? (
           <HRMyPortal
             name={currentUser?.name ?? ''}

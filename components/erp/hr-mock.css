@@ -58,7 +58,7 @@
 .hra-onb small { display: block; font-size: 11px; color: var(--hrx-muted); margin-top: 3px; }
 .hra-bar { height: 6px; border-radius: 99px; background: #e2e8f0; overflow: hidden; width: 120px; }
 .hra-bar i { display: block; height: 100%; background: var(--hrx-blue); border-radius: 99px; }
-.hra-r { text-align: right; }
+.hra-r, .hra-table .hra-r { text-align: right; }
 .hra-empty { text-align: center; color: var(--hrx-muted); padding: 22px 14px !important; }
 
 /* B · Profile */
@@ -155,3 +155,21 @@
 .hrd-hint { font-size: 11px; color: var(--hrx-muted); }
 .hrd-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 @media (max-width: 700px) { .hrd-scan-row { flex-wrap: wrap; } .hrd-code { flex-basis: 100%; } .hrd-to { flex: 1; width: auto; } }
+
+/* E · Departments */
+.hre-add { display: flex; gap: 8px; }
+.hre-add input, .hre-inline input, .hre-select { border: 1px solid #d5dce6; border-radius: 8px; padding: 5px 10px; font-family: inherit; font-size: 12px; background: #fff; color: var(--hrx-ink); }
+.hre-add input { width: 200px; }
+.hre-inline { display: flex; gap: 6px; }
+.hre-people { width: 34%; }
+.hre-bar-row { display: flex; gap: 8px; align-items: center; }
+.hre-bar { flex: 1; width: auto; }
+.hre-off td { opacity: .7; }
+.hre-menu-cell { position: relative; width: 40px; }
+.hre-dots { border: 0; background: none; font-size: 16px; color: var(--hrx-muted); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.hre-dots:hover { background: var(--hrx-soft); }
+.hre-menu { position: absolute; right: 10px; top: 34px; z-index: 20; background: #fff; border: 1px solid var(--hrx-line); border-radius: 10px; box-shadow: 0 8px 24px rgba(15,27,61,.12); padding: 4px; min-width: 200px; display: flex; flex-direction: column; text-align: left; }
+.hre-menu button { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 7px; font-family: inherit; font-size: 12.5px; color: var(--hrx-ink); cursor: pointer; }
+.hre-menu button:hover:not(:disabled) { background: var(--hrx-soft); }
+.hre-menu button:disabled { color: var(--hrx-faint); cursor: not-allowed; }
+.hre-foot { margin: 0; padding: 8px 14px 10px; font-size: 11px; color: var(--hrx-muted); }
