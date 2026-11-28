@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDashboardInvoiceFigures, nairobiDay } from '@/lib/dashboard/invoice-figures'
+import { computeDashboardInvoiceFigures, moneyReceivedByPeriod, nairobiDay } from '@/lib/dashboard/invoice-figures'
 
 const base = {
   today: '2026-11-11', // a Wednesday
@@ -99,3 +99,16 @@ describe('dashboard money received', () => {
     expect(f.revenue.paidThisWeekCount).toBe(2)
   })
 })
+
+describe('money received for the sales team', () => {
+  it('is the same figure the finance dashboard shows, over every invoice', () => {
+    const invoices = [
+      inv({ id: 'a', date: '2026-11-10', amountPaid: 1000 }),
+      inv({ id: 'b', date: '2026-11-11', amountPaid: 500 }),
+      inv({ id: 'c', date: '2026-11-11', type: 'vendor_bill', amountPaid: 900 }),
+    ]
+    const full = computeDashboardInvoiceFigures({ ...base, invoices })
+    expect(moneyReceivedByPeriod(invoices, base.today)).toEqual(full.revenue)
+  })
+})
+

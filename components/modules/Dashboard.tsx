@@ -1040,18 +1040,19 @@ export function Dashboard() {
 
       {/* P1: the lead figure, what needs attention, three key numbers */}
       <div className="dash2-bento">
-        {canSeeFinance ? (
+        {canSeeFinance || sections.salesPaidCard ? (
           <section className="dash2-hero" aria-label="Paid this week">
             <p className="dash2-hero-label">Paid this week</p>
             <p className="dash2-hero-value">{fmtKes(executiveSnapshot.paidThisWeek)}</p>
             <p className="dash2-hero-sub">
               {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} paid
-              {financeStats.overdueCount > 0 && (
+              {canSeeFinance && financeStats.overdueCount > 0 && (
                 <> · <button type="button" className="dash2-hero-link" onClick={() => handleNav('accounting', '/finance?tab=invoices')}>{financeStats.overdueCount} overdue to collect</button></>
               )}
             </p>
             <div className="dash2-hero-periods">
-              {executiveSnapshot.periods.filter(period => period.label === 'Today' || period.label === 'This month' || period.label === 'This year').map(period => (
+              {/* Sales see the day, week and month; the year is for Finance and the Director. */}
+              {executiveSnapshot.periods.filter(period => period.label === 'Today' || period.label === 'This month' || (canSeeFinance && period.label === 'This year')).map(period => (
                 <div key={period.label}>
                   <span>{period.label}</span>
                   <strong>{fmtKes(period.value)}</strong>
