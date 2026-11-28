@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp, fmtDate, type EmployeeAssetAssignment, type LocationId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
@@ -42,7 +42,7 @@ const emptyReturnForm = (assignmentId = ''): ReturnForm => ({
   notes: '',
 })
 
-export default function HRAssetsTab() {
+export default function HRAssetsTab({ prefillEmployeeId, onPrefillUsed }: { prefillEmployeeId?: string | null; onPrefillUsed?: () => void } = {}) {
   const { employees } = useHrStore()
   const {
     employeeAssetAssignments,
@@ -116,6 +116,16 @@ export default function HRAssetsTab() {
     setAssignError(null)
     setShowAssignModal(true)
   }
+
+  // Opened from a person's checklist ("Issue equipment"): their name is already chosen.
+  useEffect(() => {
+    if (!prefillEmployeeId) return
+    setAssignForm({ ...emptyAssignForm(), employeeId: prefillEmployeeId })
+    setAssignDirty(false)
+    setAssignError(null)
+    setShowAssignModal(true)
+    onPrefillUsed?.()
+  }, [prefillEmployeeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeAssignModal = () => guardedNavigate(() => {
     setShowAssignModal(false)

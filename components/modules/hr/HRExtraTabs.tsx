@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Field, Input, Modal, Select, Textarea, Badge } from '@/components/ui'
@@ -129,12 +129,21 @@ const DOC_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
-export function HRDocumentsTab() {
+export function HRDocumentsTab({ prefill, onPrefillUsed }: { prefill?: { employeeId: string; type: string } | null; onPrefillUsed?: () => void } = {}) {
   const { employees, hrDocuments, addHRDocument } = useHrStore()
   const { showToast } = useApp()
   const [show, setShow] = useState(false)
   const emptyDocForm = () => ({ employeeId: '', type: '', title: '', expiryDate: '', notes: '', visibility: 'hr_only' })
   const [form, setForm] = useState(emptyDocForm)
+  // Opened from a person's checklist ("Upload the signed contract"): the form starts filled in.
+  useEffect(() => {
+    if (!prefill) return
+    const label = DOC_TYPES.find(t => t.value === prefill.type)?.label ?? ''
+    const person = employees.find(e => e.id === prefill.employeeId)?.fullName ?? ''
+    setForm({ ...emptyDocForm(), employeeId: prefill.employeeId, type: prefill.type, title: label && person ? `${label} — ${person}` : label })
+    setShow(true)
+    onPrefillUsed?.()
+  }, [prefill]) // eslint-disable-line react-hooks/exhaustive-deps
   const [file, setFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<'all' | 'attention'>('all')

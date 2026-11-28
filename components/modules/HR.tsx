@@ -5,7 +5,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { faUsers, faUserPlus, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { useHrStore } from '@/hooks/useHrStore'
+import { useHrStore, refreshHrListsFromBrowser } from '@/hooks/useHrStore'
 import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { downloadPdf } from '@/lib/pdf'
 import HRLeaveTab from './hr/HRLeaveTab'
@@ -26,10 +26,11 @@ import { type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
+import HREmployeeProfile from './hr/HREmployeeProfile'
+import { employeeSetup, type EmployeeSetup } from '@/lib/hr/employee-setup'
 import { documentExpiry } from '@/lib/hr/document-status'
 import { userCan } from '@/lib/auth/can'
 import { initials } from '@/lib/utils'
-import { OperationalSummary } from '@/components/erp/OperationalSummary'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS & TYPES
@@ -106,7 +107,6 @@ function HRContent() {
   const {
     users,
     currentUserId,
-    payrollRuns,
     payslips,
     employeeAssetAssignments,
     showToast,
@@ -203,6 +203,8 @@ function HRContent() {
     } catch { /* keep what is shown */ }
   }
   useEffect(() => { void loadDepartments() }, [])
+  // The HR lists the server sent after this page opened (documents, departments…).
+  useEffect(() => { refreshHrListsFromBrowser(); const t = window.setTimeout(refreshHrListsFromBrowser, 1500); return () => window.clearTimeout(t) }, [])
 
   type EmpFormState = {
     fullName: string; employeeNo: string; email: string; workEmail: string; phone: string
@@ -331,7 +333,34 @@ function HRContent() {
     } finally { setSaving(false) }
   }
 
+  // Which people the list shows: active, records still incomplete, leavers, or everyone.
+  const [peopleFilterValue, setPeopleFilterValue] = useUrlUiState('people', 'active')
+  const peopleFilter = (['active', 'incomplete', 'leavers', 'all'] as const).includes(peopleFilterValue as never)
+    ? peopleFilterValue as 'active' | 'incomplete' | 'leavers' | 'all'
+    : 'active'
+  const setPeopleFilter = (v: 'active' | 'incomplete' | 'leavers' | 'all') => setPeopleFilterValue(v, { queryPatch: { employeePage: null } })
+  // A person's checklist opens the document / equipment form already filled in.
+  const [docPrefill, setDocPrefill] = useState<{ employeeId: string; type: string } | null>(null)
+  const [assignPrefill, setAssignPrefill] = useState<string | null>(null)
+  const heldAssets = useMemo(() => {
+    const by = new Map<string, typeof employeeAssetAssignments>()
+    for (const a of employeeAssetAssignments) {
+      if (a.status !== 'assigned') continue
+      by.set(a.employeeId, [...(by.get(a.employeeId) ?? []), a])
+    }
+    return by
+  }, [employeeAssetAssignments])
+  const setupById = useMemo(() => {
+    const out = new Map<string, EmployeeSetup>()
+    for (const e of employees) out.set(e.id, employeeSetup(e, hrDocuments, heldAssets.get(e.id)?.length ?? 0))
+    return out
+  }, [employees, hrDocuments, heldAssets])
+
   const filteredEmployees = employees.filter(e => {
+    const left = e.status === 'exited'
+    if (peopleFilter === 'active' && left) return false
+    if (peopleFilter === 'leavers' && !left) return false
+    if (peopleFilter === 'incomplete' && (left || setupById.get(e.id)?.complete)) return false
     const q = empSearch.toLowerCase()
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
   })
@@ -364,6 +393,27 @@ function HRContent() {
         : <Badge status="cancelled" label={e.status} />,
       // The export is a data file, not a screen: every row keeps its status.
       exportValue: e => e.status,
+    },
+    {
+      key: 'setup', label: 'Record', priority: 1, width: '190px',
+      // How complete the person's record is, and what is still missing —
+      // a leaver shows the kit still to collect instead.
+      render: e => {
+        if (e.status === 'exited') {
+          const kit = heldAssets.get(e.id)?.length ?? 0
+          return kit ? <span className="hr-setup hr-setup--bad">{kit} item{kit === 1 ? '' : 's'} to collect</span> : <span className="hr-empty-cell">Left{e.exitDate ? ` ${fmtDate(e.exitDate)}` : ''}</span>
+        }
+        const st = setupById.get(e.id)
+        if (!st) return null
+        if (st.complete) return <span className="hr-setup hr-setup--ok">Complete</span>
+        return (
+          <span className="hr-setup">
+            <span className="hr-setup__bar"><i style={{ width: `${Math.round((st.done / Math.max(1, st.total)) * 100)}%` }} /></span>
+            <small title={st.missing.join(', ')}>{st.done} of {st.total} · {st.missing[0]}{st.missing.length > 1 ? ` +${st.missing.length - 1}` : ''}</small>
+          </span>
+        )
+      },
+      exportValue: e => (setupById.get(e.id)?.complete ? 'Complete' : `${setupById.get(e.id)?.done ?? 0}/${setupById.get(e.id)?.total ?? 0}`),
     },
     {
       key: 'department', label: 'Department', priority: 2, width: '150px',
@@ -416,49 +466,31 @@ function HRContent() {
 
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
 
+  /** Open the edit form for a person, filled with their record. */
+  const startEdit = (emp: Employee) => { setEmpForm({ fullName: emp.fullName, employeeNo: emp.employeeNo, email: emp.email || '', workEmail: emp.workEmail || '', phone: emp.phone || '', nationalId: emp.nationalId || '', kraPin: emp.kraPin || '', nssfNumber: emp.nssfNumber || '', gender: emp.gender || '', departmentId: emp.departmentId || '', jobTitle: emp.jobTitle || '', shift: emp.shift || '', startDate: emp.startDate, status: emp.status as any, basicSalary: String(emp.basicSalary), housingAllowance: String(emp.housingAllowance ?? 0), transportAllowance: String(emp.transportAllowance ?? 0), bankName: emp.bankName || '', bankAccount: emp.bankAccount || '', paymentMode: emp.paymentMode || 'mpesa', mpesaNumber: emp.mpesaNumber || '', managerEmployeeId: emp.managerEmployeeId || '' }); setEditEmpId(emp.id); void loadPayBasis(emp.id) }
+
   if (!mounted) return <ModuleSkeleton />
 
   // What HR must act on. A group with nothing in it is left out, and the panel with it.
   const pendingLeave = leaveRequests.filter(req => req.status === 'pending_hr')
-  const openPayroll = payrollRuns.filter(run => run.status !== 'posted')
-  const onLeaveCount = employees.filter(e => e.status === 'on_leave').length
   const dayMs = 86400000
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  type AttentionItem = { id: string; title: string; sub: string; when: string; open?: () => void }
-  const attention: Array<{ title: string; open: () => void; items: AttentionItem[] }> = [
-    {
-      title: 'Leave approvals', open: () => setTab('leave'),
-      items: pendingLeave.slice(0, 3).map(req => ({ id: req.id, title: req.employeeName, sub: `${req.leaveType.replaceAll('_', ' ')} leave`, when: fmtDate(req.startDate) })),
-    },
-    {
-      title: 'Asset acknowledgements', open: () => setTab('assets'),
-      items: employeeAssetAssignments.filter(a => a.status === 'assigned').slice(0, 3).map(a => ({ id: a.id, title: a.employeeName, sub: a.productName, when: 'Pending' })),
-    },
-    {
-      title: 'Payroll review', open: () => setTab('payroll'),
-      items: openPayroll.slice(0, 2).map(run => ({ id: run.id, title: run.ref, sub: `${run.lines.length} employees`, when: run.status.replaceAll('_', ' ') })),
-    },
-    {
-      title: 'Probation reviews', open: () => setTab('employees'),
-      items: employees
-        .filter(e => e.status === 'active' && e.probationEndDate)
-        .map(e => ({ e, days: Math.round((new Date(`${e.probationEndDate}T00:00:00`).getTime() - todayStart) / dayMs) }))
-        .filter(x => x.days <= 30 && x.days >= -14)
-        .sort((a, b) => a.days - b.days)
-        .slice(0, 3)
-        .map(({ e, days }) => ({ id: e.id, title: e.fullName, sub: e.jobTitle || 'Probation', when: days < 0 ? `${-days}d overdue` : days === 0 ? 'Today' : `${days}d`, open: () => { setTab('employees'); setViewEmpId(e.id) } })),
-    },
-    {
-      title: 'Documents to renew', open: () => setTab('documents'),
-      items: hrDocuments
-        .map(d => ({ d, x: documentExpiry(d.expiryDate) }))
-        .filter(x => x.x.status !== 'active')
-        .sort((a, b) => (a.x.daysLeft ?? 0) - (b.x.daysLeft ?? 0))
-        .slice(0, 3)
-        .map(({ d, x }) => ({ id: d.id, title: d.title, sub: employees.find(e => e.id === d.employeeId)?.fullName ?? '', when: x.status === 'expired' ? 'Expired' : `${x.daysLeft}d` })),
-    },
-  ].filter(group => group.items.length > 0)
+  const docsToRenew = hrDocuments.filter(d => documentExpiry(d.expiryDate).status !== 'active' && employees.some(e => e.id === d.employeeId && e.status !== 'exited'))
+  const kitToCollect = employeeAssetAssignments.filter(a => a.status === 'assigned' && employees.find(e => e.id === a.employeeId)?.status === 'exited')
+  const incompleteCount = employees.filter(e => e.status !== 'exited' && !setupById.get(e.id)?.complete).length
+  const probationSoon = employees
+    .filter(e => e.status === 'active' && e.probationEndDate)
+    .filter(e => { const d = Math.round((new Date(`${e.probationEndDate}T00:00:00`).getTime() - todayStart) / dayMs); return d <= 30 && d >= -14 })
+  // The four things HR acts on, each opening the list that fixes it.
+  const attentionTiles: Array<{ id: string; n: number; title: string; sub: string; tone: 'bad' | 'warn' | 'calm'; open: () => void }> = [
+    { id: 'incomplete', n: incompleteCount, title: 'Records incomplete', sub: 'papers or details missing', tone: incompleteCount ? 'bad' : 'calm', open: () => { setTab('employees'); setPeopleFilter('incomplete') } },
+    { id: 'docs', n: docsToRenew.length, title: 'Papers to renew', sub: 'expired or ending in 30 days', tone: docsToRenew.length ? 'warn' : 'calm', open: () => setTab('documents') },
+    { id: 'kit', n: kitToCollect.length, title: 'Kit to collect', sub: 'still with people who left', tone: kitToCollect.length ? 'warn' : 'calm', open: () => setTab('assets') },
+    pendingLeave.length || !probationSoon.length
+      ? { id: 'leave', n: pendingLeave.length, title: 'Leave to approve', sub: 'waiting for HR', tone: pendingLeave.length ? 'warn' : 'calm', open: () => setTab('leave') }
+      : { id: 'probation', n: probationSoon.length, title: 'Probation ending', sub: 'within 30 days', tone: 'warn', open: () => { setTab('employees'); setPeopleFilter('active') } },
+  ]
 
   /** One-tap choices (pay type, payment method, gender, status). */
   const seg = <T extends string>(label: string, value: T, onChange: (v: T) => void, options: Array<[T, string]>) => (
@@ -616,22 +648,42 @@ function HRContent() {
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="mod-body">
       <div className="hr-content-shell card overflow-hidden m-3 sm:m-4">
-        {tab === 'employees' && canManageHR ? (
+        {viewEmployee && editEmpId !== viewEmployee.id && canManageHR ? (
+          <HREmployeeProfile
+            employee={viewEmployee}
+            department={departmentName(viewEmployee.departmentId)}
+            manager={employees.find(e => e.id === viewEmployee.managerEmployeeId)?.fullName ?? ''}
+            documents={hrDocuments}
+            assets={(heldAssets.get(viewEmployee.id) ?? []).map(a => ({ id: a.id, productName: a.productName, serialNumber: a.serialNumber, assignedDate: a.assignedDate, acknowledgedByEmployee: a.acknowledgedByEmployee }))}
+            setup={setupById.get(viewEmployee.id) ?? employeeSetup(viewEmployee, hrDocuments, 0)}
+            canManage={isAdmin}
+            canSeePay={canSetPayBasis}
+            onBack={() => setViewEmpId(null)}
+            onEdit={() => startEdit(viewEmployee)}
+            onAddDocument={type => { setDocPrefill({ employeeId: viewEmployee.id, type }); setViewEmpId(null); setTab('documents') }}
+            onIssueEquipment={() => { setAssignPrefill(viewEmployee.id); setViewEmpId(null); setTab('assets') }}
+          />
+        ) : tab === 'employees' && canManageHR ? (
           <div className="hr-employees-view">
-            <OperationalSummary
-              items={[
-                { id: 'active', label: 'active', value: employees.filter(e => e.status === 'active').length },
-                // The table lists leavers too, so a bare "13 active" over 15
-                // rows left the other two unaccounted for.
-                ...(employees.filter(e => e.status !== 'active').length > 0
-                  ? [{ id: 'exited', label: 'exited', value: employees.filter(e => e.status !== 'active').length }]
-                  : []),
-                ...(onLeaveCount > 0 ? [{ id: 'on-leave', label: 'on leave', value: onLeaveCount }] : []),
-                ...(pendingLeave.length > 0 ? [{ id: 'leave', label: `leave request${pendingLeave.length === 1 ? '' : 's'} to approve`, value: pendingLeave.length, tone: 'warning' as const, onClick: () => setTab('leave') }] : []),
-                ...(openPayroll.length > 0 ? [{ id: 'payroll', label: `payroll run${openPayroll.length === 1 ? '' : 's'} to review`, value: openPayroll.length, tone: 'warning' as const, onClick: () => setTab('payroll') }] : []),
-              ]}
-            />
-            <div className={attention.length > 0 ? 'hr-employees-grid' : undefined}>
+            <div className="hr-attn" role="list" aria-label="Needs attention">
+              {attentionTiles.map(t => (
+                <button key={t.id} type="button" role="listitem" className={`hr-attn__tile is-${t.tone}`} onClick={t.open}>
+                  <strong>{t.n}</strong><span><b>{t.title}</b><small>{t.sub}</small></span>
+                </button>
+              ))}
+            </div>
+            <div className="hr-people-bar">
+              <div className="hr-seg" role="tablist" aria-label="Which people">
+                {([
+                  ['active', `Active · ${employees.filter(e => e.status !== 'exited').length}`],
+                  ['incomplete', `Incomplete · ${incompleteCount}`],
+                  ['leavers', `Leavers · ${employees.filter(e => e.status === 'exited').length}`],
+                  ['all', 'All'],
+                ] as const).map(([id, label]) => (
+                  <button key={id} type="button" role="tab" aria-selected={peopleFilter === id} onClick={() => setPeopleFilter(id)}>{label}</button>
+                ))}
+              </div>
+            </div>
               <section className="hr-directory card overflow-hidden">
             <DataTable
               tableId="hr_employees"
@@ -676,23 +728,6 @@ function HRContent() {
               exportFilename="employees"
             />
               </section>
-              {attention.length > 0 && (
-                <aside className="hr-attention card" aria-label="HR needs attention">
-                  <div className="hr-attention__title">Needs attention</div>
-                  {attention.map(group => (
-                    <section key={group.title}>
-                      <header><strong>{group.title}</strong><button type="button" onClick={group.open}>View all</button></header>
-                      {group.items.map(item => (
-                        <button key={item.id} type="button" className="hr-attention__item" onClick={item.open ?? group.open}>
-                          <span><strong>{item.title}</strong><small>{item.sub}</small></span>
-                          <span>{item.when}</span>
-                        </button>
-                      ))}
-                    </section>
-                  ))}
-                </aside>
-              )}
-            </div>
           </div>
         ) : tab === 'attendance' && canManageHR ? (
           <HRAttendanceTab />
@@ -709,13 +744,13 @@ function HRContent() {
         ) : tab === 'training' && canManageHR ? (
           <HRTrainingTab />
         ) : tab === 'documents' && canManageHR ? (
-          <HRDocumentsTab />
+          <HRDocumentsTab prefill={docPrefill} onPrefillUsed={() => setDocPrefill(null)} />
         ) : tab === 'performance' && canManageHR ? (
           <HRPerformanceTab />
         ) : tab === 'reports' && canManageHR ? (
           <HRReportsTab />
         ) : tab === 'assets' ? (
-          <HRAssetsTab />
+          <HRAssetsTab prefillEmployeeId={assignPrefill} onPrefillUsed={() => setAssignPrefill(null)} />
         ) : tab === 'departments' && canManageHR ? (
           <HRDepartments canManage={isAdmin} showToast={showToast} onChanged={() => void loadDepartments()} />
         ) : tab === 'self_service' ? (
@@ -759,7 +794,7 @@ function HRContent() {
       )}
 
       {/* ── View Employee Modal ── */}
-      {viewEmployee && (
+      {viewEmployee && (editEmpId === viewEmployee.id || !canManageHR) && (
         <Modal 
           title={editEmpId === viewEmployee.id ? `Edit ${viewEmployee.fullName}` : "Employee Details"} 
           variant={editEmpId === viewEmployee.id ? 'enterprise' : 'default'}
@@ -809,7 +844,7 @@ function HRContent() {
                 <EmployeeLifecyclePanel key={viewEmployee.id} employee={viewEmployee} canManage={canManageHR} />
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '', managerEmployeeId: viewEmployee.managerEmployeeId || '' }); setEditEmpId(viewEmployee.id); void loadPayBasis(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => startEdit(viewEmployee)}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>
