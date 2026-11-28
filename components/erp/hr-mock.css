@@ -334,3 +334,22 @@
   .hrh-add { width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 10px; font-size: 15px; }
   .hrh-add__label { display: none; }
 }
+/* I · compact org chart */
+.hri-canvas { width: max-content; margin: 0 auto; }
+.hri .hra-ch { gap: 10px; }
+.hri .hra-ch .hri-muted { margin-left: auto; }
+.hri-node { width: 210px; min-width: 0; padding: 8px 10px; gap: 8px; }
+.hri-txt { min-width: 0; }
+.hri-node b, .hri-node small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hri-av { width: 30px; height: 30px; font-size: 11px; }
+.hri-col { padding: 16px 6px 0; }
+.hri-row.is-tops { gap: 20px; }
+.hri-team { background: var(--hrx-soft); border: 1px solid #e2e8f0; border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.hri-node.is-row { width: 200px; box-shadow: none; border-color: transparent; background: #fff; padding: 6px 8px; }
+.hri-node.is-row .hri-av { width: 26px; height: 26px; font-size: 10px; }
+.hri-node.is-row b { font-size: 12px; }
+.hri-node.is-row small { font-size: 10.5px; }
+.hri-node.is-row.is-drop { border: 2px dashed #93c5fd; background: #eff6ff; }
+.hri-lead-wrap { display: flex; flex-direction: column; align-items: center; }
+.hri-lead { display: flex; gap: 24px; padding: 10px 14px; border-radius: 16px; background: #f5f3ff; border: 1px solid #ddd6fe; position: relative; }
+.hri-lead::before { content: "Leadership"; position: absolute; top: -9px; left: 14px; background: #fff; padding: 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #6d28d9; }

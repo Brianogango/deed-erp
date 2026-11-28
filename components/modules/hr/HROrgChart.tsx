@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useHrStore } from '@/hooks/useHrStore'
 import { buildOrgTree, type OrgNode } from '@/lib/hr/org-chart'
 import { avatarColor } from './HREmployeeProfile'
@@ -17,13 +17,33 @@ export default function HROrgChart({ canManage = true }: { canManage?: boolean }
   const [hover, setHover] = useState<string | null>(null)
   const [trayAll, setTrayAll] = useState(false)
   const [byDept, setByDept] = useState<{ dept: string; manager: string } | null>(null)
-
   const active = useMemo(() => employees.filter(e => e.status !== 'exited'), [employees])
   const forest = useMemo(() => buildOrgTree(employees), [employees])
   const tops = forest.filter(n => n.reports.length > 0)
   const tray = forest.filter(n => n.reports.length === 0).map(n => n.employee)
   const pickedEmp = active.find(e => e.id === picked)
   const depts = useMemo(() => [...new Set(tray.map(e => e.departmentId).filter(Boolean) as string[])].sort(), [tray])
+
+  // Fit the whole chart on screen by default (no sideways scrolling).
+  const [fit, setFit] = useState(true)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
+  const [dims, setDims] = useState({ boxW: 0, innerW: 0, innerH: 0 })
+  useLayoutEffect(() => {
+    const box = boxRef.current, inner = innerRef.current
+    if (!box || !inner) return
+    const measure = () => setDims(d => {
+      const n = { boxW: box.clientWidth, innerW: inner.scrollWidth, innerH: inner.scrollHeight }
+      return n.boxW === d.boxW && n.innerW === d.innerW && n.innerH === d.innerH ? d : n
+    })
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(box); ro.observe(inner)
+    return () => ro.disconnect()
+  }, [tops.length])
+  const { boxW, innerW, innerH } = dims
+  const scale = innerW > 0 && boxW > 0 ? Math.min(1, (boxW - 32) / innerW) : 1
+
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPicked(null) }
@@ -52,16 +72,16 @@ export default function HROrgChart({ canManage = true }: { canManage?: boolean }
     setPicked(null); setHover(null)
   }
 
-  const card = (e: { id: string; fullName: string; jobTitle?: string }, sub: string, top = false) => {
+  const card = (e: { id: string; fullName: string; jobTitle?: string }, sub: string, top = false, row = false) => {
     const isPicked = picked === e.id
     const target = !!picked && !isPicked && !below(picked, e.id)
     return (
-      <button type="button" className={`hri-node${top ? ' is-top' : ''}${isPicked ? ' is-picked' : ''}${target ? ' is-target' : ''}`}
+      <button type="button" className={`hri-node${row ? ' is-row' : ''}${top ? ' is-top' : ''}${isPicked ? ' is-picked' : ''}${target ? ' is-target' : ''}`}
         disabled={!canManage || (!!picked && !isPicked && !target)}
         onClick={() => choose(e.id)} onMouseEnter={() => setHover(e.id)} onMouseLeave={() => setHover(h => (h === e.id ? null : h))}
         title={picked ? (isPicked ? 'Cancel' : `${pickedEmp?.fullName} reports to ${e.fullName}`) : 'Pick to change who they report to'}>
         <span className="hri-av" style={{ background: avatarColor(e.fullName) }}>{initials(e.fullName)}</span>
-        <div><b>{e.fullName}</b><small>{sub}</small></div>
+        <div className="hri-txt"><b>{e.fullName}</b><small>{sub}</small></div>
       </button>
     )
   }
@@ -70,26 +90,37 @@ export default function HROrgChart({ canManage = true }: { canManage?: boolean }
     <><div className="hri-vline" /><div className="hri-node is-drop"><span className="hri-av">+</span><div><b>{pickedEmp.fullName}</b><small>will report here</small></div></div></>
   ) : null)
 
-  const branch = (n: OrgNode, top = false): React.ReactNode => {
-    const e = n.employee
-    const sub = [e.jobTitle, `${n.reports.length} direct`].filter(Boolean).join(' · ')
-    const leafSub = e.jobTitle || e.departmentId || '—'
+  // People with nobody under them sit together in one compact team box under
+  // their manager; only managers spread sideways. Keeps the chart narrow.
+  const teamBox = (managerId: string, leaves: OrgNode[], note: (r: OrgNode) => string = () => '') => (
+    <div className="hri-team">
+      {leaves.map(l => <div key={l.employee.id}>{card(l.employee, note(l) + (l.employee.jobTitle || l.employee.departmentId || '—'), false, true)}</div>)}
+      {pickedEmp && hover === managerId && pickedEmp.managerEmployeeId !== managerId && (
+        <div className="hri-node is-drop is-row"><span className="hri-av">+</span><div><b>{pickedEmp.fullName}</b><small>will report here</small></div></div>
+      )}
+    </div>
+  )
+
+  const short = (n: string) => n.split(/\s+/)[0]
+  // Children of one manager (or of the whole leadership team): people with
+  // nobody under them share one compact team box; managers spread sideways.
+  const children = (reports: OrgNode[], boxKey: string, showManager: boolean) => {
+    const leaves = reports.filter(r => !r.reports.length)
+    const managers = reports.filter(r => r.reports.length > 0)
+    const mgrNote = (r: OrgNode) => (showManager && r.employee.managerEmployeeId ? `To ${short(active.find(a => a.id === r.employee.managerEmployeeId)?.fullName ?? '')} · ` : '')
     return (
-      <>
-        {card(e, n.reports.length ? sub : leafSub, top)}
-        {n.reports.length === 1 && !n.reports[0].reports.length ? (
-          <><div className="hri-vline" />{card(n.reports[0].employee, n.reports[0].employee.jobTitle || '—')}{drop(n.reports[0].employee.id)}{drop(e.id)}</>
-        ) : n.reports.length > 0 ? (
-          <>
-            <div className="hri-vline" />
-            <div className="hri-row">
-              {n.reports.map(r => <div key={r.employee.id} className="hri-col">{branch(r)}</div>)}
-            </div>
-            {drop(e.id)}
-          </>
-        ) : drop(e.id)}
-      </>
+      <div className="hri-row">
+        {leaves.length > 0 && <div className="hri-col">{teamBox(boxKey, leaves, mgrNote)}</div>}
+        {managers.map(r => <div key={r.employee.id} className="hri-col">{branch(r, false, mgrNote(r))}</div>)}
+      </div>
     )
+  }
+
+  const branch = (n: OrgNode, top = false, note = ''): React.ReactNode => {
+    const e = n.employee
+    const sub = note + [e.jobTitle, `${n.reports.length} direct`].filter(Boolean).join(' · ')
+    if (!n.reports.length) return <>{card(e, note + (e.jobTitle || e.departmentId || '—'), top)}{drop(e.id)}</>
+    return <>{card(e, sub, top)}<div className="hri-vline" />{children(n.reports, e.id, false)}</>
   }
 
   const shownTray = trayAll ? tray : tray.slice(0, 8)
@@ -103,13 +134,24 @@ export default function HROrgChart({ canManage = true }: { canManage?: boolean }
     <section className="hra-card hri">
       <div className="hra-ch">
         <b className="hrc-title">Who reports to whom</b>
-        <span className="hri-muted">{picked ? <>Now pick who <b>{pickedEmp?.fullName}</b> reports to · <button type="button" className="hrh-link" onClick={() => setPicked(null)}>Cancel</button></> : 'Approvals for leave and attendance go up these lines'}</span>
+        <span className="hri-muted">{picked ? <>Now pick who <b>{pickedEmp?.fullName}</b> reports to · {pickedEmp?.managerEmployeeId && <><button type="button" className="hrh-link" onClick={() => { updateEmployee(picked, { managerEmployeeId: '' }); setPicked(null) }}>Top level (no manager)</button> · </>}<button type="button" className="hrh-link" onClick={() => setPicked(null)}>Cancel</button></> : 'Approvals for leave and attendance go up these lines'}</span>
+        {innerW > boxW - 32 && <button type="button" className="hrb-btn" onClick={() => setFit(f => !f)}>{fit ? 'Actual size' : 'Fit to screen'}</button>}
       </div>
 
-      <div className="hri-org">
+      <div className="hri-org" ref={boxRef} style={fit && scale < 1 ? { height: innerH * scale + 34, overflow: 'hidden' } : undefined}>
         {tops.length === 0
           ? <p className="hri-muted hri-empty">No reporting lines yet. Pick someone below, then pick their manager.</p>
-          : <div className="hri-row is-tops">{tops.map(n => <div key={n.employee.id} className="hri-col">{branch(n, true)}</div>)}</div>}
+          : <div className="hri-canvas" ref={innerRef} style={fit && scale < 1 ? { transform: `scale(${scale})`, transformOrigin: 'top left', marginLeft: Math.max(0, ((boxW - 32) - innerW * scale) / 2) } : undefined}>
+              {tops.length === 1 ? <div className="hri-row is-tops"><div className="hri-col">{branch(tops[0], true)}</div></div> : (
+                // Several people with no manager lead together (e.g. two directors):
+                // one top row, and everyone under any of them in one row below.
+                <div className="hri-lead-wrap">
+                  <div className="hri-lead">{tops.map(n => <div key={n.employee.id}>{card(n.employee, [n.employee.jobTitle, `${n.reports.length} direct`].filter(Boolean).join(' · '), true)}</div>)}</div>
+                  <div className="hri-vline" />
+                  {children(tops.flatMap(n => n.reports), 'lead', true)}
+                </div>
+              )}
+            </div>}
       </div>
 
       {tray.length > 0 && (
