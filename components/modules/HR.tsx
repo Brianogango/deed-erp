@@ -539,8 +539,8 @@ function HRContent() {
               />
             )}
             {isAdmin && (
-              <button type="button" className="hrb-btn is-p hrh-add" onClick={() => { setTab('employees'); void loadPayBasis(null); setShowEmployeeModal(true) }}>
-                <Fa icon={faUserPlus} /> Add employee
+              <button type="button" className="hrb-btn is-p hrh-add" aria-label="Add employee" title="Add employee" onClick={() => { setTab('employees'); void loadPayBasis(null); setShowEmployeeModal(true) }}>
+                <Fa icon={faUserPlus} /><span className="hrh-add__label">Add employee</span>
               </button>
             )}
           </div>
