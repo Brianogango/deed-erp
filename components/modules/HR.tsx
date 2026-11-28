@@ -679,7 +679,7 @@ function HRContent() {
         ) : tab === 'recruitment' && canManageHR ? (
           <HRRecruitmentTab />
         ) : tab === 'org_chart' && canManageHR ? (
-          <HROrgChart />
+          <HROrgChart canManage={canManageHR} />
         ) : tab === 'training' && canManageHR ? (
           <HRTrainingTab />
         ) : tab === 'documents' && canManageHR ? (
@@ -700,7 +700,7 @@ function HRContent() {
             employee={myEmployee}
             department={myDepartmentName}
             payslips={myPayslips}
-            assets={myAssets.map(a => ({ id: a.id, productName: a.productName, serial: (a as { serialNumber?: string }).serialNumber }))}
+            assets={myAssets.map(a => ({ id: a.id, productName: a.productName, serial: a.serialNumber, acknowledged: a.acknowledgedByEmployee, assignedDate: a.assignedDate }))}
             attendanceOn={!!systemSettings?.hrAttendance}
             leaveOn={leaveOn}
             onRequestLeave={() => setTab('leave')}
