@@ -103,6 +103,28 @@ export function compactLabelSpecs(
   return [gen, cpu, ram, storage].filter(Boolean).join(' ')
 }
 
+/**
+ * The model alone — "HP EliteBook 845 G8" from "HP EliteBook 845 G8 AMD Ryzen
+ * 5 PRO 14\" FHD". The processor and screen are on the specs line below, so
+ * the name no longer takes two lines and pushes the barcode over the text.
+ * Left whole when it has no specs line or nothing model-like would be left.
+ */
+const DESCRIPTOR = /\s+(?=(?:AMD\b|Intel\b|Ryzen\b|Core\b|i[3579]\b|Celeron\b|Pentium\b|Xeon\b|\d{1,2}(?:\.\d)?\s*(?:["”″]|-?\s?inch\b)|\d+(?:st|nd|rd|th)\s*Gen\b|FHD\b|UHD\b|QHD\b|HD\b))/i
+export function labelModelName(model: string, hasSpecs: boolean): string {
+  const name = String(model ?? '').replace(/\s+/g, ' ').trim()
+  if (!hasSpecs) return name
+  const at = name.search(DESCRIPTOR)
+  const cut = at > 0 ? name.slice(0, at).replace(/[\s\-–—,/|]+$/, '').trim() : name
+  return cut.split(' ').length >= 2 ? cut : name
+}
+
+/** Screen size from the name, for the specs line: 14" (empty when not named). */
+export function screenSize(name: string | null | undefined): string {
+  const m = String(name ?? '').match(/\b(\d{1,2}(?:\.\d)?)\s*(?:["”″]|-?\s?inch\b)/i)
+  const n = m ? Number(m[1]) : 0
+  return n >= 10 && n <= 34 ? `${m![1]}"` : ''
+}
+
 function dateIn(value: string | null | undefined): string {
   const d = new Date(String(value ?? ''))
   if (!Number.isFinite(d.getTime())) return ''
@@ -114,12 +136,16 @@ export function buildMachineLabelView(input: MachineLabelInput): MachineLabelVie
   const internal = variant === 'with_issues'
   const code = String(input.assetId || input.barcode || input.serial || '').trim().toUpperCase()
   const serial = input.identityPending ? '' : String(input.serial ?? '').trim()
+  const baseModel = catalogBaseName(input.productName) || input.productName || 'Device'
+  const compact = internal ? '' : compactLabelSpecs(input.specsText, input.currentConfig, input.productName)
+  const inch = compact ? screenSize(input.productName) : ''
+  const specs = [compact, inch].filter(Boolean).join(' ')
   return {
     variant,
     category: categoryLabel(input.category),
     condition: variant === 'new' ? 'BRAND NEW' : variant === 'refurbished' ? 'REFURBISHED' : 'WITH ISSUES · INTERNAL',
-    model: catalogBaseName(input.productName) || input.productName || 'Device',
-    specs: internal ? '' : compactLabelSpecs(input.specsText, input.currentConfig, input.productName),
+    model: internal ? baseModel : labelModelName(baseModel, !!specs),
+    specs,
     serial: internal || serial === code ? '' : serial,
     code,
     dateIn: internal ? dateIn(input.receivedDate) : '',

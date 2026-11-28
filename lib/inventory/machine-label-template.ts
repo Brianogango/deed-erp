@@ -16,7 +16,7 @@ function barcode(code: string): string {
     : `<div class="ml-bar ml-bar-text">${esc(code)}</div>`
 }
 
-function machineLabelHtml(v: MachineLabelView): string {
+export function machineLabelHtml(v: MachineLabelView): string {
   if (v.variant === 'with_issues') {
     return `
   <div class="ml ml-internal">
@@ -34,7 +34,6 @@ function machineLabelHtml(v: MachineLabelView): string {
       <span class="ml-cat">${esc(v.category)}</span>
       <span class="ml-cond ${v.variant === 'new' ? 'ml-cond-solid' : ''}">${esc(v.condition)}</span>
     </div>
-    <div class="ml-rule"></div>
     <div class="ml-model">${esc(v.model)}</div>
     ${v.specs ? `<div class="ml-specs">${esc(v.specs)}</div>` : ''}
     ${v.serial ? `<div class="ml-sn">S/N: ${esc(v.serial)}</div>` : ''}
@@ -46,34 +45,38 @@ function machineLabelHtml(v: MachineLabelView): string {
   </div>`
 }
 
-const CSS = `
+export const MACHINE_LABEL_CSS = `
   @page { size: 58mm 38mm; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 58mm; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .ml { width: 58mm; height: 38mm; padding: 1.6mm 2.4mm 1.2mm; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; break-after: page; }
+  /* Text keeps its size; the barcode takes what height is left (never under
+     6.5 mm, which still scans), so a long name can no longer push it over the
+     lines above. */
+  .ml { width: 58mm; height: 38mm; padding: 1.5mm 2.6mm 1.1mm; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; break-after: page; }
   .ml:last-child { page-break-after: auto; break-after: auto; }
-  .ml-top { display: flex; align-items: center; justify-content: space-between; gap: 1.5mm; }
-  .ml-cat { font-size: 7.4pt; font-weight: 700; letter-spacing: 0.2pt; }
-  .ml-cond { font-size: 7.6pt; font-weight: 800; letter-spacing: 0.3pt; border: 0.35mm solid #000; padding: 0.2mm 1.1mm; white-space: nowrap; }
+  .ml > * { flex: none; }
+  .ml-top { display: flex; align-items: center; justify-content: space-between; gap: 1.5mm; padding-bottom: 0.9mm; border-bottom: 0.3mm solid #000; margin-bottom: 1mm; }
+  .ml-cat { font-size: 7pt; font-weight: 700; letter-spacing: 0.3pt; }
+  .ml-cond { font-size: 7pt; font-weight: 800; letter-spacing: 0.4pt; border: 0.3mm solid #000; padding: 0.15mm 1mm; white-space: nowrap; }
   .ml-cond-solid { background: #000; color: #fff; }
-  .ml-rule { border-top: 0.3mm solid #000; margin: 0.8mm 0 1mm; }
-  .ml-model { font-size: 10.2pt; font-weight: 800; line-height: 1.12; max-height: 2.3em; overflow: hidden; }
-  .ml-specs { font-size: 9pt; font-weight: 700; line-height: 1.15; margin-top: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ml-sn { font-size: 7.6pt; margin-top: 0.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ml-test { font-size: 7.4pt; font-weight: 700; margin-top: 0.4mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ml-code-wrap { margin-top: auto; display: flex; flex-direction: column; align-items: center; }
-  .ml-bar { display: block; width: 40mm; height: 9.5mm; object-fit: fill; }
+  .ml-rule { display: none; }
+  .ml-model { font-size: 10pt; font-weight: 800; line-height: 1.12; max-height: 2.24em; overflow: hidden; }
+  .ml-specs { font-size: 8.6pt; font-weight: 700; line-height: 1.2; margin-top: 0.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ml-sn { font-size: 7.2pt; line-height: 1.2; margin-top: 0.4mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ml-test { font-size: 7.2pt; line-height: 1.2; font-weight: 700; margin-top: 0.2mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ml > .ml-code-wrap { flex: 1 1 auto; min-height: 9.8mm; margin-top: 1mm; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+  .ml-bar { display: block; width: 44mm; flex: 1 1 auto; min-height: 6.5mm; max-height: 10mm; object-fit: fill; }
   .ml-bar-text { font-family: monospace; font-size: 9pt; text-align: center; }
-  .ml-code { font-family: 'Courier New', monospace; font-size: 8.4pt; font-weight: 700; letter-spacing: 0.6pt; margin-top: 0.4mm; }
-  .ml-internal .ml-band { background: #000; color: #fff; font-size: 7.6pt; font-weight: 800; letter-spacing: 0.4pt; text-align: center; padding: 0.9mm 0; margin: -1.6mm -2.4mm 1.4mm; }
+  .ml-code { font-family: 'Courier New', monospace; font-size: 8pt; font-weight: 700; letter-spacing: 0.8pt; margin-top: 0.3mm; line-height: 1; }
+  .ml-internal .ml-band { background: #000; color: #fff; font-size: 7.6pt; font-weight: 800; letter-spacing: 0.4pt; text-align: center; padding: 0.9mm 0; margin: -1.5mm -2.6mm 1.4mm; }
   .ml-internal .ml-model { font-size: 11pt; }
-  .ml-internal .ml-bar { height: 11mm; }
-  .ml-foot { display: flex; align-items: baseline; justify-content: space-between; width: 100%; margin-top: 0.4mm; }
+  .ml-internal .ml-bar { max-height: 11mm; }
+  .ml-foot { display: flex; align-items: baseline; justify-content: space-between; width: 100%; margin-top: 0.3mm; }
   .ml-date { font-size: 7.2pt; }
   @media print { html, body, .ml { width: 58mm; } .ml { height: 38mm; } }
 `
 
 export function printMachineLabels(views: MachineLabelView[], title = 'Machine labels'): void {
   if (!views.length) return
-  openLabelPrintWindow(views.map(machineLabelHtml).join('\n'), CSS, title)
+  openLabelPrintWindow(views.map(machineLabelHtml).join('\n'), MACHINE_LABEL_CSS, title)
 }
