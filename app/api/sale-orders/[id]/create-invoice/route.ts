@@ -613,6 +613,12 @@ async function createInvoiceHandler(
       newValues: { saleOrderId: orderId, ref: result.invoiceNumber, total: totalAmount },
     })
 
+    // A machine upgraded on the bench before this sale: the invoice shows its
+    // new specs, not the catalog name the order line carried.
+    void import('@/lib/reconfiguration/sales-bridge')
+      .then(m => m.applyReconfiguredUnitNames((confirmed.items ?? []).flatMap(i => [i.serialNumberId, ...((i as { serialIds?: string[] }).serialIds ?? [])])))
+      .catch(() => {})
+
     return NextResponse.json({
       ok: true,
       invoice: clientInvoice,

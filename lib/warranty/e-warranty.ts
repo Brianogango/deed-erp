@@ -39,7 +39,7 @@ export type SaleSources = {
   deliveries: Array<{ id: string; ref?: string; status: string; date?: string; saleOrderRef?: string; customerId?: string; customerName?: string; lines?: Line[] }>
   posOrders: Array<{ id: string; ref: string; date?: string; createdAt?: string; customerId?: string; customerName?: string; lines?: Line[]; status?: string; voided?: boolean; refunded?: boolean }>
   kilimallOrders: Array<{ id: string; ref: string; kilimallRef?: string; status: string; orderDate?: string; dispatchedAt?: string; customerName?: string; productId: string; productName?: string; fulfilledProductId?: string; fulfilledProductName?: string; serialId?: string }>
-  serials: Array<{ id: string; serial: string; productId: string; productName?: string; status: string; soldDate?: string; specs?: string }>
+  serials: Array<{ id: string; serial: string; productId: string; productName?: string; status: string; soldDate?: string; specs?: string; unitName?: string }>
   products: Array<{ id: string; name?: string; warrantyMonths?: number }>
   defaultMonths?: number
   /** Completed exchanges: the machines handed back and the ones given in their place. */
@@ -120,7 +120,8 @@ export function warrantiesToIssue(existing: WarrantyRow[], src: SaleSources): Wa
     const startDate = day(start) || day(serial.soldDate) || day(new Date().toISOString())
     out.push({
       customerId: customerId || '', customerName: (customerName || '').trim() || 'Walk-in customer',
-      productId: pid, productName: productName || product?.name || serial.productName || '',
+      // A machine upgraded on the bench is sold under its new name, not the catalog one.
+      productId: pid, productName: serial.unitName || productName || product?.name || serial.productName || '',
       serialId, serialNumber: serial.serial,
       deliveryId, saleOrderRef: docRef,
       startDate, endDate: addWarrantyMonths(startDate, months), months,
@@ -174,7 +175,7 @@ export function warrantiesToIssue(existing: WarrantyRow[], src: SaleSources): Wa
       out.push({
         customerId: before?.customerId || exc.customerId || '',
         customerName: (before?.customerName || exc.customerName || '').trim() || 'Walk-in customer',
-        productId: pid, productName: line?.productName || product?.name || serial.productName || '',
+        productId: pid, productName: serial.unitName || line?.productName || product?.name || serial.productName || '',
         serialId: given, serialNumber: serial.serial,
         deliveryId: before?.deliveryId || '', saleOrderRef: before?.saleOrderRef || exc.originalSORef || exc.ref,
         startDate, endDate: before?.endDate || addWarrantyMonths(startDate, months), months,

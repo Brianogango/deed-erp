@@ -21,6 +21,7 @@ import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
 import { resolveProductAccounts, aggregateLinesByAccount } from '@/lib/product-accounts'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
+import { applyUnitNameToLineDescription } from '@/lib/reconfiguration/unit-selling-name'
 import { pairOrderLinesWithDeliveryLines, sumQtyByProductId, planPrepareDeliveryLines, assertSerialUsableForDeliveryPrepare, allocateDeliveredQtyToOrderLines } from '@/lib/delivery-prepare'
 import { applyConfirmLineSelection, confirmSelectionHasProduct } from '@/lib/sales/confirm-quotation'
 import { calcSaleOrderTotals } from '@/lib/sales/line-calc'
@@ -57,6 +58,19 @@ import type { PurchaseOrder } from '../purchasing'
 
 /** sales actions of the store. `store` reads the provider's current state, setters and helpers. */
 export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKilimallOrder' | 'updateKilimallOrder' | 'returnKilimallOrder' | 'confirmKilimallDispatch' | 'createKilimallSettlement' | 'updateKilimallSettlement' | 'reconcileKilimallSettlement' | 'matchKilimallSettlementLine' | 'addContact' | 'updateContact' | 'deleteContact' | 'createCompany' | 'updateCompany' | 'deleteCompany' | 'createContactPerson' | 'updateContactPerson' | 'deleteContactPerson' | 'createOpportunity' | 'ingestOpportunity' | 'updateOpportunity' | 'moveOpportunityStage' | 'markOpportunityWon' | 'markOpportunityLost' | 'deleteOpportunity' | 'logActivity' | 'completeActivity' | 'createCustomerContract' | 'updateCustomerContract' | 'renewCustomerContract' | 'terminateCustomerContract' | 'createQuote' | 'updateQuote' | 'addQuoteLine' | 'removeQuoteLine' | 'sendQuote' | 'acceptQuote' | 'rejectQuote' | 'convertQuoteToSaleOrder' | 'convertRepairQuoteToSOAndInvoice' | 'reviseQuote' | 'deleteQuote' | 'createSaleOrder' | 'updateSaleOrder' | 'addSOLine' | 'assignSerialToSOLine' | 'assignSerialsToSOLine' | 'unassignSerialFromSOLine' | 'removeSOLine' | 'moveSOLine' | 'addSOSection' | 'confirmSO' | 'ensureWaitingDeliveryForSO' | 'markQuotationSent' | 'setSaleOrderLock' | 'prepareDelivery' | 'reverseDelivery' | 'validateDelivery' | 'markDeliveryNoteGenerated' | 'updateDelivery' | 'createInvoiceFromSO' | 'deleteSaleOrder' | 'resetSOToDraft' | 'cancelSO' | 'createNewSOVersion' | 'openPOSSession' | 'closePOSSession' | 'createPOSOrder' | 'checkDiscountApproval' | 'requestApproval' | 'checkCreditLimit' | 'getCustomerCreditStatus' | 'issueCreditNoteFromSaleOrder' | 'approveRequest' | 'getPendingApprovalsForUser'> {
+  /**
+   * A one-machine line takes the name of the machine picked for it when that
+   * machine was upgraded on the bench (its RAM/SSD no longer match the
+   * catalog name) — as the POS already does.
+   */
+  const withUnitName = <L extends { qty: number; serialIds?: string[]; description?: string; productName?: string }>(line: L): L => {
+    const ids = line.serialIds ?? []
+    if (Number(line.qty) !== 1 || ids.length !== 1) return line
+    const unitName = (store.serialRef.current.find(s => s.id === ids[0]) as { unitName?: string } | undefined)?.unitName
+    if (!unitName) return line
+    const description = applyUnitNameToLineDescription(line.description || line.productName || '', unitName)
+    return description === line.description ? line : { ...line, description }
+  }
   /** Replace a quote's lines, recompute its totals and save it. */
   const saveQuoteLines = (quoteId: string, updatedLines: Quote['lines']) => {
     const newSubtotal = updatedLines.reduce((sum, l) => sum + l.subtotal, 0)
@@ -1727,7 +1741,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
             if (l.id !== lineId) return l
             if (l.serialIds.includes(serialId)) return l
             if (l.serialIds.length >= l.qty) { store.showToast('All serials assigned for this line', 'error'); return l }
-            return { ...l, serialIds: [...l.serialIds, serialId] }
+            return withUnitName({ ...l, serialIds: [...l.serialIds, serialId] })
           })
           const updated = { ...so, lines }
           sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderPersistBody(updated as unknown as Record<string, unknown>)) })
@@ -1750,7 +1764,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         }
         store.setSaleOrders(p => p.map(order => {
           if (order.id !== orderId) return order
-          const lines = order.lines.map((l: any) => l.id === lineId ? { ...l, serialIds: [...(l.serialIds || []), ...toAdd] } : l)
+          const lines = order.lines.map((l: any) => l.id === lineId ? withUnitName({ ...l, serialIds: [...(l.serialIds || []), ...toAdd] }) : l)
           const updated = { ...order, lines }
           sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderPersistBody(updated as unknown as Record<string, unknown>)) })
           return updated

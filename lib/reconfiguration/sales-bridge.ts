@@ -316,25 +316,34 @@ export async function refreshSaleOrderHostLineAfterReconfig(workOrderId: string)
     })
   }
 
-  const soItems = await prisma.saleOrderItem.findMany({
+  // The machine's own record carries the new name and specs: a warranty, a
+  // delivery note or an invoice made after this (the machine was upgraded
+  // first and sold later) copies them from here.
+  await saveUnitNameOnSerial(wo.serialId, unitName, specs)
+
+  // A line holding several machines is left alone: one upgraded unit does not
+  // rename the other fourteen.
+  const soItems = (await prisma.saleOrderItem.findMany({
     where: {
       OR: [
         { serialNumberId: wo.serialId },
+        { serialIds: { has: wo.serialId } },
         ...(wo.linkedSaleOrderId
           ? [{ saleOrderId: wo.linkedSaleOrderId, productId: wo.productId, serialNumberId: { not: null } }]
           : []),
       ],
     },
-  })
+  })).filter(i => Number(i.qty ?? 1) <= 1 && (i.serialIds?.length ?? 0) <= 1)
   const soIds = [...new Set(soItems.map(i => i.saleOrderId))]
+  const changedSoIds = new Set<string>()
   for (const item of soItems) {
-    await prisma.saleOrderItem.update({
-      where: { id: item.id },
-      data: { description: applyUnitNameToLineDescription(item.description, unitName) },
-    })
+    const description = applyUnitNameToLineDescription(item.description, unitName)
+    if (description === item.description) continue
+    await prisma.saleOrderItem.update({ where: { id: item.id }, data: { description } })
+    changedSoIds.add(item.saleOrderId)
   }
 
-  const invoiceItems = await prisma.invoiceItem.findMany({
+  const invoiceItems = (await prisma.invoiceItem.findMany({
     where: {
       OR: [
         { serialNumberId: wo.serialId },
@@ -344,26 +353,31 @@ export async function refreshSaleOrderHostLineAfterReconfig(workOrderId: string)
         ...(wo.linkedInvoiceId ? [{ invoiceId: wo.linkedInvoiceId, productId: wo.productId }] : []),
       ],
     },
-  })
+  })).filter(i => i.serialNumberId === wo.serialId || (Number(i.qty ?? 1) <= 1 && !i.serialNumberId))
+  const changedInvoiceIds = new Set<string>()
   for (const item of invoiceItems) {
+    const description = applyUnitNameToLineDescription(item.description, unitName)
+    if (description === item.description && item.serialNumberId) continue
     await prisma.invoiceItem.update({
       where: { id: item.id },
       data: {
-        description: applyUnitNameToLineDescription(item.description, unitName),
+        description,
         ...(item.serialNumberId ? {} : { serialNumberId: wo.serialId }),
       },
     })
+    changedInvoiceIds.add(item.invoiceId)
   }
 
-  const deliveryItems = await prisma.deliveryNoteItem.findMany({
+  const deliveryItems = (await prisma.deliveryNoteItem.findMany({
     where: {
       OR: [
         { serialNumberId: wo.serialId },
         { serialIds: { has: wo.serialId } },
       ],
     },
-  })
+  })).filter(i => (i.serialIds?.length ?? 0) <= 1)
   for (const item of deliveryItems) {
+    if (item.description === unitName && item.productName === unitName.slice(0, 200)) continue
     await prisma.deliveryNoteItem.update({
       where: { id: item.id },
       data: {
@@ -374,6 +388,16 @@ export async function refreshSaleOrderHostLineAfterReconfig(workOrderId: string)
     })
   }
 
+  // Invoice and sale-order screens are cached until the document itself
+  // changes; a line edit alone left them showing the old specs.
+  const now = new Date()
+  if (changedSoIds.size) {
+    await prisma.saleOrder.updateMany({ where: { id: { in: [...changedSoIds] } }, data: { updatedAt: now } })
+  }
+  if (changedInvoiceIds.size) {
+    await prisma.invoice.updateMany({ where: { id: { in: [...changedInvoiceIds] } }, data: { updatedAt: now } })
+  }
+
   if (!wo.linkedSaleOrderId && soIds.length === 1) {
     await prisma.reconfigurationWorkOrder.update({
       where: { id: wo.id },
@@ -381,110 +405,134 @@ export async function refreshSaleOrderHostLineAfterReconfig(workOrderId: string)
     })
   }
 
-  await syncBlobCommercialDocumentsAfterReconfig({
-    serialId: wo.serialId,
-    manufacturerSerial: wo.manufacturerSerial || wo.serial?.serialNumber || '',
-    productId: wo.productId,
-    productName: wo.product?.name || unitName,
-    unitName,
-    specs,
-    saleOrderIds: soIds,
-  })
+  await syncScreenCopiesAfterReconfig({ serialId: wo.serialId, unitName, specs })
+
+  const { notifyStoreKeysChanged } = await import('@/lib/server-store')
+  await notifyStoreKeysChanged(['deed_serials', 'deed_saleOrders', 'deed_invoices']).catch(() => {})
 
   return { description: unitName, saleOrderItemIds: soItems.map(i => i.id), invoiceItemIds: invoiceItems.map(i => i.id) }
 }
 
-async function syncBlobCommercialDocumentsAfterReconfig(params: {
-  serialId: string
-  manufacturerSerial: string
-  productId: string
-  productName: string
-  unitName: string
-  specs: string
-  saleOrderIds: string[]
-}) {
-  const { loadAppState, saveStoreKeys } = await import('@/lib/server-store')
-  const state = await loadAppState(['deed_serials', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries'])
-  const patch: Record<string, string> = {}
+/** Merge the unit name and specs into the serial's screen fields. */
+async function saveUnitNameOnSerial(serialId: string, unitName: string, specs: string) {
+  const row = await prisma.serialNumber.findUnique({ where: { id: serialId }, select: { screenExtras: true, notes: true } })
+  if (!row) return
+  const extras = row.screenExtras && typeof row.screenExtras === 'object' && !Array.isArray(row.screenExtras)
+    ? row.screenExtras as Record<string, unknown>
+    : {}
+  if (extras.specs === specs && extras.unitName === unitName && row.notes === specs) return
+  await prisma.serialNumber.update({
+    where: { id: serialId },
+    data: { screenExtras: { ...extras, specs, unitName } as any, notes: specs },
+  })
+}
 
-  const serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
-  const sidx = serials.findIndex(
-    s => s.id === params.serialId || (params.manufacturerSerial && s.serial === params.manufacturerSerial),
-  )
-  if (sidx >= 0) {
-    serials[sidx] = { ...serials[sidx], specs: params.specs }
-    patch.deed_serials = JSON.stringify(serials)
-  } else if (params.manufacturerSerial) {
-    serials.push({
-      id: params.serialId,
-      serial: params.manufacturerSerial,
-      barcode: params.manufacturerSerial,
-      productId: params.productId,
-      productName: params.productName,
-      specs: params.specs,
-      status: 'assigned',
-      location: 'warehouse',
-      receivedDate: new Date().toISOString().slice(0, 10),
+/**
+ * The screen copies that are still written: delivery notes, and warranties
+ * already issued for this machine (their page shows the name and specs).
+ * Sale orders, invoices and serials are read from their tables, updated above.
+ */
+async function syncScreenCopiesAfterReconfig(params: { serialId: string; unitName: string; specs: string }) {
+  const { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } = await import('@/lib/server-store')
+
+  await withAppStateKeyLock('deed_deliveries', async () => {
+    const state = await loadAppStateForWrite(['deed_deliveries'])
+    const deliveries = Array.isArray(state.deed_deliveries) ? [...(state.deed_deliveries as any[])] : []
+    let changed = false
+    for (const dn of deliveries) {
+      if (!Array.isArray(dn?.lines)) continue
+      dn.lines = dn.lines.map((line: any) => {
+        const ids = Array.isArray(line.serialIds) ? line.serialIds : []
+        if (!ids.includes(params.serialId) || ids.length > 1) return line
+        if (line.productName === params.unitName && line.description === params.unitName) return line
+        changed = true
+        return { ...line, productName: params.unitName, description: params.unitName }
+      })
+    }
+    if (changed) await saveStoreKeys({ deed_deliveries: JSON.stringify(deliveries) })
+  })
+
+  await withAppStateKeyLock('deed_warranties', async () => {
+    const state = await loadAppStateForWrite(['deed_warranties'])
+    const warranties = Array.isArray(state.deed_warranties) ? (state.deed_warranties as any[]) : []
+    let changed = false
+    const next = warranties.map(w => {
+      if (w?.serialId !== params.serialId || w.status === 'cancelled') return w
+      if (w.productName === params.unitName && w.specs === params.specs) return w
+      changed = true
+      return { ...w, productName: params.unitName, specs: params.specs }
     })
-    patch.deed_serials = JSON.stringify(serials)
-  }
+    if (changed) await saveStoreKeys({ deed_warranties: JSON.stringify(next) })
+  })
+}
 
-  const saleOrders = Array.isArray(state.deed_saleOrders) ? [...(state.deed_saleOrders as any[])] : []
-  let soChanged = false
-  for (const so of saleOrders) {
-    if (!Array.isArray(so?.lines)) continue
-    let hit = false
-    so.lines = so.lines.map((line: any) => {
-      const ids = Array.isArray(line.serialIds) ? line.serialIds : []
-      if (!ids.includes(params.serialId) && line.serialNumberId !== params.serialId) return line
-      hit = true
-      return {
-        ...line,
-        productName: params.unitName,
-        description: applyUnitNameToLineDescription(line.description || line.productName, params.unitName),
-      }
+/**
+ * Put the upgraded name and specs on the documents of machines that were
+ * reconfigured before they were sold. Called when a sale order, invoice or
+ * delivery is saved and when warranties are issued — the documents made after
+ * the reconfiguration took the catalog name. Returns how many machines it
+ * refreshed. Never throws: the sale itself has already been saved.
+ */
+export async function applyReconfiguredUnitNames(serialIds: Array<string | null | undefined>): Promise<number> {
+  const ids = [...new Set(serialIds.filter((id): id is string => typeof id === 'string' && UUID.test(id)))]
+  if (!ids.length) return 0
+  try {
+    const orders = await prisma.reconfigurationWorkOrder.findMany({
+      where: { serialId: { in: ids }, status: 'completed', proposedSnapshotId: { not: null } },
+      select: { id: true, serialId: true, dateCompleted: true, updatedAt: true },
     })
-    if (hit) soChanged = true
+    const latest = new Map<string, { id: string; at: number }>()
+    for (const o of orders) {
+      const at = (o.dateCompleted ?? o.updatedAt ?? new Date(0)).getTime()
+      const have = latest.get(o.serialId)
+      if (!have || at > have.at) latest.set(o.serialId, { id: o.id, at })
+    }
+    let done = 0
+    for (const { id } of latest.values()) {
+      const r = await refreshSaleOrderHostLineAfterReconfig(id).catch(err => {
+        console.error('[reconfig] refreshing documents failed for', id, err)
+        return null
+      })
+      if (r) done += 1
+    }
+    return done
+  } catch (err) {
+    console.error('[reconfig] applyReconfiguredUnitNames failed:', err)
+    return 0
   }
-  if (soChanged) patch.deed_saleOrders = JSON.stringify(saleOrders)
+}
 
-  const invoices = Array.isArray(state.deed_invoices) ? [...(state.deed_invoices as any[])] : []
-  let invChanged = false
-  const soIdSet = new Set(params.saleOrderIds)
-  for (const inv of invoices) {
-    if (!Array.isArray(inv?.lines)) continue
-    const onLinkedSo = inv.saleOrderId && soIdSet.has(inv.saleOrderId)
-    let hit = false
-    inv.lines = inv.lines.map((line: any) => {
-      const ids = Array.isArray(line.serialIds) ? line.serialIds : []
-      const matchesSerial = ids.includes(params.serialId) || line.serialNumberId === params.serialId
-      const matchesHost = onLinkedSo && line.productId === params.productId
-      if (!matchesSerial && !matchesHost) return line
-      hit = true
-      return {
-        ...line,
-        description: applyUnitNameToLineDescription(line.description, params.unitName),
-        ...(matchesSerial ? {} : { serialIds: [params.serialId] }),
-      }
-    })
-    if (hit) invChanged = true
-  }
-  if (invChanged) patch.deed_invoices = JSON.stringify(invoices)
+/** Every machine reconfigured and then sold: correct its documents once. */
+export async function backfillReconfiguredUnitNames(): Promise<number> {
+  const orders = await prisma.reconfigurationWorkOrder.findMany({
+    where: { status: 'completed', proposedSnapshotId: { not: null } },
+    select: { serialId: true },
+  })
+  return applyReconfiguredUnitNames(orders.map(o => o.serialId))
+}
 
-  const deliveries = Array.isArray(state.deed_deliveries) ? [...(state.deed_deliveries as any[])] : []
-  let dnChanged = false
-  for (const dn of deliveries) {
-    if (!Array.isArray(dn?.lines)) continue
-    let hit = false
-    dn.lines = dn.lines.map((line: any) => {
-      const ids = Array.isArray(line.serialIds) ? line.serialIds : []
-      if (!ids.includes(params.serialId)) return line
-      hit = true
-      return { ...line, productName: params.unitName, description: params.unitName }
-    })
-    if (hit) dnChanged = true
-  }
-  if (dnChanged) patch.deed_deliveries = JSON.stringify(deliveries)
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-  if (Object.keys(patch).length) await saveStoreKeys(patch)
+const BACKFILL_KEY = 'deed_reconfigDocsBackfill_v1'
+let backfillRunning: Promise<unknown> | null = null
+
+/**
+ * After warranties are issued: refresh the machines just sold and, the first
+ * time this runs, every machine reconfigured before the fix — their invoices
+ * and warranties were issued with the catalog specs.
+ */
+export async function refreshReconfiguredSales(serialIds: Array<string | null | undefined>): Promise<void> {
+  await applyReconfiguredUnitNames(serialIds)
+  if (backfillRunning) return
+  backfillRunning = (async () => {
+    const { loadAppState, saveStoreKeys } = await import('@/lib/server-store')
+    const state = await loadAppState([BACKFILL_KEY])
+    if (state[BACKFILL_KEY]) return
+    const count = await backfillReconfiguredUnitNames()
+    await saveStoreKeys({ [BACKFILL_KEY]: JSON.stringify({ at: new Date().toISOString(), machines: count }) })
+  })().catch(err => {
+    console.error('[reconfig] backfill of reconfigured sales failed:', err)
+    backfillRunning = null
+  })
+  await backfillRunning
 }

@@ -112,7 +112,16 @@ export async function POST(request: NextRequest, { params }: { params: RoutePara
     return NextResponse.json({ error: outcome.error }, { status: outcome.status })
   }
 
-  void mirrorDeliveryToPrisma(outcome.item).catch(() => {})
+  // Machines upgraded on the bench before this sale: once the note is in its
+  // table, its lines and the order/invoice take their new specs.
+  const deliveredSerials = (Array.isArray(outcome.item?.lines) ? outcome.item.lines : [])
+    .flatMap((l: { serialIds?: unknown }) => (Array.isArray(l?.serialIds) ? l.serialIds as string[] : []))
+  void mirrorDeliveryToPrisma(outcome.item)
+    .catch(() => {})
+    .then(() => deliveredSerials.length
+      ? import('@/lib/reconfiguration/sales-bridge').then(m => m.applyReconfiguredUnitNames(deliveredSerials))
+      : 0)
+    .catch(() => {})
 
   return NextResponse.json({ item: outcome.item, valuation: outcome.valuation ?? null })
 }
