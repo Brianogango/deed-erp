@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMachineLabelView, compactLabelSpecs, machineLabelVariant } from '@/lib/inventory/machine-label'
+import { buildMachineLabelView, compactLabelSpecs, labelModelName, machineLabelVariant } from '@/lib/inventory/machine-label'
 
 describe('machine label', () => {
   it('picks the version from where the machine is', () => {
@@ -30,5 +30,19 @@ describe('machine label', () => {
     const v = buildMachineLabelView({ productName: 'HP EliteBook 840 G5', category: 'Laptops', productType: 'refurbished', serial: '5CG81234', assetId: 'DT000001', location: 'warehouse', specsText: 'Intel Core i5 8th Gen, 8GB RAM, 256GB SSD' })
     expect(v).toMatchObject({ variant: 'refurbished', category: 'LAPTOP', condition: 'REFURBISHED', specs: '8th i5 8GB 256GB', serial: '5CG81234', code: 'DT000001', dateIn: '' })
     expect(buildMachineLabelView({ productName: 'HP ProBook 450 G10', category: 'Laptops', productType: 'new', serial: 'X', assetId: 'LT000125', location: 'warehouse' }).condition).toBe('BRAND NEW')
+  })
+})
+
+describe('sticker fits', () => {
+  it('names the model alone when the specs line carries the processor and screen', () => {
+    const v = buildMachineLabelView({ productName: 'HP EliteBook 845 G8 AMD Ryzen 5 PRO 14" FHD', category: 'Laptops', productType: 'refurbished', serial: '5CG2281QYH', assetId: 'LT000312', location: 'warehouse', specsText: 'Ryzen 5, 16GB RAM, 512GB SSD' })
+    expect(v.model).toBe('HP EliteBook 845 G8')
+    expect(v.specs).toBe('Ryzen 5 16GB 512GB 14"')
+  })
+  it('keeps model words and the whole name when there are no specs', () => {
+    expect(labelModelName('HP EliteBook x360 1030 G3 Intel Core i7', true)).toBe('HP EliteBook x360 1030 G3')
+    expect(labelModelName('Lenovo ThinkPad K14 Gen 1 - i5 11th Gen', true)).toBe('Lenovo ThinkPad K14 Gen 1')
+    expect(labelModelName('HP EliteBook 845 G8 AMD Ryzen 5', false)).toBe('HP EliteBook 845 G8 AMD Ryzen 5')
+    expect(labelModelName('Intel NUC', true)).toBe('Intel NUC')
   })
 })
