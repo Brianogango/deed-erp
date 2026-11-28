@@ -219,3 +219,27 @@
   .hrg-rv { grid-template-columns: minmax(0, 1fr); }
   .hrg-dec { align-items: stretch; }
 }
+
+/* J · Time › Leave */
+.hrj-req { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 14px; border-top: 1px solid #eef1f5; align-items: center; }
+.hrj-who { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.hrj-who b { font-size: 14px; color: var(--hrx-ink); }
+.hrj-av { width: 52px; height: 52px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex: none; }
+.hrj-av.is-sm { width: 22px; height: 22px; font-size: 9px; }
+.hrj-when { font-size: 12px; color: var(--hrx-ink); margin-top: 2px; }
+.hrj-when b { font-size: 12px; }
+.hrj-bal { height: 8px; border-radius: 99px; background: #e2e8f0; overflow: hidden; width: 180px; margin-top: 6px; }
+.hrj-bal i { display: block; height: 100%; background: var(--hrx-blue); }
+.hrj-small { font-size: 11px; color: var(--hrx-muted); }
+.hrj-warn { margin-top: 8px; font-size: 11.5px; background: #fff7ed; color: #9a3412; border-radius: 8px; padding: 5px 9px; display: inline-block; }
+.hrj-btns { display: flex; gap: 8px; }
+.hrj-legend { display: flex; gap: 8px; }
+.hrj-cal { display: grid; font-size: 11px; padding-bottom: 10px; min-width: 640px; }
+.hrj-h { padding: 6px 0; text-align: center; color: var(--hrx-faint); font-weight: 700; }
+.hrj-h.is-we { color: #cbd5e1; }
+.hrj-h.is-today { color: var(--hrx-blue); }
+.hrj-nm { padding: 7px 0 7px 14px; font-weight: 600; font-size: 12px; display: flex; gap: 7px; align-items: center; border-top: 1px solid #f1f5f9; color: var(--hrx-ink); white-space: nowrap; }
+.hrj-c { border-top: 1px solid #f1f5f9; position: relative; min-height: 36px; }
+.hrj-c.is-we { background: #f8fafc; }
+.hrj-bar { position: absolute; top: 9px; left: 3px; height: 18px; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff; display: flex; align-items: center; padding: 0 7px; white-space: nowrap; overflow: hidden; z-index: 1; }
+@media (max-width: 700px) { .hrj-req { grid-template-columns: minmax(0, 1fr); } .hrj-av { width: 40px; height: 40px; font-size: 14px; } }
