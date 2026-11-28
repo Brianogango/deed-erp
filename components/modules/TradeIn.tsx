@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import ReactBarcode from 'react-barcode'
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -7,7 +8,7 @@ import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } fro
 import { useAfterSalesStore, useFinanceStore, BuyBack, Donation, ClientExchange, LocationId, LOCATIONS, fmtKes, fmtDate } from '@/lib/store'
 import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
 import { clearFormDraft, loadFormDraft, saveFormDraft } from '@/lib/form-draft'
-import { Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
@@ -224,7 +225,13 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
 
 // qty / condition / unitPrice start empty ('') on a new line — the user sets them.
 type BBLine = { productId: string; productName: string; qty: number | ''; condition: 'good'|'fair'|'poor'|''; unitPrice: number | ''; serialIds: string[]; notes: string }
-type DetailTabProps = { detailId: string | null; onOpenDetail: (id: string | null) => void }
+type DetailTabProps = {
+  detailId: string | null
+  onOpenDetail: (id: string | null) => void
+  /** Open the new-record form at once (from the combined list's buttons). */
+  startNew?: boolean
+  onStarted?: () => void
+}
 type BuyBackBulkRow = {
   batchRef: string; customerId: string; customerName: string; originalSORef: string
   destination: LocationId; productId: string; productName: string; qty: number
@@ -242,7 +249,7 @@ function downloadBuyBackBulkTemplate() {
   downloadTemplate('buybacks_bulk_template.xlsx', 'BuyBacks', BUYBACK_BULK_HEADERS, BUYBACK_BULK_EXAMPLE)
 }
 
-function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
+function BuyBackTab({ detailId, onOpenDetail, startNew, onStarted }: DetailTabProps) {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, creditBuyBack, receiveFreeBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
   const { invoices } = useFinanceStore()
@@ -251,6 +258,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const canApprove = userCan(currentUser, 'sales.buyback.approve')
 
   const [showNew, setShowNew] = useState(false)
+  useEffect(() => { if (startNew) { setShowNew(true); onStarted?.() } }, [startNew]) // eslint-disable-line react-hooks/exhaustive-deps
   const [search, setSearch] = useUrlUiState('buybackQ', '')
   const [buybackPageValue, setBuybackPageValue] = useUrlUiState('buybackPage', '1')
   const buybackPage = Math.max(1, Number.parseInt(buybackPageValue, 10) || 1)
@@ -499,75 +507,96 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     const liveBill = bb.billId ? (invoices ?? []).find(i => i.id === bb.billId && i.status !== 'cancelled') : undefined
     const STEPS = ['draft', 'approved', 'paid', 'stocked']
     const si = STEPS.indexOf(bb.status)
+    const when = (d?: string) => (d ? fmtDate(d) : '')
+    const METHOD: Record<string, string> = { cash: 'Cash', bank_transfer: 'Bank transfer', mpesa: 'M-Pesa', store_credit: 'Store credit' }
+    const settled = bb.paymentMethod === 'store_credit'
+      ? `Store credit ${bb.creditRef ?? ''}`.trim()
+      : bb.paymentMethod
+        ? `${METHOD[bb.paymentMethod] ?? bb.paymentMethod}${bb.billRef ? ` (bill ${bb.billRef})` : ''}`
+        : liveBill ? `Bill ${liveBill.ref} — with Finance` : '—'
+    const steps = [
+      { key: 'draft', label: 'Valued', sub: when(bb.date) },
+      { key: 'approved', label: 'Approved', sub: [when(bb.approvedDate), bb.approvedByName].filter(Boolean).join(' · ') },
+      { key: 'paid', label: bb.paymentMethod === 'store_credit' ? 'Credited' : 'Paid', sub: [when(bb.paidDate), bb.paymentReference].filter(Boolean).join(' · ') },
+      { key: 'stocked', label: 'Stocked', sub: [when(bb.stockedDate), bb.stockedByName].filter(Boolean).join(' · ') },
+    ]
+    const next = bb.status === 'draft'
+      ? { title: 'Review the valuation', sub: canApprove ? 'Approve it, or cancel it' : 'Waiting for approval' }
+      : bb.status === 'approved' && !(bb.total > 0)
+        ? { title: 'Receive it at no cost', sub: 'Nothing to pay' }
+        : bb.status === 'approved' && liveBill
+          ? { title: `Finance pays bill ${liveBill.ref}`, sub: liveBill.amountPaid > 0 ? `${fmtKes(liveBill.amountPaid)} of ${fmtKes(liveBill.total)} paid so far` : 'The buy-back is settled once the bill is paid' }
+          : bb.status === 'approved'
+            ? { title: `Pay the customer ${fmtKes(bb.total)}`, sub: 'Or add it to their store credit' }
+            : bb.status === 'paid'
+              ? { title: 'Put it in stock', sub: `Goes to ${LOCATIONS[bb.destinationLocation]?.name ?? 'stock'} for testing` }
+              : null
+    const history = [
+      bb.stockedDate && `${when(bb.stockedDate)} · Stocked${bb.stockedByName ? ` by ${bb.stockedByName}` : ''}`,
+      bb.paidDate && (bb.paymentMethod === 'store_credit'
+        ? `${when(bb.paidDate)} · ${fmtKes(bb.total)} added to store credit ${bb.creditRef ?? ''}`
+        : `${when(bb.paidDate)} · Paid ${fmtKes(bb.total)}${bb.paymentMethod ? ` by ${METHOD[bb.paymentMethod] ?? bb.paymentMethod}` : ''}${bb.paymentReference ? ` ${bb.paymentReference}` : ''}${bb.billRef ? ` · bill ${bb.billRef}` : ''}`),
+      bb.approvedDate && `${when(bb.approvedDate)} · Approved${bb.approvedByName ? ` by ${bb.approvedByName}` : ''}`,
+      `${when(bb.date)} · Valued and recorded`,
+    ].filter(Boolean) as string[]
     return (
-      <div>
-        <button type="button" className="tradein-back btn-outline text-[12px] mb-3" onClick={() => onOpenDetail(null)}>‹ Back to buy-backs</button>
-        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-            <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{bb.ref}</p>
-              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{bb.customerName} · {fmtDate(bb.date)}</p>
-              {bb.repairRef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>From repair: {bb.repairRef}</p>}
-              {bb.originalSORef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>Original sale: {bb.originalSORef}</p>}
-            </div>
-            <StatusPill status={bb.status} />
+      <div className="trd">
+        <div className="trd-head">
+          <div className="min-w-0">
+            <button type="button" className="trd-back" onClick={() => onOpenDetail(null)}>‹ Trade-ins</button>
+            <h2>{bb.ref} <span className="tri-kind tri-kind--buybacks">Buy-back</span></h2>
+            <p>{[bb.customerName, fmtDate(bb.date), bb.repairRef ? `from repair ${bb.repairRef}` : '', bb.originalSORef ? `original sale ${bb.originalSORef}` : ''].filter(Boolean).join(' · ')}</p>
           </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {STEPS.map((s, i) => (
-              <div key={s} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--navy)' : 'var(--border-lt)', marginBottom: 4 }} />
-                <span style={{ fontSize: 11, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+          <StatusPill status={bb.status} />
+        </div>
+        <ol className="trd-steps">
+          {steps.map((st, idx) => (
+            <li key={st.key} className={idx < si ? 'is-done' : idx === si ? (bb.status === 'stocked' ? 'is-done' : 'is-now') : ''}>
+              <b>{st.label}</b><span>{idx <= si ? st.sub || '—' : 'waiting'}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="trd-cols">
+          <div>
+            <p className="trd-sec">Machines bought</p>
+            {bb.lines.map(l => (
+              <div key={l.id} className="trd-machine">
+                <div className="min-w-0">
+                  <b>{l.productName}{l.qty > 1 ? ` ×${l.qty}` : ''}</b>
+                  <small>Condition <span className={`trd-cond trd-cond--${l.condition}`}>{l.condition}</span>{l.notes ? ` · ${l.notes}` : ''}</small>
+                </div>
+                <div className="trd-code">
+                  {l.serialIds.length === 1 && (() => {
+                    const sn = serials.find(x => x.id === l.serialIds[0])?.serial
+                    return sn ? <ReactBarcode value={sn} width={1} height={22} displayValue={false} margin={0} background="transparent" /> : null
+                  })()}
+                  {l.serialIds.slice(0, 3).map(id => {
+                    const sn = serials.find(x => x.id === id)?.serial ?? id
+                    return <span key={id}>{sn}</span>
+                  })}
+                  {l.serialIds.length > 3 && <span>+{l.serialIds.length - 3} more</span>}
+                </div>
+                <span className="trd-amt">{fmtKes(l.unitPrice * l.qty)}</span>
               </div>
             ))}
+            {bb.notes && <p className="trd-note">Note: {bb.notes}</p>}
+            <p className="trd-sec">History</p>
+            <ul className="trd-history">{history.map(h => <li key={h}>{h}</li>)}</ul>
           </div>
-
-          <div className="dt-scroll" style={{ marginBottom: 16 }}>
-          <table data-no-responsive className="erp-table">
-            <thead><tr>
-              {['Product', 'Condition', 'Qty', 'Serials', 'Unit Price', 'Total'].map(h => (
-                <th key={h}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {bb.lines.map(l => (
-                <tr key={l.id} >
-                  <td style={{ fontWeight: 600 }}>{l.productName}</td>
-                  <td>
-                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: l.condition === 'good' ? 'var(--success-bg)' : l.condition === 'fair' ? '#FEF9C3' : 'var(--danger-bg)', color: l.condition === 'good' ? 'var(--success-text)' : l.condition === 'fair' ? '#854D0E' : '#991B1B' }}>{l.condition}</span>
-                  </td>
-                  <td>{l.qty}</td>
-                  <td style={{ color: 'var(--text-4)' }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
-                  <td>{fmtKes(l.unitPrice)}</td>
-                  <td style={{ fontWeight: 700 }}>{fmtKes(l.unitPrice * l.qty)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-
-          <div style={{ textAlign: 'right', marginBottom: 16, fontSize: 14, fontWeight: 700 }}>Total We Pay: {fmtKes(bb.total)}</div>
-          {bb.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {bb.notes}</p>}
-          {bb.approvedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Approved by {bb.approvedByName} on {fmtDate(bb.approvedDate!)}</p>}
-          {/* After Approve: Pay XOR Add as credit. Both mark the BBK paid so Add to stock can follow. */}
-          {bb.paymentMethod === 'store_credit' && bb.creditRef && (
-            <p style={{ fontSize: 12, color: 'var(--navy)', fontWeight: 600, marginTop: 8 }}>
-              Settled as store credit {bb.creditRef} — no cash left the till. Apply this credit on the customer&apos;s next invoice.
-            </p>
-          )}
-          {bb.status === 'approved' && liveBill && (
-            <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)' }}>
-              {liveBill.status === 'draft'
-                ? `Bill ${liveBill.ref} is waiting for Finance to confirm and pay it.`
-                : `Bill ${liveBill.ref} is with Finance to pay${liveBill.amountPaid > 0 ? ` — ${fmtKes(liveBill.amountPaid)} of ${fmtKes(liveBill.total)} paid so far` : ''}. This buy-back is marked paid once it is.`}
-            </p>
-          )}
-          {bb.status === 'paid' && bb.paymentMethod && bb.paymentMethod !== 'store_credit' && (
-            <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Paid to customer by {bb.paymentMethod.replace('_', ' ')} on {fmtDate(bb.paidDate!)}{bb.paymentReference ? ` · ref ${bb.paymentReference}` : ''}{bb.billRef ? ` · bill ${bb.billRef}` : ''}</p>
-          )}
-          {bb.stockedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
-
-          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          <div>
+            <p className="trd-sec">Money</p>
+            <dl className="trd-money">
+              <dt>Valuation</dt><dd>{fmtKes(bb.total)}</dd>
+              <dt>Settled as</dt><dd>{settled}</dd>
+              <dt className="is-total">{bb.status === 'paid' || bb.status === 'stocked' ? (bb.paymentMethod === 'store_credit' ? 'Credited to customer' : 'Paid to customer') : 'We pay'}</dt>
+              <dd className="is-total">{fmtKes(bb.total)}</dd>
+            </dl>
+            {bb.paymentMethod === 'store_credit' && bb.creditRef && (
+              <p className="trd-note">Store credit {bb.creditRef} — apply it on the customer&apos;s next invoice.</p>
+            )}
+            <div className="trd-next">
+              {next ? <div><span>Next</span><b>{next.title}</b><small>{next.sub}</small></div> : <div><span>Done</span><b>Bought and in stock</b></div>}
+              <div className="trd-actions">
             {bb.status === 'draft' && canApprove && (
               <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => approveBuyBack(bb.id)}>
                 <Fa icon={faCheck} aria-hidden="true" /> Approve
@@ -614,6 +643,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
                 <Fa icon={faTrash} aria-hidden="true" /> Cancel buy-back
               </button>
             )}
+              </div>
+            </div>
           </div>
         </div>
         {settleModals}
@@ -850,11 +881,12 @@ async function downloadBulkTemplate() {
   XLSX.writeFile(wb, 'donations_bulk_template.xlsx')
 }
 
-function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
+function DonationTab({ detailId, onOpenDetail, startNew, onStarted }: DetailTabProps) {
   const { donations, createDonation, confirmDonation, deleteDonation,
     products, serials, showToast } = useAfterSalesStore()
 
   const [showNew, setShowNew] = useState(false)
+  useEffect(() => { if (startNew) { setShowNew(true); onStarted?.() } }, [startNew]) // eslint-disable-line react-hooks/exhaustive-deps
   const [showBulk, setShowBulk] = useState(false)
   const [donType, setDonType] = useState<'in' | 'out' | ''>('')
   const [party, setParty]     = useState('')
@@ -1299,15 +1331,16 @@ function downloadExchangeBulkTemplate() {
   downloadTemplate('trade_in_exchanges_bulk_template.xlsx', 'TradeIns', EXCHANGE_BULK_HEADERS, EXCHANGE_BULK_EXAMPLE)
 }
 
-function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
+function ExchangeTab({ detailId, onOpenDetail, startNew, onStarted }: DetailTabProps) {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
-    contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial, warranties } = useAfterSalesStore()
   const { companySettings, bankAccounts, invoices } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canApprove = userCan(currentUser, 'sales.buyback.approve')
 
   const [showNew, setShowNew] = useState(false)
+  useEffect(() => { if (startNew) { setShowNew(true); onStarted?.() } }, [startNew]) // eslint-disable-line react-hooks/exhaustive-deps
   const [customerId, setCustomerId]   = useState('')
   const [customerName, setCustomerName] = useState('')
   const [originalSORef, setOriginalSORef] = useState('')
@@ -1518,52 +1551,77 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
         showToast('Exchange note could not be made', 'error')
       }
     }
+    const when = (d?: string) => (d ? fmtDate(d) : '')
+    const givenIds = exc.newLines.flatMap(l => l.serialIds)
+    const carried = (warranties ?? []).filter(w => givenIds.includes(w.serialId) && w.status !== 'cancelled')
+    const invoiceDue = balanceInvoice ? Math.max(0, Number(balanceInvoice.total) - Number(balanceInvoice.amountPaid || 0)) : 0
+    const invoicePaid = !!balanceInvoice && invoiceDue <= 0.5
+    const steps = [
+      { label: 'Draft', sub: when(exc.date) },
+      { label: 'Approved', sub: [when(exc.approvedDate), exc.approvedByName].filter(Boolean).join(' · ') },
+      { label: 'Completed', sub: [when(exc.completedDate), exc.completedByName].filter(Boolean).join(' · ') },
+    ]
+    const next = exc.status === 'draft'
+      ? { title: 'Approve the exchange', sub: canApprove ? 'Then hand over the machine and complete it' : 'Waiting for approval' }
+      : exc.status === 'approved'
+        ? { title: 'Hand over and complete', sub: 'The returned machine goes to With Issues; the balance is billed or credited' }
+        : exc.status === 'completed' && balanceInvoice && !invoicePaid
+          ? { title: `Collect ${fmtKes(invoiceDue)}`, sub: `Record the payment on invoice ${balanceInvoice.ref}` }
+          : null
     return (
-      <div>
-        <button onClick={() => onOpenDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
-        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{exc.ref}</p>
-              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{exc.customerName} · {fmtDate(exc.date)}</p>
-              {exc.originalSORef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>Original SO: {exc.originalSORef}</p>}
-            </div>
-            <StatusPill status={exc.status} />
+      <div className="trd">
+        <div className="trd-head">
+          <div className="min-w-0">
+            <button type="button" className="trd-back" onClick={() => onOpenDetail(null)}>‹ Trade-ins</button>
+            <h2>{exc.ref} <span className="tri-kind tri-kind--exchanges">Exchange</span></h2>
+            <p>{[exc.customerName, fmtDate(exc.date), exc.originalSORef ? `original sale ${exc.originalSORef}` : ''].filter(Boolean).join(' · ')}</p>
           </div>
-
-          {exc.status !== 'cancelled' && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              {STEPS.map((s, i) => (
-                <div key={s} style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--navy)' : 'var(--border-lt)', marginBottom: 4 }} />
-                  <span style={{ fontSize: 11, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+          <StatusPill status={exc.status} />
+        </div>
+        {exc.status !== 'cancelled' && (
+          <ol className="trd-steps">
+            {steps.map((st, idx) => (
+              <li key={st.label} className={idx < si || exc.status === 'completed' ? 'is-done' : idx === si ? 'is-now' : ''}>
+                <b>{st.label}</b><span>{idx <= si ? st.sub || '—' : 'waiting'}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        <ExchangeSwapCard view={excView} title="Machines swapped" aside={<>Returned {fmtKes(exc.returnTotal)} · Given {fmtKes(exc.newTotal)}</>} />
+        <div className="trd-cols" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
+          <div>
+            <p className="trd-sec">Balance</p>
+            <dl className="trd-money">
+              <dt>Given</dt><dd>{fmtKes(exc.newTotal)}</dd>
+              <dt>Less returned</dt><dd>− {fmtKes(exc.returnTotal)}</dd>
+              <dt className="is-total">{exc.priceDiff > 0 ? 'Customer pays' : exc.priceDiff < 0 ? 'We owe the customer' : 'Even exchange'}</dt>
+              <dd className="is-total">{exc.priceDiff !== 0 ? fmtKes(Math.abs(exc.priceDiff)) : '—'}</dd>
+              {balanceInvoice && (<><dt>Invoice</dt><dd><Link className="text-primary-600" href={financeInvoicePath(balanceInvoice.id)}>{balanceInvoice.ref}</Link> <span className={`tri-status ${invoicePaid ? 'tri-status--done' : 'tri-status--todo'}`}>{invoicePaid ? 'Paid' : invoiceDue < Number(balanceInvoice.total) ? `${fmtKes(invoiceDue)} due` : 'Not paid'}</span></dd></>)}
+              {exc.status === 'completed' && exc.priceDiff < 0 && (<><dt>Store credit</dt><dd>CR/{exc.ref}</dd></>)}
+              {carried.length > 0 && (<><dt>Warranty</dt><dd>{carried.map(w => w.ref).join(', ')} · to {fmtDate(carried[0].endDate)}</dd></>)}
+            </dl>
+            {exc.notes && <p className="trd-note">Note: {exc.notes}</p>}
+          </div>
+          <div>
+            {exc.status === 'completed' && (
+              <>
+                <p className="trd-sec">Documents</p>
+                <div className="trd-docs">
+                  <button type="button" className="trd-doc" onClick={() => { void printNote() }}>Exchange note <span>PDF ⤓</span></button>
+                  {balanceInvoice && <Link className="trd-doc" href={financeInvoicePath(balanceInvoice.id)}>Invoice {balanceInvoice.ref} <span>Open ›</span></Link>}
+                  {carried.map(w => <span key={w.id} className="trd-doc" style={{ cursor: 'default' }}>Warranty {w.ref} <span>to {fmtDate(w.endDate)}</span></span>)}
                 </div>
-              ))}
-            </div>
-          )}
-
-          <ExchangeSwapCard view={excView} title="Machines swapped" aside={<>Returned {fmtKes(exc.returnTotal)} · Given {fmtKes(exc.newTotal)}</>} />
-
-          <div style={{ background: exc.priceDiff > 0 ? '#FEF9C3' : exc.priceDiff < 0 ? 'var(--success-bg)' : 'var(--bg-muted)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
-            <span>{exc.priceDiff > 0 ? 'Customer pays additional' : exc.priceDiff < 0 ? 'We owe customer' : 'Even exchange'}</span>
-            <span style={{ color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? 'var(--success-text)' : 'var(--text-3)' }}>
-              {exc.priceDiff !== 0 ? fmtKes(Math.abs(exc.priceDiff)) : '—'}
-            </span>
-          </div>
-
-          {exc.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {exc.notes}</p>}
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}><Fa icon={faCheck} aria-hidden="true" /> Approve</button>}
-            {exc.status === 'approved' && (
-              <div className="flex flex-col gap-1">
-                <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>
-                <p className="text-[10px]" style={{ color: 'var(--text-4)' }}>Returned units move to With Issues</p>
-              </div>
+              </>
             )}
-            {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); onOpenDetail(null) }}>✕ Cancel</button>}
-            {exc.status === 'completed' && <button className="btn-secondary text-[11px]" onClick={() => { void printNote() }}>Print exchange note</button>}
-            {exc.status === 'completed' && balanceInvoice && <Link className="btn-secondary text-[11px]" href={financeInvoicePath(balanceInvoice.id)}>Open invoice {balanceInvoice.ref}</Link>}
+            <div className="trd-next">
+              {next ? <div><span>Next</span><b>{next.title}</b><small>{next.sub}</small></div> : <div><span>Done</span><b>{exc.status === 'cancelled' ? 'Cancelled' : 'Nothing left to do'}</b></div>}
+              <div className="trd-actions">
+                {exc.status === 'draft' && canApprove && <button type="button" className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}><Fa icon={faCheck} aria-hidden="true" /> Approve</button>}
+                {exc.status === 'approved' && <button type="button" className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>Complete exchange</button>}
+                {exc.status === 'completed' && balanceInvoice && !invoicePaid && <Link className="btn-primary text-[11px]" href={financeInvoicePath(balanceInvoice.id)}>Record receipt on {balanceInvoice.ref}</Link>}
+                {['draft', 'approved'].includes(exc.status) && <button type="button" className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); onOpenDetail(null) }}>Cancel exchange</button>}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1776,28 +1834,133 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
 // ROOT EXPORT
 // ══════════════════════════════════════════════════════════════════════════════
 
-type TradeTab = 'buybacks' | 'donations' | 'exchanges'
-const TRADE_TABS: TradeTab[] = ['buybacks', 'donations', 'exchanges']
+type TradeTab = 'all' | 'buybacks' | 'donations' | 'exchanges'
+const TRADE_TABS: TradeTab[] = ['all', 'buybacks', 'donations', 'exchanges']
+type TradeKind = Exclude<TradeTab, 'all'>
+
+type TradeRow = {
+  id: string
+  ref: string
+  kind: TradeKind
+  customer: string
+  machines: string
+  amount: number | null
+  amountLabel: string
+  status: string
+  tone: 'draft' | 'todo' | 'done' | 'off'
+  date: string
+}
+
+const KIND_LABEL: Record<TradeKind, string> = { buybacks: 'Buy-back', exchanges: 'Exchange', donations: 'Donation' }
+
+/** "HP 840 G5" for one line, "HP 840 G5 +2 more" for several. */
+function machinesOf(lines: Array<{ productName: string; qty: number }>): string {
+  if (!lines.length) return '—'
+  const first = `${lines[0].productName}${lines[0].qty > 1 ? ` ×${lines[0].qty}` : ''}`
+  return lines.length > 1 ? `${first} +${lines.length - 1} more` : first
+}
+
+/** Every buy-back, exchange and donation as one list, newest first. */
+function tradeRows(buyBacks: BuyBack[], exchanges: ClientExchange[], donations: Donation[]): TradeRow[] {
+  const rows: TradeRow[] = []
+  for (const bb of buyBacks) {
+    const status = bb.status === 'draft' ? 'Draft'
+      : bb.status === 'approved' ? (bb.total > 0 ? 'Approved · to pay' : 'Approved · to receive')
+      : bb.status === 'paid' ? 'Paid · to stock'
+      : 'Stocked'
+    rows.push({
+      id: bb.id, ref: bb.ref, kind: 'buybacks', customer: bb.customerName || '—', machines: machinesOf(bb.lines),
+      amount: bb.total, amountLabel: fmtKes(bb.total), status,
+      tone: bb.status === 'draft' ? 'draft' : bb.status === 'stocked' ? 'done' : 'todo', date: bb.date,
+    })
+  }
+  for (const ex of exchanges) {
+    const status = ex.status === 'draft' ? 'Draft' : ex.status === 'approved' ? 'Approved · to complete' : ex.status === 'completed' ? 'Completed' : 'Cancelled'
+    const ret = ex.returnLines[0]?.productName ?? '?'
+    const giv = ex.newLines[0]?.productName ?? '?'
+    rows.push({
+      id: ex.id, ref: ex.ref, kind: 'exchanges', customer: ex.customerName || '—',
+      machines: `${ret} → ${giv}${ex.returnLines.length + ex.newLines.length > 2 ? ' …' : ''}`,
+      amount: ex.priceDiff,
+      amountLabel: ex.priceDiff > 0 ? `+ ${fmtKes(ex.priceDiff)}` : ex.priceDiff < 0 ? `− ${fmtKes(-ex.priceDiff)}` : 'Even',
+      status, tone: ex.status === 'draft' ? 'draft' : ex.status === 'approved' ? 'todo' : ex.status === 'completed' ? 'done' : 'off', date: ex.date,
+    })
+  }
+  for (const dn of donations) {
+    rows.push({
+      id: dn.id, ref: dn.ref, kind: 'donations', customer: dn.party || '—', machines: machinesOf(dn.lines),
+      amount: null, amountLabel: dn.type === 'in' ? 'Received' : 'Given',
+      status: dn.status === 'confirmed' ? 'Confirmed' : 'Draft', tone: dn.status === 'confirmed' ? 'done' : 'draft', date: dn.date,
+    })
+  }
+  return rows.sort((a, b) => String(b.date).localeCompare(String(a.date)) || b.ref.localeCompare(a.ref))
+}
+
+function AllTradeIns({ onOpen }: { onOpen: (kind: TradeKind, id: string) => void }) {
+  const { buyBacks, donations, clientExchanges } = useAfterSalesStore()
+  const [search, setSearch] = useUrlUiState('tradeQ', '')
+  const [pageValue, setPageValue] = useUrlUiState('tradePage', '1')
+  const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const all = useMemo(() => tradeRows(buyBacks, clientExchanges, donations), [buyBacks, clientExchanges, donations])
+  const q = search.trim().toLowerCase()
+  const rows = q ? all.filter(r => [r.ref, r.customer, r.machines, KIND_LABEL[r.kind]].some(v => v.toLowerCase().includes(q))) : all
+  const columns: ColumnDef<TradeRow>[] = [
+    { key: 'ref', label: 'Ref', priority: 1, width: '140px', render: r => <span className="font-mono text-[11px] font-bold">{r.ref}</span>, accessor: r => r.ref },
+    { key: 'kind', label: 'Type', priority: 1, width: '100px', render: r => <span className={`tri-kind tri-kind--${r.kind}`}>{KIND_LABEL[r.kind]}</span>, accessor: r => KIND_LABEL[r.kind] },
+    { key: 'customer', label: 'Customer', priority: 1, width: '1fr', render: r => <span className="text-xs font-medium erp-truncate" title={r.customer}>{r.customer}</span>, accessor: r => r.customer },
+    { key: 'machines', label: 'Machines', priority: 2, width: '1.3fr', render: r => <span className="text-xs text-t2 erp-truncate" title={r.machines}>{r.machines}</span>, accessor: r => r.machines },
+    { key: 'amount', label: 'Amount', priority: 1, width: '120px', render: r => <span className="text-xs font-bold whitespace-nowrap">{r.amountLabel}</span>, accessor: r => r.amount ?? 0 },
+    { key: 'status', label: 'Status', priority: 1, width: '170px', render: r => <span className={`tri-status tri-status--${r.tone}`}>{r.status}</span>, accessor: r => r.status },
+    { key: 'date', label: 'Date', priority: 2, width: '100px', render: r => <span className="text-xs text-t3">{fmtDate(r.date)}</span>, accessor: r => r.date },
+  ]
+  return (
+    <DataTable
+      tableId="tradein-all"
+      columns={columns}
+      rows={rows}
+      rowKey={r => `${r.kind}:${r.id}`}
+      searchValue={search}
+      onSearchChange={v => { setSearch(v); setPageValue('1') }}
+      clientSearch={false}
+      page={page}
+      onPageChange={p => setPageValue(String(p))}
+      searchPlaceholder="Search ref, customer, machine…"
+      emptyMessage={q ? 'No trade-ins match.' : 'No buy-backs, exchanges or donations yet.'}
+      onRowClick={r => onOpen(r.kind, r.id)}
+      rowLabel={r => r.ref}
+      hideColumnFilters
+      renderCard={r => (
+        <div className="record-card p-3 rounded-xl border border-[var(--border-lt)]" onClick={() => onOpen(r.kind, r.id)}>
+          <div className="flex justify-between gap-2"><span className="font-mono text-[11px] font-bold">{r.ref}</span><span className={`tri-status tri-status--${r.tone}`}>{r.status}</span></div>
+          <p className="text-xs font-semibold mt-1">{r.customer} <span className={`tri-kind tri-kind--${r.kind}`}>{KIND_LABEL[r.kind]}</span></p>
+          <p className="text-[11px] text-t3">{r.machines} · {r.amountLabel}</p>
+        </div>
+      )}
+    />
+  )
+}
 
 function TradeInContent() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   const { buyBacks, donations, clientExchanges } = useAfterSalesStore()
-  const [tabParam] = useUrlQueryState('tab', 'buybacks')
-  const tab = TRADE_TABS.includes(tabParam as TradeTab) ? tabParam as TradeTab : 'buybacks'
+  const [tabParam] = useUrlQueryState('tab', 'all')
+  const tab = TRADE_TABS.includes(tabParam as TradeTab) ? tabParam as TradeTab : 'all'
   const [detailId, setDetailId] = useUrlRecordId({ whenOpen: { tab } })
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
+  const [newFor, setNewFor] = useState<TradeKind | null>(null)
 
   useEffect(() => { setMounted(true) }, [])
 
-  function selectTab(nextTab: TradeTab) {
+  function go(nextTab: TradeTab, id?: string) {
     const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', nextTab)
-    params.delete('id')
+    params.set('tab', nextTab === 'all' ? 'trade' : nextTab)
+    if (id) params.set('id', id); else params.delete('id')
     const qs = params.toString()
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
+  const startNew = (kind: TradeKind) => { setNewFor(kind); go(kind) }
 
   if (!mounted) {
     return (
@@ -1805,9 +1968,10 @@ function TradeInContent() {
     )
   }
 
-  const awaitingReview = buyBacks.filter(item => item.status === 'draft').length
-  const approvedBuyBacks = buyBacks.filter(item => item.status === 'approved')
+  const awaitingReview = buyBacks.filter(item => item.status === 'draft').length + clientExchanges.filter(e => e.status === 'draft').length
+  const approvedBuyBacks = buyBacks.filter(item => item.status === 'approved' && Number(item.total) > 0)
   const totalToPay = approvedBuyBacks.reduce((sum, item) => sum + Number(item.total || 0), 0)
+  const toStock = buyBacks.filter(item => item.status === 'paid').length
   const monthKey = new Date().toISOString().slice(0, 7)
   const thisMonth = [
     ...buyBacks.map(item => item.date),
@@ -1816,49 +1980,51 @@ function TradeInContent() {
   ].filter(date => String(date || '').slice(0, 7) === monthKey).length
 
   const tabs: { id: TradeTab; label: string; count: number }[] = [
+    { id: 'all',       label: 'All',        count: buyBacks.length + clientExchanges.length + donations.length },
     { id: 'buybacks',  label: 'Buy-backs',  count: buyBacks.length },
-    { id: 'donations', label: 'Donations',  count: donations.length },
     { id: 'exchanges', label: 'Exchanges',  count: clientExchanges.length },
+    { id: 'donations', label: 'Donations',  count: donations.length },
   ]
 
   return (
-    <div className="mod-page tradein-workspace">
-      <ModuleHeader
-        title="Trade-in"
-        subtitle="Traceable intake, valuation and stock recovery"
-        count={buyBacks.length + donations.length + clientExchanges.length}
-        color="var(--navy)"
-      />
-      <TabBar
-        tabs={tabs.map(t => ({
-          id: t.id,
-          label: t.count > 0 ? `${t.label} (${t.count})` : t.label,
-        }))}
-        active={tab}
-        onChange={id => selectTab(id as TradeTab)}
-        maxVisibleDesktop={6}
-        ariaLabel="Trade-in sections"
-      />
-      <div className="mod-body tradein-body p-3 sm:p-4">
-        <section className="tradein-summary" aria-label="Trade-in summary">
-          <button type="button" className="tradein-summary__item" onClick={() => selectTab('buybacks')}>
-            <span>Awaiting review</span><strong>{awaitingReview}</strong><small>Draft valuations</small>
-          </button>
-          <button type="button" className="tradein-summary__item" onClick={() => selectTab('buybacks')}>
-            <span>Approved</span><strong>{approvedBuyBacks.length}</strong><small>Ready for payout</small>
-          </button>
-          <button type="button" className="tradein-summary__item is-warning" onClick={() => selectTab('buybacks')}>
-            <span>To pay</span><strong>{fmtKes(totalToPay)}</strong><small>Approved buy-backs</small>
-          </button>
-          <button type="button" className="tradein-summary__item">
-            <span>This month</span><strong>{thisMonth}</strong><small>All trade records</small>
-          </button>
-        </section>
-        <div className="tradein-content">
-        {tab === 'buybacks'  && <BuyBackTab detailId={detailId} onOpenDetail={setDetailId} />}
-        {tab === 'donations' && <DonationTab detailId={detailId} onOpenDetail={setDetailId} />}
-        {tab === 'exchanges' && <ExchangeTab detailId={detailId} onOpenDetail={setDetailId} />}
+    <div className="tradein-workspace tri">
+      <section className="tradein-summary" aria-label="Trade-in figures">
+        <button type="button" className="tradein-summary__item" onClick={() => go('all')}>
+          <span>Awaiting review</span><strong>{awaitingReview}</strong><small>Draft buy-backs and exchanges</small>
+        </button>
+        <button type="button" className="tradein-summary__item is-warning" onClick={() => go('buybacks')}>
+          <span>To pay</span><strong>{fmtKes(totalToPay)}</strong><small>{approvedBuyBacks.length} approved buy-back{approvedBuyBacks.length === 1 ? '' : 's'}</small>
+        </button>
+        <button type="button" className="tradein-summary__item" onClick={() => go('buybacks')}>
+          <span>To stock</span><strong>{toStock}</strong><small>Paid, not yet stocked</small>
+        </button>
+        <div className="tradein-summary__item">
+          <span>This month</span><strong>{thisMonth}</strong><small>Trade-ins recorded</small>
         </div>
+      </section>
+      {!detailId && (
+        <div className="tri-bar">
+          <div className="tri-seg" role="tablist" aria-label="Trade-in type">
+            {tabs.map(t => (
+              <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)}>
+                {t.label} <b>{t.count}</b>
+              </button>
+            ))}
+          </div>
+          {tab === 'all' && (
+            <div className="tri-new">
+              <button type="button" className="btn-secondary text-[11px]" onClick={() => startNew('donations')}>+ Donation</button>
+              <button type="button" className="btn-secondary text-[11px]" onClick={() => startNew('exchanges')}>+ Exchange</button>
+              <button type="button" className="btn-primary text-[11px]" onClick={() => startNew('buybacks')}>+ Buy-back</button>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="tradein-content">
+        {tab === 'all' && <AllTradeIns onOpen={(kind, id) => go(kind, id)} />}
+        {tab === 'buybacks'  && <BuyBackTab detailId={detailId} onOpenDetail={setDetailId} startNew={newFor === 'buybacks'} onStarted={() => setNewFor(null)} />}
+        {tab === 'donations' && <DonationTab detailId={detailId} onOpenDetail={setDetailId} startNew={newFor === 'donations'} onStarted={() => setNewFor(null)} />}
+        {tab === 'exchanges' && <ExchangeTab detailId={detailId} onOpenDetail={setDetailId} startNew={newFor === 'exchanges'} onStarted={() => setNewFor(null)} />}
       </div>
     </div>
   )
