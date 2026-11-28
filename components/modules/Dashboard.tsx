@@ -1040,13 +1040,13 @@ export function Dashboard() {
 
       {/* P1: the lead figure, what needs attention, three key numbers */}
       <div className="dash2-bento">
-        {canSeeFinance ? (
+        {canSeeFinance || canSeeSales ? (
           <section className="dash2-hero" aria-label="Paid this week">
             <p className="dash2-hero-label">Paid this week</p>
             <p className="dash2-hero-value">{fmtKes(executiveSnapshot.paidThisWeek)}</p>
             <p className="dash2-hero-sub">
               {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} paid
-              {financeStats.overdueCount > 0 && (
+              {canSeeFinance && financeStats.overdueCount > 0 && (
                 <> · <button type="button" className="dash2-hero-link" onClick={() => handleNav('accounting', '/finance?tab=invoices')}>{financeStats.overdueCount} overdue to collect</button></>
               )}
             </p>

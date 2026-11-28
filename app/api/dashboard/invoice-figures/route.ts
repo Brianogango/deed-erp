@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { dashboardSectionsForUser, visibleDashboardRepairs, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
-import { computeDashboardInvoiceFigures } from '@/lib/dashboard/invoice-figures'
+import { computeDashboardInvoiceFigures, moneyReceivedByPeriod } from '@/lib/dashboard/invoice-figures'
+import { loadAppState } from '@/lib/server-store'
 import { loadViewerState } from '@/lib/store-viewer-state.server'
 
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,13 @@ export async function GET(request: NextRequest) {
           }
         : null,
     })
+    // The sales team sees the company's money received (the dashboard's lead
+    // card), not just their own invoices — worked out here over every
+    // invoice; they still receive only their own invoice rows.
+    if (!sections.finance && sections.sales) {
+      const all = await loadAppState(['deed_invoices'])
+      figures.revenue = moneyReceivedByPeriod(rows(all.deed_invoices), today)
+    }
     return NextResponse.json(figures, { headers: { 'Cache-Control': 'no-store' } })
   })
 }

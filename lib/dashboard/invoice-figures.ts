@@ -193,24 +193,7 @@ export function computeDashboardInvoiceFigures(input: {
   // Counted on the day each payment came in, not the invoice date: an invoice
   // raised in March and paid today is money received today, and a part
   // payment is money received even though the invoice is not yet settled.
-  const yesterday = addDays(today, -1)
-  const dow = new Date(`${today}T00:00:00Z`).getUTCDay()
-  const weekStart = addDays(today, -((dow + 6) % 7))
-  const monthStart = `${today.slice(0, 7)}-01`
-  const yearStart = `${today.slice(0, 4)}-01-01`
-  const revenue = { today: 0, yesterday: 0, week: 0, month: 0, year: 0, paidThisWeekCount: 0 }
-  for (const inv of invoices) {
-    if (inv.type === 'vendor_bill' || invoiceDocState(inv.status) !== 'posted') continue
-    for (const { day, amount } of receiptsOf(inv)) {
-      if (day > today) continue
-      if (day === today) revenue.today += amount
-      if (day === yesterday) revenue.yesterday += amount
-      if (day >= monthStart) revenue.month += amount
-      if (day >= yearStart) revenue.year += amount
-      if (day >= weekStart) revenue.week += amount
-    }
-    if (receiptsOf(inv).some(r => r.day >= weekStart && r.day <= today)) revenue.paidThisWeekCount++
-  }
+  const revenue = moneyReceivedByPeriod(invoices, today)
 
   // ── Activity feed ──────────────────────────────────────────────────────────
   const time = (v: unknown) => { const t = new Date(String(v || 0)).getTime(); return Number.isFinite(t) ? t : 0 }
@@ -241,4 +224,32 @@ export function computeDashboardInvoiceFigures(input: {
   }
 
   return { today, sales, repairs: { months, currentInvoices }, revenue, recent, invoicedNotDelivered, financeDesk }
+}
+
+/**
+ * Money received by period, counted on the day each payment came in. Shared
+ * with the sales team's dashboard, which works it out over every invoice
+ * (their own invoice list is only their own sales).
+ */
+export function moneyReceivedByPeriod(invoices: Row[], today: string): DashboardInvoiceFigures['revenue'] {
+  const yesterday = addDays(today, -1)
+  const dow = new Date(`${today}T00:00:00Z`).getUTCDay()
+  const weekStart = addDays(today, -((dow + 6) % 7))
+  const monthStart = `${today.slice(0, 7)}-01`
+  const yearStart = `${today.slice(0, 4)}-01-01`
+  const revenue: DashboardInvoiceFigures['revenue'] = { today: 0, yesterday: 0, week: 0, month: 0, year: 0, paidThisWeekCount: 0 }
+  for (const inv of invoices) {
+    if (inv.type === 'vendor_bill' || invoiceDocState(inv.status) !== 'posted') continue
+    for (const { day, amount } of receiptsOf(inv)) {
+      if (day > today) continue
+      if (day === today) revenue.today += amount
+      if (day === yesterday) revenue.yesterday += amount
+      if (day >= monthStart) revenue.month += amount
+      if (day >= yearStart) revenue.year += amount
+      if (day >= weekStart) revenue.week += amount
+    }
+    if (receiptsOf(inv).some(r => r.day >= weekStart && r.day <= today)) revenue.paidThisWeekCount++
+  }
+
+  return revenue
 }
