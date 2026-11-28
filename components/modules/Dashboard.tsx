@@ -1040,7 +1040,7 @@ export function Dashboard() {
 
       {/* P1: the lead figure, what needs attention, three key numbers */}
       <div className="dash2-bento">
-        {canSeeFinance || isSalesRep ? (
+        {canSeeFinance || sections.ownSalesPaid ? (
           <section className="dash2-hero" aria-label="Paid this week">
             <p className="dash2-hero-label">{canSeeFinance ? 'Paid this week' : 'Your sales paid this week'}</p>
             <p className="dash2-hero-value">{fmtKes(executiveSnapshot.paidThisWeek)}</p>

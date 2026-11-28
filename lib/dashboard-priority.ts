@@ -14,6 +14,8 @@ import { userCan } from '@/lib/auth/can'
 interface DashboardSections {
   /** Revenue / receivables / payables KPIs and money-denominated analytics. */
   finance: boolean
+  /** Lead card shows the money received on the user's own sales (a sales rep). */
+  ownSalesPaid: boolean
   /** Sales KPIs and pipeline content. */
   sales: boolean
   /** Full sales analytics (charts) in the P3 disclosure section. */
@@ -60,6 +62,7 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
     hrAdmin: isDirector,
     leaveApprovals: userCan({ role: r }, 'approveLeave'),
     repairRevenue: isDirector || isFinance || isLead,
+    ownSalesPaid: isSalesRep,
   }
 }
 
@@ -77,6 +80,7 @@ const DASHBOARD_SECTION_MODULES: Record<keyof DashboardSections, ModuleId> = {
   hrAdmin: 'hr',
   leaveApprovals: 'hr',
   repairRevenue: 'repair',
+  ownSalesPaid: 'sales',
 }
 
 export function hasExplicitModuleGrant(
